@@ -1,0 +1,77 @@
+# Copilot Instructions
+
+## Project Context
+This is a Drone News Aggregator with a Go MCP server backend and React TypeScript frontend.
+
+## Allowed Terminal Commands
+
+The following commands are safe to run without confirmation:
+
+### Go Commands
+- `go build ./...`
+- `go run ./cmd/server`
+- `go mod tidy`
+- `go mod download`
+- `go test ./...`
+- `go fmt ./...`
+- `go vet ./...`
+
+### Node/NPM Commands
+- `npm install`
+- `npm run dev`
+- `npm run build`
+- `npm run lint`
+- `npm run preview`
+- `npx tsc --noEmit`
+
+### Git Commands
+- `git status`
+- `git log`
+- `git diff`
+- `git add`
+- `git commit`
+- `git push`
+- `git pull`
+- `git branch`
+- `git checkout`
+- `git stash`
+
+### Docker Commands
+- `docker-compose up`
+- `docker-compose down`
+- `docker-compose build`
+- `docker ps`
+- `docker logs`
+
+### File Operations
+- `cat`
+- `ls`
+- `find`
+- `grep`
+- `head`
+- `tail`
+- `wc`
+
+## Code Style
+
+### Go
+- Use `gofmt` formatting
+- Follow standard Go project layout
+- Internal packages under `internal/`
+- Structured JSON logging
+
+### TypeScript/React
+- Strict TypeScript mode
+- Functional components with hooks
+- Tailwind CSS for styling
+- Conventional imports (React first, then libraries, then local)
+
+### Commits
+- Use Conventional Commits format
+- Examples: `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`
+
+## Project Structure Awareness
+- Backend code is in `server/`
+- Frontend code is in `web/`
+- Docker configs are in root
+- MCP config is `mcp.json`
