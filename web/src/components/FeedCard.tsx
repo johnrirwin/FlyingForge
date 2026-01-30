@@ -1,8 +1,14 @@
 import type { FeedItem, SourceInfo } from '../types';
 
+/**
+ * Props for the FeedCard component
+ */
 interface FeedCardProps {
+  /** The feed item to display */
   item: FeedItem;
+  /** Optional source information for the feed */
   source?: SourceInfo;
+  /** Callback when the card is clicked */
   onClick: () => void;
 }
 
