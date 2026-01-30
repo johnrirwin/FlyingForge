@@ -1,5 +1,6 @@
 # Build
 server/mcp-news-feed
+server/server
 web/dist/
 web/node_modules/
 
