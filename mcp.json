@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "drone-news-feed": {
+      "command": "go",
+      "args": ["run", "./cmd/server", "-mcp"],
+      "cwd": "${workspaceFolder}/server",
+      "env": {
+        "MCP_MODE": "true",
+        "LOG_LEVEL": "info"
+      }
+    }
+  }
+}

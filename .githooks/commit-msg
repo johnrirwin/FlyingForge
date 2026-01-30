@@ -1,0 +1,13 @@
+#!/bin/sh
+
+commit_msg_file=$1
+commit_msg=$(head -n1 "$commit_msg_file")
+
+# Regex for Conventional Commits
+pattern="^(feat|fix|docs|style|refactor|perf|test|chore|build|ci)(\([a-z0-9_-]+\))?: .+"
+
+if ! echo "$commit_msg" | grep -Eq "$pattern"; then
+  echo "❌ Commit message does not follow Conventional Commits format."
+  echo "Example: feat(auth): add JWT-based authentication"
+  exit 1
+fi
