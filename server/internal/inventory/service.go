@@ -14,13 +14,13 @@ import (
 
 // InventoryManager defines the interface for inventory operations
 type InventoryManager interface {
-	AddItem(ctx context.Context, params models.AddInventoryParams) (*models.InventoryItem, error)
-	AddFromEquipment(ctx context.Context, equipment models.EquipmentItem, quantity int, condition models.ItemCondition, notes string) (*models.InventoryItem, error)
-	GetItem(ctx context.Context, id string) (*models.InventoryItem, error)
-	GetInventory(ctx context.Context, params models.InventoryFilterParams) (*models.InventoryResponse, error)
-	UpdateItem(ctx context.Context, params models.UpdateInventoryParams) (*models.InventoryItem, error)
-	RemoveItem(ctx context.Context, id string) error
-	GetSummary(ctx context.Context) (*models.InventorySummary, error)
+	AddItem(ctx context.Context, userID string, params models.AddInventoryParams) (*models.InventoryItem, error)
+	AddFromEquipment(ctx context.Context, userID string, equipment models.EquipmentItem, quantity int, condition models.ItemCondition, notes string) (*models.InventoryItem, error)
+	GetItem(ctx context.Context, id string, userID string) (*models.InventoryItem, error)
+	GetInventory(ctx context.Context, userID string, params models.InventoryFilterParams) (*models.InventoryResponse, error)
+	UpdateItem(ctx context.Context, userID string, params models.UpdateInventoryParams) (*models.InventoryItem, error)
+	RemoveItem(ctx context.Context, id string, userID string) error
+	GetSummary(ctx context.Context, userID string) (*models.InventorySummary, error)
 }
 
 // Service handles inventory operations backed by PostgreSQL
@@ -38,7 +38,7 @@ func NewService(store *database.InventoryStore, logger *logging.Logger) *Service
 }
 
 // AddItem adds a new item to the inventory
-func (s *Service) AddItem(ctx context.Context, params models.AddInventoryParams) (*models.InventoryItem, error) {
+func (s *Service) AddItem(ctx context.Context, userID string, params models.AddInventoryParams) (*models.InventoryItem, error) {
 	if params.Category == "" {
 		return nil, &ServiceError{Message: "category is required"}
 	}
@@ -54,9 +54,10 @@ func (s *Service) AddItem(ctx context.Context, params models.AddInventoryParams)
 	s.logger.Debug("Adding inventory item", logging.WithFields(map[string]interface{}{
 		"name":     params.Name,
 		"category": params.Category,
+		"user_id":  userID,
 	}))
 
-	item, err := s.store.Add(ctx, params)
+	item, err := s.store.Add(ctx, userID, params)
 	if err != nil {
 		s.logger.Error("Failed to add inventory item", logging.WithField("error", err.Error()))
 		return nil, err
@@ -67,7 +68,7 @@ func (s *Service) AddItem(ctx context.Context, params models.AddInventoryParams)
 }
 
 // AddFromEquipment adds an equipment item to the inventory
-func (s *Service) AddFromEquipment(ctx context.Context, equipment models.EquipmentItem, quantity int, condition models.ItemCondition, notes string) (*models.InventoryItem, error) {
+func (s *Service) AddFromEquipment(ctx context.Context, userID string, equipment models.EquipmentItem, quantity int, condition models.ItemCondition, notes string) (*models.InventoryItem, error) {
 	if quantity <= 0 {
 		quantity = 1
 	}
@@ -90,21 +91,21 @@ func (s *Service) AddFromEquipment(ctx context.Context, equipment models.Equipme
 		SourceEquipmentID: equipment.ID,
 	}
 
-	return s.AddItem(ctx, params)
+	return s.AddItem(ctx, userID, params)
 }
 
 // GetItem retrieves an item by ID
-func (s *Service) GetItem(ctx context.Context, id string) (*models.InventoryItem, error) {
-	return s.store.Get(ctx, id)
+func (s *Service) GetItem(ctx context.Context, id string, userID string) (*models.InventoryItem, error) {
+	return s.store.Get(ctx, id, userID)
 }
 
 // GetInventory retrieves inventory items with optional filtering
-func (s *Service) GetInventory(ctx context.Context, params models.InventoryFilterParams) (*models.InventoryResponse, error) {
-	return s.store.List(ctx, params)
+func (s *Service) GetInventory(ctx context.Context, userID string, params models.InventoryFilterParams) (*models.InventoryResponse, error) {
+	return s.store.List(ctx, userID, params)
 }
 
 // UpdateItem updates an inventory item
-func (s *Service) UpdateItem(ctx context.Context, params models.UpdateInventoryParams) (*models.InventoryItem, error) {
+func (s *Service) UpdateItem(ctx context.Context, userID string, params models.UpdateInventoryParams) (*models.InventoryItem, error) {
 	if params.ID == "" {
 		return nil, &ServiceError{Message: "item ID is required"}
 	}
@@ -115,7 +116,7 @@ func (s *Service) UpdateItem(ctx context.Context, params models.UpdateInventoryP
 
 	s.logger.Debug("Updating inventory item", logging.WithField("id", params.ID))
 
-	item, err := s.store.Update(ctx, params)
+	item, err := s.store.Update(ctx, userID, params)
 	if err != nil {
 		s.logger.Error("Failed to update inventory item", logging.WithFields(map[string]interface{}{
 			"id":    params.ID,
@@ -129,14 +130,14 @@ func (s *Service) UpdateItem(ctx context.Context, params models.UpdateInventoryP
 }
 
 // RemoveItem removes an item from the inventory
-func (s *Service) RemoveItem(ctx context.Context, id string) error {
+func (s *Service) RemoveItem(ctx context.Context, id string, userID string) error {
 	if id == "" {
 		return &ServiceError{Message: "item ID is required"}
 	}
 
 	s.logger.Debug("Removing inventory item", logging.WithField("id", id))
 
-	if err := s.store.Delete(ctx, id); err != nil {
+	if err := s.store.Delete(ctx, id, userID); err != nil {
 		s.logger.Error("Failed to remove inventory item", logging.WithFields(map[string]interface{}{
 			"id":    id,
 			"error": err.Error(),
@@ -149,8 +150,8 @@ func (s *Service) RemoveItem(ctx context.Context, id string) error {
 }
 
 // GetSummary returns a summary of the inventory
-func (s *Service) GetSummary(ctx context.Context) (*models.InventorySummary, error) {
-	return s.store.GetSummary(ctx)
+func (s *Service) GetSummary(ctx context.Context, userID string) (*models.InventorySummary, error) {
+	return s.store.GetSummary(ctx, userID)
 }
 
 // InMemoryService is an in-memory implementation for development/testing
@@ -168,7 +169,7 @@ func NewInMemoryService(logger *logging.Logger) *InMemoryService {
 }
 
 // AddItem adds a new item to the in-memory inventory
-func (s *InMemoryService) AddItem(ctx context.Context, params models.AddInventoryParams) (*models.InventoryItem, error) {
+func (s *InMemoryService) AddItem(ctx context.Context, userID string, params models.AddInventoryParams) (*models.InventoryItem, error) {
 	if params.Category == "" {
 		return nil, &ServiceError{Message: "category is required"}
 	}
@@ -191,6 +192,7 @@ func (s *InMemoryService) AddItem(ctx context.Context, params models.AddInventor
 
 	item := models.InventoryItem{
 		ID:                id,
+		UserID:            userID,
 		Name:              params.Name,
 		Category:          params.Category,
 		Manufacturer:      params.Manufacturer,
@@ -215,7 +217,7 @@ func (s *InMemoryService) AddItem(ctx context.Context, params models.AddInventor
 }
 
 // AddFromEquipment adds an equipment item to the in-memory inventory
-func (s *InMemoryService) AddFromEquipment(ctx context.Context, equipment models.EquipmentItem, quantity int, condition models.ItemCondition, notes string) (*models.InventoryItem, error) {
+func (s *InMemoryService) AddFromEquipment(ctx context.Context, userID string, equipment models.EquipmentItem, quantity int, condition models.ItemCondition, notes string) (*models.InventoryItem, error) {
 	if quantity <= 0 {
 		quantity = 1
 	}
@@ -223,7 +225,7 @@ func (s *InMemoryService) AddFromEquipment(ctx context.Context, equipment models
 		condition = models.ConditionNew
 	}
 
-	return s.AddItem(ctx, models.AddInventoryParams{
+	return s.AddItem(ctx, userID, models.AddInventoryParams{
 		Name:              equipment.Name,
 		Category:          equipment.Category,
 		Manufacturer:      equipment.Manufacturer,
@@ -240,20 +242,28 @@ func (s *InMemoryService) AddFromEquipment(ctx context.Context, equipment models
 }
 
 // GetItem retrieves an item by ID
-func (s *InMemoryService) GetItem(ctx context.Context, id string) (*models.InventoryItem, error) {
+func (s *InMemoryService) GetItem(ctx context.Context, id string, userID string) (*models.InventoryItem, error) {
 	item, ok := s.items[id]
 	if !ok {
+		return nil, nil
+	}
+	// Filter by userID if provided
+	if userID != "" && item.UserID != userID {
 		return nil, nil
 	}
 	return &item, nil
 }
 
 // GetInventory retrieves inventory items with optional filtering
-func (s *InMemoryService) GetInventory(ctx context.Context, params models.InventoryFilterParams) (*models.InventoryResponse, error) {
+func (s *InMemoryService) GetInventory(ctx context.Context, userID string, params models.InventoryFilterParams) (*models.InventoryResponse, error) {
 	items := make([]models.InventoryItem, 0, len(s.items))
 	categories := make(map[models.EquipmentCategory]int)
 
 	for _, item := range s.items {
+		// Filter by userID if provided
+		if userID != "" && item.UserID != userID {
+			continue
+		}
 		if params.Category != "" && item.Category != params.Category {
 			continue
 		}
@@ -301,9 +311,13 @@ func (s *InMemoryService) GetInventory(ctx context.Context, params models.Invent
 }
 
 // UpdateItem updates an inventory item
-func (s *InMemoryService) UpdateItem(ctx context.Context, params models.UpdateInventoryParams) (*models.InventoryItem, error) {
+func (s *InMemoryService) UpdateItem(ctx context.Context, userID string, params models.UpdateInventoryParams) (*models.InventoryItem, error) {
 	item, ok := s.items[params.ID]
 	if !ok {
+		return nil, &ServiceError{Message: "inventory item not found"}
+	}
+	// Check ownership if userID provided
+	if userID != "" && item.UserID != userID {
 		return nil, &ServiceError{Message: "inventory item not found"}
 	}
 
@@ -351,8 +365,13 @@ func (s *InMemoryService) UpdateItem(ctx context.Context, params models.UpdateIn
 }
 
 // RemoveItem removes an item from the inventory
-func (s *InMemoryService) RemoveItem(ctx context.Context, id string) error {
-	if _, ok := s.items[id]; !ok {
+func (s *InMemoryService) RemoveItem(ctx context.Context, id string, userID string) error {
+	item, ok := s.items[id]
+	if !ok {
+		return &ServiceError{Message: "inventory item not found"}
+	}
+	// Check ownership if userID provided
+	if userID != "" && item.UserID != userID {
 		return &ServiceError{Message: "inventory item not found"}
 	}
 	delete(s.items, id)
@@ -360,13 +379,17 @@ func (s *InMemoryService) RemoveItem(ctx context.Context, id string) error {
 }
 
 // GetSummary returns a summary of the inventory
-func (s *InMemoryService) GetSummary(ctx context.Context) (*models.InventorySummary, error) {
+func (s *InMemoryService) GetSummary(ctx context.Context, userID string) (*models.InventorySummary, error) {
 	summary := &models.InventorySummary{
 		ByCategory:  make(map[models.EquipmentCategory]int),
 		ByCondition: make(map[models.ItemCondition]int),
 	}
 
 	for _, item := range s.items {
+		// Filter by userID if provided
+		if userID != "" && item.UserID != userID {
+			continue
+		}
 		summary.TotalItems += item.Quantity
 		if item.PurchasePrice != nil {
 			summary.TotalValue += *item.PurchasePrice * float64(item.Quantity)

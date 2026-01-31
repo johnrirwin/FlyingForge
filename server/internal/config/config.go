@@ -13,6 +13,7 @@ type Config struct {
 	Cache    CacheConfig
 	Database DatabaseConfig
 	Logging  LoggingConfig
+	Auth     AuthConfig
 }
 
 // ServerConfig holds HTTP/MCP server configuration
@@ -41,6 +42,19 @@ type DatabaseConfig struct {
 // LoggingConfig holds logging configuration
 type LoggingConfig struct {
 	Level string
+}
+
+// AuthConfig holds authentication configuration
+type AuthConfig struct {
+	JWTSecret        string
+	JWTIssuer        string
+	JWTAudience      string
+	AccessTokenTTL   time.Duration
+	RefreshTokenTTL  time.Duration
+	GoogleClientID   string
+	GoogleClientSecret string
+	GoogleRedirectURI  string
+	EnableAdminTools bool
 }
 
 // Load parses flags and environment variables to build configuration
@@ -91,7 +105,45 @@ func Load() *Config {
 		Level: *logLevel,
 	}
 
+	// Load auth config from environment
+	cfg.Auth = loadAuthConfig()
+
 	return cfg
+}
+
+func loadAuthConfig() AuthConfig {
+	accessTTL := 15 * time.Minute
+	if v := os.Getenv("AUTH_ACCESS_TOKEN_TTL"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			accessTTL = d
+		}
+	}
+
+	refreshTTL := 7 * 24 * time.Hour // 7 days
+	if v := os.Getenv("AUTH_REFRESH_TOKEN_TTL"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			refreshTTL = d
+		}
+	}
+
+	return AuthConfig{
+		JWTSecret:          getEnvOrDefault("AUTH_JWT_SECRET", "change-me-in-production"),
+		JWTIssuer:          getEnvOrDefault("AUTH_JWT_ISSUER", "mcp-news-feed"),
+		JWTAudience:        getEnvOrDefault("AUTH_JWT_AUDIENCE", "mcp-news-feed"),
+		AccessTokenTTL:     accessTTL,
+		RefreshTokenTTL:    refreshTTL,
+		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+		GoogleRedirectURI:  getEnvOrDefault("GOOGLE_REDIRECT_URI", "http://localhost:8080/api/auth/google/callback"),
+		EnableAdminTools:   os.Getenv("ENABLE_ADMIN_TOOLS") == "true",
+	}
+}
+
+func getEnvOrDefault(key, defaultValue string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return defaultValue
 }
 
 func applyEnvOverrides(

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/johnrirwin/mcp-news-feed/internal/aggregator"
+	"github.com/johnrirwin/mcp-news-feed/internal/auth"
 	"github.com/johnrirwin/mcp-news-feed/internal/cache"
 	"github.com/johnrirwin/mcp-news-feed/internal/config"
 	"github.com/johnrirwin/mcp-news-feed/internal/database"
@@ -20,15 +21,18 @@ import (
 
 // App holds all application dependencies
 type App struct {
-	Config       *config.Config
-	Logger       *logging.Logger
-	Cache        cache.Cache
-	Aggregator   *aggregator.Aggregator
-	EquipmentSvc *equipment.Service
-	InventorySvc inventory.InventoryManager
-	HTTPServer   *httpapi.Server
-	MCPServer    *mcp.Server
-	db           *database.DB
+	Config         *config.Config
+	Logger         *logging.Logger
+	Cache          cache.Cache
+	Aggregator     *aggregator.Aggregator
+	EquipmentSvc   *equipment.Service
+	InventorySvc   inventory.InventoryManager
+	AuthService    *auth.Service
+	AuthMiddleware *auth.Middleware
+	HTTPServer     *httpapi.Server
+	MCPServer      *mcp.Server
+	db             *database.DB
+	userStore      *database.UserStore
 }
 
 // New creates and initializes a new App instance
@@ -57,8 +61,8 @@ func New(cfg *config.Config) (*App, error) {
 	// Initialize equipment service
 	app.EquipmentSvc = equipment.NewService(sellerRegistry, app.Cache, app.Logger)
 
-	// Initialize inventory service
-	app.InventorySvc = app.initInventory()
+	// Initialize database, inventory, and auth services
+	app.initDatabaseServices()
 
 	// Initialize servers
 	app.initServers()
@@ -139,7 +143,7 @@ func (a *App) initSellers(limiter *ratelimit.Limiter) *sellers.Registry {
 	return registry
 }
 
-func (a *App) initInventory() inventory.InventoryManager {
+func (a *App) initDatabaseServices() {
 	dbConfig := database.Config{
 		Host:     a.Config.Database.Host,
 		Port:     a.Config.Database.Port,
@@ -150,24 +154,38 @@ func (a *App) initInventory() inventory.InventoryManager {
 
 	db, err := database.New(dbConfig)
 	if err != nil {
-		a.Logger.Warn("Failed to connect to PostgreSQL, using in-memory inventory", logging.WithField("error", err.Error()))
-		return inventory.NewInMemoryService(a.Logger)
+		a.Logger.Warn("Failed to connect to PostgreSQL, using in-memory inventory (auth disabled)", logging.WithField("error", err.Error()))
+		a.InventorySvc = inventory.NewInMemoryService(a.Logger)
+		// Auth service requires database, so we create a no-op middleware
+		a.AuthMiddleware = auth.NewMiddleware(nil)
+		return
 	}
 
-	a.Logger.Info("Connected to PostgreSQL for inventory persistence")
+	a.Logger.Info("Connected to PostgreSQL")
 	if err := db.Migrate(context.Background()); err != nil {
-		a.Logger.Warn("Failed to run migrations, using in-memory inventory", logging.WithField("error", err.Error()))
-		return inventory.NewInMemoryService(a.Logger)
+		a.Logger.Warn("Failed to run migrations, using in-memory inventory (auth disabled)", logging.WithField("error", err.Error()))
+		a.InventorySvc = inventory.NewInMemoryService(a.Logger)
+		a.AuthMiddleware = auth.NewMiddleware(nil)
+		return
 	}
 
 	a.db = db
+
+	// Initialize inventory
 	inventoryStore := database.NewInventoryStore(db)
-	return inventory.NewService(inventoryStore, a.Logger)
+	a.InventorySvc = inventory.NewService(inventoryStore, a.Logger)
+
+	// Initialize auth
+	a.userStore = database.NewUserStore(db)
+	a.AuthService = auth.NewService(a.userStore, a.Config.Auth, a.Logger)
+	a.AuthMiddleware = auth.NewMiddleware(a.AuthService)
+
+	a.Logger.Info("Authentication service initialized")
 }
 
 func (a *App) initServers() {
-	// Initialize HTTP server
-	a.HTTPServer = httpapi.New(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.Logger)
+	// Initialize HTTP server with auth
+	a.HTTPServer = httpapi.New(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.AuthService, a.AuthMiddleware, a.Logger)
 
 	// Initialize MCP server
 	mcpHandler := mcp.NewHandler(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.Logger)

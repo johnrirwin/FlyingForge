@@ -383,7 +383,8 @@ func (h *EquipmentHandler) handleAddInventoryItem(ctx context.Context, arguments
 		return nil, &ToolError{Message: "Invalid arguments: " + err.Error()}
 	}
 
-	item, err := h.inventorySvc.AddItem(ctx, params)
+	// MCP mode operates without user authentication - use empty userID for system/admin access
+	item, err := h.inventorySvc.AddItem(ctx, "", params)
 	if err != nil {
 		return nil, &ToolError{Message: "Failed to add item: " + err.Error()}
 	}
@@ -419,7 +420,8 @@ func (h *EquipmentHandler) handleGetInventory(ctx context.Context, arguments jso
 		Offset:    params.Offset,
 	}
 
-	response, err := h.inventorySvc.GetInventory(ctx, filterParams)
+	// MCP mode operates without user authentication - use empty userID
+	response, err := h.inventorySvc.GetInventory(ctx, "", filterParams)
 	if err != nil {
 		return nil, &ToolError{Message: "Failed to get inventory: " + err.Error()}
 	}
@@ -434,7 +436,8 @@ func (h *EquipmentHandler) handleUpdateInventoryItem(ctx context.Context, argume
 		return nil, &ToolError{Message: "Invalid arguments: " + err.Error()}
 	}
 
-	item, err := h.inventorySvc.UpdateItem(ctx, params)
+	// MCP mode operates without user authentication - use empty userID
+	item, err := h.inventorySvc.UpdateItem(ctx, "", params)
 	if err != nil {
 		return nil, &ToolError{Message: "Failed to update item: " + err.Error()}
 	}
@@ -454,7 +457,8 @@ func (h *EquipmentHandler) handleRemoveInventoryItem(ctx context.Context, argume
 		return nil, &ToolError{Message: "Invalid arguments: " + err.Error()}
 	}
 
-	if err := h.inventorySvc.RemoveItem(ctx, params.ID); err != nil {
+	// MCP mode operates without user authentication - use empty userID
+	if err := h.inventorySvc.RemoveItem(ctx, params.ID, ""); err != nil {
 		return nil, &ToolError{Message: "Failed to remove item: " + err.Error()}
 	}
 

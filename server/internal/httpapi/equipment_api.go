@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/johnrirwin/mcp-news-feed/internal/auth"
 	"github.com/johnrirwin/mcp-news-feed/internal/equipment"
 	"github.com/johnrirwin/mcp-news-feed/internal/inventory"
 	"github.com/johnrirwin/mcp-news-feed/internal/logging"
@@ -15,32 +16,34 @@ import (
 
 // EquipmentAPI handles HTTP API requests for equipment and inventory
 type EquipmentAPI struct {
-	equipmentSvc *equipment.Service
-	inventorySvc inventory.InventoryManager
-	logger       *logging.Logger
+	equipmentSvc   *equipment.Service
+	inventorySvc   inventory.InventoryManager
+	authMiddleware *auth.Middleware
+	logger         *logging.Logger
 }
 
 // NewEquipmentAPI creates a new equipment API handler
-func NewEquipmentAPI(equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, logger *logging.Logger) *EquipmentAPI {
+func NewEquipmentAPI(equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, authMiddleware *auth.Middleware, logger *logging.Logger) *EquipmentAPI {
 	return &EquipmentAPI{
-		equipmentSvc: equipmentSvc,
-		inventorySvc: inventorySvc,
-		logger:       logger,
+		equipmentSvc:   equipmentSvc,
+		inventorySvc:   inventorySvc,
+		authMiddleware: authMiddleware,
+		logger:         logger,
 	}
 }
 
 // RegisterRoutes registers equipment and inventory routes on the given mux
 func (api *EquipmentAPI) RegisterRoutes(mux *http.ServeMux, corsMiddleware func(http.HandlerFunc) http.HandlerFunc) {
-	// Equipment routes
+	// Equipment routes (public)
 	mux.HandleFunc("/api/equipment/search", corsMiddleware(api.handleSearchEquipment))
 	mux.HandleFunc("/api/equipment/category/", corsMiddleware(api.handleGetByCategory))
 	mux.HandleFunc("/api/equipment/sellers", corsMiddleware(api.handleGetSellers))
 	mux.HandleFunc("/api/equipment/sync", corsMiddleware(api.handleSyncProducts))
 
-	// Inventory routes
-	mux.HandleFunc("/api/inventory", corsMiddleware(api.handleInventory))
-	mux.HandleFunc("/api/inventory/", corsMiddleware(api.handleInventoryItem))
-	mux.HandleFunc("/api/inventory/summary", corsMiddleware(api.handleInventorySummary))
+	// Inventory routes (require authentication)
+	mux.HandleFunc("/api/inventory", corsMiddleware(api.authMiddleware.RequireAuth(api.handleInventory)))
+	mux.HandleFunc("/api/inventory/summary", corsMiddleware(api.authMiddleware.RequireAuth(api.handleInventorySummary)))
+	mux.HandleFunc("/api/inventory/", corsMiddleware(api.authMiddleware.RequireAuth(api.handleInventoryItem)))
 }
 
 // Equipment handlers
@@ -202,6 +205,8 @@ func (api *EquipmentAPI) handleInventory(w http.ResponseWriter, r *http.Request)
 }
 
 func (api *EquipmentAPI) listInventory(w http.ResponseWriter, r *http.Request) {
+	userID := auth.GetUserID(r.Context())
+
 	query := r.URL.Query()
 
 	params := models.InventoryFilterParams{
@@ -226,7 +231,7 @@ func (api *EquipmentAPI) listInventory(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
-	response, err := api.inventorySvc.GetInventory(ctx, params)
+	response, err := api.inventorySvc.GetInventory(ctx, userID, params)
 	if err != nil {
 		api.logger.Error("Inventory list failed", logging.WithField("error", err.Error()))
 		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
@@ -239,6 +244,8 @@ func (api *EquipmentAPI) listInventory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (api *EquipmentAPI) addInventoryItem(w http.ResponseWriter, r *http.Request) {
+	userID := auth.GetUserID(r.Context())
+
 	var params models.AddInventoryParams
 
 	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
@@ -249,7 +256,7 @@ func (api *EquipmentAPI) addInventoryItem(w http.ResponseWriter, r *http.Request
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
-	item, err := api.inventorySvc.AddItem(ctx, params)
+	item, err := api.inventorySvc.AddItem(ctx, userID, params)
 	if err != nil {
 		api.logger.Error("Add inventory item failed", logging.WithField("error", err.Error()))
 		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
@@ -283,10 +290,12 @@ func (api *EquipmentAPI) handleInventoryItem(w http.ResponseWriter, r *http.Requ
 }
 
 func (api *EquipmentAPI) getInventoryItem(w http.ResponseWriter, r *http.Request, id string) {
+	userID := auth.GetUserID(r.Context())
+
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
-	item, err := api.inventorySvc.GetItem(ctx, id)
+	item, err := api.inventorySvc.GetItem(ctx, id, userID)
 	if err != nil {
 		api.logger.Error("Get inventory item failed", logging.WithFields(map[string]interface{}{
 			"id":    id,
@@ -307,6 +316,8 @@ func (api *EquipmentAPI) getInventoryItem(w http.ResponseWriter, r *http.Request
 }
 
 func (api *EquipmentAPI) updateInventoryItem(w http.ResponseWriter, r *http.Request, id string) {
+	userID := auth.GetUserID(r.Context())
+
 	var params models.UpdateInventoryParams
 
 	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
@@ -318,7 +329,7 @@ func (api *EquipmentAPI) updateInventoryItem(w http.ResponseWriter, r *http.Requ
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
-	item, err := api.inventorySvc.UpdateItem(ctx, params)
+	item, err := api.inventorySvc.UpdateItem(ctx, userID, params)
 	if err != nil {
 		api.logger.Error("Update inventory item failed", logging.WithFields(map[string]interface{}{
 			"id":    id,
@@ -334,10 +345,12 @@ func (api *EquipmentAPI) updateInventoryItem(w http.ResponseWriter, r *http.Requ
 }
 
 func (api *EquipmentAPI) deleteInventoryItem(w http.ResponseWriter, r *http.Request, id string) {
+	userID := auth.GetUserID(r.Context())
+
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
-	if err := api.inventorySvc.RemoveItem(ctx, id); err != nil {
+	if err := api.inventorySvc.RemoveItem(ctx, id, userID); err != nil {
 		api.logger.Error("Delete inventory item failed", logging.WithFields(map[string]interface{}{
 			"id":    id,
 			"error": err.Error(),
@@ -357,10 +370,12 @@ func (api *EquipmentAPI) handleInventorySummary(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	userID := auth.GetUserID(r.Context())
+
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
-	summary, err := api.inventorySvc.GetSummary(ctx)
+	summary, err := api.inventorySvc.GetSummary(ctx, userID)
 	if err != nil {
 		api.logger.Error("Get inventory summary failed", logging.WithField("error", err.Error()))
 		api.writeJSON(w, http.StatusInternalServerError, map[string]string{

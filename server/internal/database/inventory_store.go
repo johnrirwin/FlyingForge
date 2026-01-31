@@ -22,7 +22,7 @@ func NewInventoryStore(db *DB) *InventoryStore {
 }
 
 // Add creates a new inventory item
-func (s *InventoryStore) Add(ctx context.Context, params models.AddInventoryParams) (*models.InventoryItem, error) {
+func (s *InventoryStore) Add(ctx context.Context, userID string, params models.AddInventoryParams) (*models.InventoryItem, error) {
 	var purchaseDate *time.Time
 	if params.PurchaseDate != "" {
 		t, err := time.Parse("2006-01-02", params.PurchaseDate)
@@ -48,14 +48,15 @@ func (s *InventoryStore) Add(ctx context.Context, params models.AddInventoryPara
 
 	query := `
 		INSERT INTO inventory_items (
-			name, category, manufacturer, quantity, condition, notes,
+			user_id, name, category, manufacturer, quantity, condition, notes,
 			build_id, purchase_price, purchase_date, purchase_seller,
 			product_url, image_url, specs, source_equipment_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		RETURNING id, created_at, updated_at
 	`
 
 	item := &models.InventoryItem{
+		UserID:            userID,
 		Name:              params.Name,
 		Category:          params.Category,
 		Manufacturer:      params.Manufacturer,
@@ -73,7 +74,7 @@ func (s *InventoryStore) Add(ctx context.Context, params models.AddInventoryPara
 	}
 
 	err := s.db.QueryRowContext(ctx, query,
-		item.Name, item.Category, item.Manufacturer, item.Quantity, item.Condition, item.Notes,
+		nullString(userID), item.Name, item.Category, item.Manufacturer, item.Quantity, item.Condition, item.Notes,
 		nullString(item.BuildID), item.PurchasePrice, purchaseDate, nullString(item.PurchaseSeller),
 		nullString(item.ProductURL), nullString(item.ImageURL), item.Specs, nullString(item.SourceEquipmentID),
 	).Scan(&item.ID, &item.CreatedAt, &item.UpdatedAt)
@@ -85,8 +86,8 @@ func (s *InventoryStore) Add(ctx context.Context, params models.AddInventoryPara
 	return item, nil
 }
 
-// Get retrieves an inventory item by ID
-func (s *InventoryStore) Get(ctx context.Context, id string) (*models.InventoryItem, error) {
+// Get retrieves an inventory item by ID (optionally scoped to user)
+func (s *InventoryStore) Get(ctx context.Context, id string, userID string) (*models.InventoryItem, error) {
 	query := `
 		SELECT id, user_id, name, category, manufacturer, quantity, condition, notes,
 			   build_id, purchase_price, purchase_date, purchase_seller,
@@ -94,14 +95,28 @@ func (s *InventoryStore) Get(ctx context.Context, id string) (*models.InventoryI
 		FROM inventory_items
 		WHERE id = $1
 	`
+	args := []interface{}{id}
+
+	// If userID is provided, scope the query
+	if userID != "" {
+		query = `
+			SELECT id, user_id, name, category, manufacturer, quantity, condition, notes,
+				   build_id, purchase_price, purchase_date, purchase_seller,
+				   product_url, image_url, specs, source_equipment_id, created_at, updated_at
+			FROM inventory_items
+			WHERE id = $1 AND user_id = $2
+		`
+		args = append(args, userID)
+	}
 
 	item := &models.InventoryItem{}
+	var itemUserID sql.NullString
 	var buildID, purchaseSeller, productURL, imageURL, sourceEquipmentID sql.NullString
 	var purchasePrice sql.NullFloat64
 	var purchaseDate sql.NullTime
 
-	err := s.db.QueryRowContext(ctx, query, id).Scan(
-		&item.ID, &item.UserID, &item.Name, &item.Category, &item.Manufacturer,
+	err := s.db.QueryRowContext(ctx, query, args...).Scan(
+		&item.ID, &itemUserID, &item.Name, &item.Category, &item.Manufacturer,
 		&item.Quantity, &item.Condition, &item.Notes,
 		&buildID, &purchasePrice, &purchaseDate, &purchaseSeller,
 		&productURL, &imageURL, &item.Specs, &sourceEquipmentID,
@@ -115,6 +130,9 @@ func (s *InventoryStore) Get(ctx context.Context, id string) (*models.InventoryI
 		return nil, fmt.Errorf("failed to get inventory item: %w", err)
 	}
 
+	if itemUserID.Valid {
+		item.UserID = itemUserID.String
+	}
 	item.BuildID = buildID.String
 	item.PurchaseSeller = purchaseSeller.String
 	item.ProductURL = productURL.String
@@ -131,12 +149,19 @@ func (s *InventoryStore) Get(ctx context.Context, id string) (*models.InventoryI
 	return item, nil
 }
 
-// List retrieves inventory items with optional filtering
-func (s *InventoryStore) List(ctx context.Context, params models.InventoryFilterParams) (*models.InventoryResponse, error) {
+// List retrieves inventory items with optional filtering (scoped to user if userID provided)
+func (s *InventoryStore) List(ctx context.Context, userID string, params models.InventoryFilterParams) (*models.InventoryResponse, error) {
 	// Build WHERE clause
 	var conditions []string
 	var args []interface{}
 	argIndex := 1
+
+	// Scope to user if userID is provided
+	if userID != "" {
+		conditions = append(conditions, fmt.Sprintf("user_id = $%d", argIndex))
+		args = append(args, userID)
+		argIndex++
+	}
 
 	if params.Category != "" {
 		conditions = append(conditions, fmt.Sprintf("category = $%d", argIndex))
@@ -244,8 +269,8 @@ func (s *InventoryStore) List(ctx context.Context, params models.InventoryFilter
 	}, nil
 }
 
-// Update updates an inventory item
-func (s *InventoryStore) Update(ctx context.Context, params models.UpdateInventoryParams) (*models.InventoryItem, error) {
+// Update updates an inventory item (scoped to user if userID provided)
+func (s *InventoryStore) Update(ctx context.Context, userID string, params models.UpdateInventoryParams) (*models.InventoryItem, error) {
 	// Build SET clause
 	var sets []string
 	var args []interface{}
@@ -337,18 +362,26 @@ func (s *InventoryStore) Update(ctx context.Context, params models.UpdateInvento
 	}
 
 	if len(sets) == 0 {
-		return s.Get(ctx, params.ID)
+		return s.Get(ctx, params.ID, userID)
 	}
 
 	sets = append(sets, "updated_at = NOW()")
 
+	whereClause := fmt.Sprintf("id = $%d", argIndex)
+	args = append(args, params.ID)
+	argIndex++
+
+	// Scope to user if userID provided
+	if userID != "" {
+		whereClause += fmt.Sprintf(" AND user_id = $%d", argIndex)
+		args = append(args, userID)
+	}
+
 	query := fmt.Sprintf(`
 		UPDATE inventory_items
 		SET %s
-		WHERE id = $%d
-	`, strings.Join(sets, ", "), argIndex)
-
-	args = append(args, params.ID)
+		WHERE %s
+	`, strings.Join(sets, ", "), whereClause)
 
 	result, err := s.db.ExecContext(ctx, query, args...)
 	if err != nil {
@@ -360,13 +393,20 @@ func (s *InventoryStore) Update(ctx context.Context, params models.UpdateInvento
 		return nil, fmt.Errorf("inventory item not found: %s", params.ID)
 	}
 
-	return s.Get(ctx, params.ID)
+	return s.Get(ctx, params.ID, userID)
 }
 
-// Delete removes an inventory item
-func (s *InventoryStore) Delete(ctx context.Context, id string) error {
+// Delete removes an inventory item (scoped to user if userID provided)
+func (s *InventoryStore) Delete(ctx context.Context, id string, userID string) error {
 	query := "DELETE FROM inventory_items WHERE id = $1"
-	result, err := s.db.ExecContext(ctx, query, id)
+	args := []interface{}{id}
+
+	if userID != "" {
+		query = "DELETE FROM inventory_items WHERE id = $1 AND user_id = $2"
+		args = append(args, userID)
+	}
+
+	result, err := s.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("failed to delete inventory item: %w", err)
 	}
@@ -379,16 +419,21 @@ func (s *InventoryStore) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// GetSummary returns a summary of the inventory
-func (s *InventoryStore) GetSummary(ctx context.Context) (*models.InventorySummary, error) {
+// GetSummary returns a summary of the inventory (scoped to user if userID provided)
+func (s *InventoryStore) GetSummary(ctx context.Context, userID string) (*models.InventorySummary, error) {
 	// Get total items and value
 	var totalItems int
 	var totalValue sql.NullFloat64
 
-	err := s.db.QueryRowContext(ctx, `
-		SELECT COUNT(*), COALESCE(SUM(purchase_price * quantity), 0)
-		FROM inventory_items
-	`).Scan(&totalItems, &totalValue)
+	query := `SELECT COUNT(*), COALESCE(SUM(purchase_price * quantity), 0) FROM inventory_items`
+	args := []interface{}{}
+
+	if userID != "" {
+		query += " WHERE user_id = $1"
+		args = append(args, userID)
+	}
+
+	err := s.db.QueryRowContext(ctx, query, args...).Scan(&totalItems, &totalValue)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get inventory summary: %w", err)
 	}
@@ -396,11 +441,13 @@ func (s *InventoryStore) GetSummary(ctx context.Context) (*models.InventorySumma
 	// Get counts by category
 	byCategory := make(map[models.EquipmentCategory]int)
 
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT category, COUNT(*)
-		FROM inventory_items
-		GROUP BY category
-	`)
+	categoryQuery := `SELECT category, COUNT(*) FROM inventory_items`
+	if userID != "" {
+		categoryQuery += " WHERE user_id = $1"
+	}
+	categoryQuery += " GROUP BY category"
+
+	rows, err := s.db.QueryContext(ctx, categoryQuery, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get category counts: %w", err)
 	}
@@ -418,11 +465,13 @@ func (s *InventoryStore) GetSummary(ctx context.Context) (*models.InventorySumma
 	// Get counts by condition
 	byCondition := make(map[models.ItemCondition]int)
 
-	rows, err = s.db.QueryContext(ctx, `
-		SELECT condition, COUNT(*)
-		FROM inventory_items
-		GROUP BY condition
-	`)
+	conditionQuery := `SELECT condition, COUNT(*) FROM inventory_items`
+	if userID != "" {
+		conditionQuery += " WHERE user_id = $1"
+	}
+	conditionQuery += " GROUP BY condition"
+
+	rows, err = s.db.QueryContext(ctx, conditionQuery, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get condition counts: %w", err)
 	}

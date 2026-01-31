@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/johnrirwin/mcp-news-feed/internal/aggregator"
+	"github.com/johnrirwin/mcp-news-feed/internal/auth"
 	"github.com/johnrirwin/mcp-news-feed/internal/equipment"
 	"github.com/johnrirwin/mcp-news-feed/internal/inventory"
 	"github.com/johnrirwin/mcp-news-feed/internal/logging"
@@ -16,19 +17,23 @@ import (
 )
 
 type Server struct {
-	agg          *aggregator.Aggregator
-	equipmentSvc *equipment.Service
-	inventorySvc inventory.InventoryManager
-	logger       *logging.Logger
-	server       *http.Server
+	agg            *aggregator.Aggregator
+	equipmentSvc   *equipment.Service
+	inventorySvc   inventory.InventoryManager
+	authSvc        *auth.Service
+	authMiddleware *auth.Middleware
+	logger         *logging.Logger
+	server         *http.Server
 }
 
-func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, logger *logging.Logger) *Server {
+func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, authSvc *auth.Service, authMiddleware *auth.Middleware, logger *logging.Logger) *Server {
 	return &Server{
-		agg:          agg,
-		equipmentSvc: equipmentSvc,
-		inventorySvc: inventorySvc,
-		logger:       logger,
+		agg:            agg,
+		equipmentSvc:   equipmentSvc,
+		inventorySvc:   inventorySvc,
+		authSvc:        authSvc,
+		authMiddleware: authMiddleware,
+		logger:         logger,
 	}
 }
 
@@ -40,8 +45,14 @@ func (s *Server) Start(addr string) error {
 	mux.HandleFunc("/api/sources", s.corsMiddleware(s.handleGetSources))
 	mux.HandleFunc("/api/refresh", s.corsMiddleware(s.handleRefresh))
 
+	// Auth routes
+	if s.authSvc != nil && s.authMiddleware != nil {
+		authAPI := NewAuthAPI(s.authSvc, s.authMiddleware, s.logger)
+		authAPI.RegisterRoutes(mux, s.corsMiddleware)
+	}
+
 	// Equipment and inventory routes
-	equipmentAPI := NewEquipmentAPI(s.equipmentSvc, s.inventorySvc, s.logger)
+	equipmentAPI := NewEquipmentAPI(s.equipmentSvc, s.inventorySvc, s.authMiddleware, s.logger)
 	equipmentAPI.RegisterRoutes(mux, s.corsMiddleware)
 
 	// Health check
@@ -68,8 +79,8 @@ func (s *Server) Shutdown(ctx context.Context) error {
 func (s *Server) corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)

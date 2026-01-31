@@ -78,6 +78,9 @@ func (db *DB) Close() error {
 // Migrate runs database migrations
 func (db *DB) Migrate(ctx context.Context) error {
 	migrations := []string{
+		migrationUsers,
+		migrationUserIdentities,
+		migrationRefreshTokens,
 		migrationSellers,
 		migrationEquipmentItems,
 		migrationInventoryItems,
@@ -94,6 +97,52 @@ func (db *DB) Migrate(ctx context.Context) error {
 }
 
 // Migration SQL statements
+const migrationUsers = `
+CREATE TABLE IF NOT EXISTS users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255),
+    display_name VARCHAR(255) NOT NULL,
+    avatar_url VARCHAR(1024),
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    last_login_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(LOWER(email));
+CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
+`
+
+const migrationUserIdentities = `
+CREATE TABLE IF NOT EXISTS user_identities (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    provider VARCHAR(50) NOT NULL,
+    provider_subject VARCHAR(255) NOT NULL,
+    provider_email VARCHAR(255),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(provider, provider_subject)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_identities_user ON user_identities(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_identities_provider ON user_identities(provider, provider_subject);
+`
+
+const migrationRefreshTokens = `
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash VARCHAR(255) NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    revoked_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash ON refresh_tokens(token_hash);
+`
+
 const migrationSellers = `
 CREATE TABLE IF NOT EXISTS sellers (
     id VARCHAR(50) PRIMARY KEY,
@@ -137,7 +186,7 @@ CREATE TABLE IF NOT EXISTS equipment_items (
 const migrationInventoryItems = `
 CREATE TABLE IF NOT EXISTS inventory_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id VARCHAR(100) DEFAULT 'default',
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     name VARCHAR(512) NOT NULL,
     category VARCHAR(50) NOT NULL,
     manufacturer VARCHAR(255),
