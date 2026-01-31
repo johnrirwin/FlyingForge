@@ -24,18 +24,25 @@ type Engagement struct {
 }
 
 type SourceInfo struct {
-	Name   string `json:"name"`
-	Type   string `json:"type"`
-	URL    string `json:"url"`
-	Active bool   `json:"active"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	URL         string `json:"url"`
+	SourceType  string `json:"sourceType"`
+	Description string `json:"description"`
+	FeedType    string `json:"feedType"`
+	Enabled     bool   `json:"enabled"`
 }
 
 type FilterParams struct {
-	Limit  int    `json:"limit"`
-	Offset int    `json:"offset"`
-	Source string `json:"source"`
-	Tag    string `json:"tag"`
-	Search string `json:"search"`
+	Limit      int      `json:"limit"`
+	Offset     int      `json:"offset"`
+	Sources    []string `json:"sources"`
+	SourceType string   `json:"sourceType"`
+	Query      string   `json:"query"`
+	Sort       string   `json:"sort"`
+	FromDate   string   `json:"fromDate"`
+	ToDate     string   `json:"toDate"`
+	Tag        string   `json:"tag"`
 }
 
 type AggregatedResponse struct {

@@ -57,10 +57,13 @@ func (f *RedditFetcher) Name() string {
 
 func (f *RedditFetcher) SourceInfo() models.SourceInfo {
 	return models.SourceInfo{
-		Name:   "r/" + f.subreddit,
-		Type:   "reddit",
-		URL:    fmt.Sprintf("https://www.reddit.com/r/%s", f.subreddit),
-		Active: true,
+		ID:          "r-" + f.subreddit,
+		Name:        "r/" + f.subreddit,
+		URL:         fmt.Sprintf("https://www.reddit.com/r/%s", f.subreddit),
+		SourceType:  "community",
+		Description: "Reddit community r/" + f.subreddit,
+		FeedType:    "reddit",
+		Enabled:     true,
 	}
 }
 

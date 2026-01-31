@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/johnrirwin/mcp-news-feed/internal/aggregator"
@@ -88,12 +89,22 @@ func (s *Server) handleGetItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Parse sources (comma-separated)
+	var sources []string
+	if s := query.Get("sources"); s != "" {
+		sources = strings.Split(s, ",")
+	}
+
 	params := models.FilterParams{
-		Limit:  limit,
-		Offset: offset,
-		Source: query.Get("source"),
-		Tag:    query.Get("tag"),
-		Search: query.Get("search"),
+		Limit:      limit,
+		Offset:     offset,
+		Sources:    sources,
+		SourceType: query.Get("sourceType"),
+		Query:      query.Get("q"),
+		Sort:       query.Get("sort"),
+		FromDate:   query.Get("fromDate"),
+		ToDate:     query.Get("toDate"),
+		Tag:        query.Get("tag"),
 	}
 
 	response := s.agg.GetItems(params)

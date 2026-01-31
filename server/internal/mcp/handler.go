@@ -74,10 +74,10 @@ func (h *Handler) GetTools() []ToolDefinition {
 }
 
 type GetNewsParams struct {
-	Limit  int    `json:"limit"`
-	Source string `json:"source"`
-	Tag    string `json:"tag"`
-	Search string `json:"search"`
+	Limit   int      `json:"limit"`
+	Sources []string `json:"sources"`
+	Tag     string   `json:"tag"`
+	Query   string   `json:"query"`
 }
 
 func (h *Handler) HandleToolCall(ctx context.Context, name string, arguments json.RawMessage) (interface{}, error) {
@@ -106,10 +106,10 @@ func (h *Handler) handleGetNews(ctx context.Context, arguments json.RawMessage) 
 	}
 
 	filterParams := models.FilterParams{
-		Limit:  params.Limit,
-		Source: params.Source,
-		Tag:    params.Tag,
-		Search: params.Search,
+		Limit:   params.Limit,
+		Sources: params.Sources,
+		Tag:     params.Tag,
+		Query:   params.Query,
 	}
 
 	response := h.agg.GetItems(filterParams)

@@ -134,33 +134,119 @@ func (a *Aggregator) GetSources() []models.SourceInfo {
 }
 
 func (a *Aggregator) filterItems(items []models.FeedItem, params models.FilterParams) []models.FeedItem {
-	if params.Source == "" && params.Tag == "" && params.Search == "" {
-		return items
+	// Early return if no filters
+	if len(params.Sources) == 0 && params.SourceType == "" && params.Tag == "" && params.Query == "" && params.FromDate == "" && params.ToDate == "" {
+		return a.sortItems(items, params.Sort)
+	}
+
+	// Build source name lookup map from source IDs
+	// This maps source IDs (e.g., "r-fpv") to source names (e.g., "r/fpv")
+	sourceNameMap := make(map[string]bool)
+	if len(params.Sources) > 0 {
+		// Get all source info to build ID -> Name mapping
+		idToName := make(map[string]string)
+		for _, f := range a.fetchers {
+			info := f.SourceInfo()
+			idToName[strings.ToLower(info.ID)] = strings.ToLower(info.Name)
+		}
+		// Convert requested source IDs to source names
+		for _, srcID := range params.Sources {
+			srcIDLower := strings.ToLower(srcID)
+			if name, ok := idToName[srcIDLower]; ok {
+				sourceNameMap[name] = true
+			} else {
+				// Fallback: also try the ID as-is in case it matches a name
+				sourceNameMap[srcIDLower] = true
+			}
+		}
+	}
+
+	// Parse date filters
+	var fromTime, toTime time.Time
+	if params.FromDate != "" {
+		if t, err := time.Parse("2006-01-02", params.FromDate); err == nil {
+			fromTime = t
+		} else if t, err := time.Parse("01/02/2006", params.FromDate); err == nil {
+			fromTime = t
+		}
+	}
+	if params.ToDate != "" {
+		if t, err := time.Parse("2006-01-02", params.ToDate); err == nil {
+			toTime = t.Add(24*time.Hour - time.Nanosecond) // End of day
+		} else if t, err := time.Parse("01/02/2006", params.ToDate); err == nil {
+			toTime = t.Add(24*time.Hour - time.Nanosecond)
+		}
 	}
 
 	filtered := make([]models.FeedItem, 0)
 	for _, item := range items {
-		if params.Source != "" && !strings.EqualFold(item.Source, params.Source) {
+		// Filter by sources
+		if len(sourceNameMap) > 0 && !sourceNameMap[strings.ToLower(item.Source)] {
 			continue
 		}
 
+		// Filter by source type
+		if params.SourceType != "" && !strings.EqualFold(item.SourceType, params.SourceType) {
+			// Map reddit to community
+			if params.SourceType == "community" && item.SourceType != "reddit" {
+				continue
+			} else if params.SourceType == "news" && item.SourceType != "rss" {
+				continue
+			} else if params.SourceType != "community" && params.SourceType != "news" {
+				continue
+			}
+		}
+
+		// Filter by tag
 		if params.Tag != "" && !containsTag(item.Tags, params.Tag) {
 			continue
 		}
 
-		if params.Search != "" {
-			search := strings.ToLower(params.Search)
+		// Filter by search query
+		if params.Query != "" {
+			search := strings.ToLower(params.Query)
 			title := strings.ToLower(item.Title)
 			summary := strings.ToLower(item.Summary)
-			if !strings.Contains(title, search) && !strings.Contains(summary, search) {
+			content := strings.ToLower(item.Content)
+			if !strings.Contains(title, search) && !strings.Contains(summary, search) && !strings.Contains(content, search) {
 				continue
 			}
+		}
+
+		// Filter by date range
+		if !fromTime.IsZero() && item.PublishedAt.Before(fromTime) {
+			continue
+		}
+		if !toTime.IsZero() && item.PublishedAt.After(toTime) {
+			continue
 		}
 
 		filtered = append(filtered, item)
 	}
 
-	return filtered
+	return a.sortItems(filtered, params.Sort)
+}
+
+func (a *Aggregator) sortItems(items []models.FeedItem, sortBy string) []models.FeedItem {
+	switch sortBy {
+	case "score", "top":
+		sort.Slice(items, func(i, j int) bool {
+			scoreI := 0
+			scoreJ := 0
+			if items[i].Engagement != nil {
+				scoreI = items[i].Engagement.Upvotes + items[i].Engagement.Comments
+			}
+			if items[j].Engagement != nil {
+				scoreJ = items[j].Engagement.Upvotes + items[j].Engagement.Comments
+			}
+			return scoreI > scoreJ
+		})
+	default: // "newest" or empty
+		sort.Slice(items, func(i, j int) bool {
+			return items[i].PublishedAt.After(items[j].PublishedAt)
+		})
+	}
+	return items
 }
 
 func (a *Aggregator) deduplicate(items []models.FeedItem) []models.FeedItem {

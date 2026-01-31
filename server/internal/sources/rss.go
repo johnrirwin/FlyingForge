@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/mmcdole/gofeed"
@@ -36,10 +37,13 @@ func (f *RSSFetcher) Name() string {
 
 func (f *RSSFetcher) SourceInfo() models.SourceInfo {
 	return models.SourceInfo{
-		Name:   f.name,
-		Type:   "rss",
-		URL:    f.url,
-		Active: true,
+		ID:          strings.ToLower(strings.ReplaceAll(f.name, " ", "-")),
+		Name:        f.name,
+		URL:         f.url,
+		SourceType:  "news",
+		Description: "RSS feed from " + f.name,
+		FeedType:    "rss",
+		Enabled:     true,
 	}
 }
 

@@ -50,10 +50,13 @@ func (f *ForumFetcher) Name() string {
 
 func (f *ForumFetcher) SourceInfo() models.SourceInfo {
 	return models.SourceInfo{
-		Name:   f.name,
-		Type:   "forum",
-		URL:    f.url,
-		Active: true,
+		ID:          strings.ToLower(strings.ReplaceAll(f.name, " ", "-")),
+		Name:        f.name,
+		URL:         f.url,
+		SourceType:  "community",
+		Description: "Forum " + f.name,
+		FeedType:    "forum",
+		Enabled:     true,
 	}
 }
 
