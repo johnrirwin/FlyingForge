@@ -10,3 +10,9 @@ export { InventoryCard, InventoryList } from './InventoryCard';
 export { AddInventoryModal } from './AddInventoryModal';
 export { EquipmentSidebar } from './EquipmentSidebar';
 export { ShopSection } from './ShopSection';
+
+// Aircraft components
+export { AircraftCard } from './AircraftCard';
+export { AircraftList } from './AircraftList';
+export { AircraftForm } from './AircraftForm';
+export { AircraftDetail } from './AircraftDetail';

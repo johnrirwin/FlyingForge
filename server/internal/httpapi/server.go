@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/johnrirwin/mcp-news-feed/internal/aggregator"
+	"github.com/johnrirwin/mcp-news-feed/internal/aircraft"
 	"github.com/johnrirwin/mcp-news-feed/internal/auth"
 	"github.com/johnrirwin/mcp-news-feed/internal/equipment"
 	"github.com/johnrirwin/mcp-news-feed/internal/inventory"
@@ -20,17 +21,19 @@ type Server struct {
 	agg            *aggregator.Aggregator
 	equipmentSvc   *equipment.Service
 	inventorySvc   inventory.InventoryManager
+	aircraftSvc    *aircraft.Service
 	authSvc        *auth.Service
 	authMiddleware *auth.Middleware
 	logger         *logging.Logger
 	server         *http.Server
 }
 
-func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, authSvc *auth.Service, authMiddleware *auth.Middleware, logger *logging.Logger) *Server {
+func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, logger *logging.Logger) *Server {
 	return &Server{
 		agg:            agg,
 		equipmentSvc:   equipmentSvc,
 		inventorySvc:   inventorySvc,
+		aircraftSvc:    aircraftSvc,
 		authSvc:        authSvc,
 		authMiddleware: authMiddleware,
 		logger:         logger,
@@ -54,6 +57,12 @@ func (s *Server) Start(addr string) error {
 	// Equipment and inventory routes
 	equipmentAPI := NewEquipmentAPI(s.equipmentSvc, s.inventorySvc, s.authMiddleware, s.logger)
 	equipmentAPI.RegisterRoutes(mux, s.corsMiddleware)
+
+	// Aircraft routes
+	if s.aircraftSvc != nil && s.authMiddleware != nil {
+		aircraftAPI := NewAircraftAPI(s.aircraftSvc, s.authMiddleware, s.logger)
+		aircraftAPI.RegisterRoutes(mux, s.corsMiddleware)
+	}
 
 	// Health check
 	mux.HandleFunc("/health", s.handleHealth)

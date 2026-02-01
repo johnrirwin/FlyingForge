@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/johnrirwin/mcp-news-feed/internal/aggregator"
+	"github.com/johnrirwin/mcp-news-feed/internal/aircraft"
 	"github.com/johnrirwin/mcp-news-feed/internal/auth"
 	"github.com/johnrirwin/mcp-news-feed/internal/cache"
 	"github.com/johnrirwin/mcp-news-feed/internal/config"
@@ -27,6 +28,7 @@ type App struct {
 	Aggregator     *aggregator.Aggregator
 	EquipmentSvc   *equipment.Service
 	InventorySvc   inventory.InventoryManager
+	AircraftSvc    *aircraft.Service
 	AuthService    *auth.Service
 	AuthMiddleware *auth.Middleware
 	HTTPServer     *httpapi.Server
@@ -176,6 +178,10 @@ func (a *App) initDatabaseServices() {
 	inventoryStore := database.NewInventoryStore(db)
 	a.InventorySvc = inventory.NewService(inventoryStore, a.Logger)
 
+	// Initialize aircraft
+	aircraftStore := database.NewAircraftStore(db)
+	a.AircraftSvc = aircraft.NewService(aircraftStore, a.InventorySvc, a.Logger)
+
 	// Initialize auth
 	a.userStore = database.NewUserStore(db)
 	a.AuthService = auth.NewService(a.userStore, a.Config.Auth, a.Logger)
@@ -185,8 +191,8 @@ func (a *App) initDatabaseServices() {
 }
 
 func (a *App) initServers() {
-	// Initialize HTTP server with auth
-	a.HTTPServer = httpapi.New(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.AuthService, a.AuthMiddleware, a.Logger)
+	// Initialize HTTP server with auth and aircraft
+	a.HTTPServer = httpapi.New(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.AircraftSvc, a.AuthService, a.AuthMiddleware, a.Logger)
 
 	// Initialize MCP server
 	mcpHandler := mcp.NewHandler(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.Logger)

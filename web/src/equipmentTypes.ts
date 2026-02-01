@@ -191,10 +191,11 @@ export interface InventorySummary {
 }
 
 // App section navigation
-export type AppSection = 'news' | 'equipment' | 'inventory';
+export type AppSection = 'news' | 'equipment' | 'inventory' | 'aircraft';
 
 export const APP_SECTIONS: { value: AppSection; label: string; icon: string }[] = [
   { value: 'news', label: 'News', icon: '📰' },
   { value: 'equipment', label: 'Equipment', icon: '🛒' },
   { value: 'inventory', label: 'My Gear', icon: '🎒' },
+  { value: 'aircraft', label: 'My Aircraft', icon: '🚁' },
 ];
