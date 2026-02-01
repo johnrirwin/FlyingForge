@@ -199,6 +199,7 @@ func (s *Service) CreateBackup(ctx context.Context, radioID string, userID strin
 
 	// Copy file content and calculate checksum
 	// Enforce max size while copying by using LimitReader
+	// We add 1 to the limit to detect if the stream exceeds the max size
 	hasher := sha256.New()
 	limitedReader := io.LimitReader(fileReader, MaxBackupFileSize+1)
 	teeReader := io.TeeReader(limitedReader, hasher)

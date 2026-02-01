@@ -166,7 +166,6 @@ export function RadioSection({ onError }: RadioSectionProps) {
       try {
         const newBackup = await createBackup(selectedRadio.id, params);
 
-        clearInterval(progressInterval);
         setUploadProgress(100);
 
         setBackups(prev => [newBackup, ...prev]);
