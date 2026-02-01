@@ -140,7 +140,7 @@ export function BatterySection({ onError }: BatterySectionProps) {
       chemistry: battery.chemistry,
       cells: battery.cells,
       capacity_mah: battery.capacity_mah,
-      discharge_rating: battery.discharge_rating || '',
+      c_rating: battery.c_rating || '',
       weight_grams: battery.weight_grams?.toString() || '',
       brand: battery.brand || '',
       model: battery.model || '',
@@ -160,8 +160,8 @@ export function BatterySection({ onError }: BatterySectionProps) {
         chemistry: formState.chemistry,
         cells: formState.cells,
         capacity_mah: formState.capacity_mah,
-        discharge_rating: formState.discharge_rating || undefined,
-        weight_grams: formState.weight_grams ? parseInt(formState.weight_grams) : undefined,
+        c_rating: formState.c_rating || undefined,
+        weight_grams: formState.weight_grams ? parseInt(formState.weight_grams, 10) : undefined,
         brand: formState.brand || undefined,
         model: formState.model || undefined,
         purchase_date: formState.purchase_date || undefined,
@@ -186,8 +186,8 @@ export function BatterySection({ onError }: BatterySectionProps) {
         chemistry: formState.chemistry,
         cells: formState.cells,
         capacity_mah: formState.capacity_mah,
-        discharge_rating: formState.discharge_rating || undefined,
-        weight_grams: formState.weight_grams ? parseInt(formState.weight_grams) : undefined,
+        c_rating: formState.c_rating || undefined,
+        weight_grams: formState.weight_grams ? parseInt(formState.weight_grams, 10) : undefined,
         brand: formState.brand || undefined,
         model: formState.model || undefined,
         purchase_date: formState.purchase_date || undefined,
@@ -237,11 +237,14 @@ export function BatterySection({ onError }: BatterySectionProps) {
         .map(v => v ? parseFloat(v) : null)
         .filter((v): v is number => v !== null && !isNaN(v));
 
+      const voltage = logFormState.min_cell_v ? parseFloat(logFormState.min_cell_v) : undefined;
+
       const newLog = await createBatteryLog(selectedBattery.id, {
         log_date: logFormState.log_date,
-        cycle_count: logFormState.cycle_count ? parseInt(logFormState.cycle_count) : undefined,
+        cycle_count: logFormState.cycle_count ? parseInt(logFormState.cycle_count, 10) : undefined,
         ir_milliohms: irValues.length > 0 ? irValues : undefined,
-        voltage_per_cell: logFormState.voltage_per_cell ? parseFloat(logFormState.voltage_per_cell) : undefined,
+        min_cell_v: voltage,
+        max_cell_v: logFormState.max_cell_v ? parseFloat(logFormState.max_cell_v) : voltage,
         storage_voltage_ok: logFormState.storage_voltage_ok,
         notes: logFormState.notes || undefined,
       });
@@ -306,7 +309,7 @@ export function BatterySection({ onError }: BatterySectionProps) {
           <label className="block text-xs font-medium text-slate-400 uppercase mb-1.5">Cells</label>
           <select
             value={filterCells}
-            onChange={e => setFilterCells(e.target.value ? parseInt(e.target.value) : '')}
+            onChange={e => setFilterCells(e.target.value ? parseInt(e.target.value, 10) : '')}
             className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-primary-500"
           >
             <option value="">All</option>
@@ -353,8 +356,16 @@ export function BatterySection({ onError }: BatterySectionProps) {
           {batteries.map(battery => (
             <div
               key={battery.id}
-              className="p-4 bg-slate-800 rounded-lg border border-slate-700 hover:border-slate-600 transition-colors cursor-pointer"
+              role="button"
+              tabIndex={0}
+              className="p-4 bg-slate-800 rounded-lg border border-slate-700 hover:border-slate-600 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
               onClick={() => handleViewBattery(battery)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleViewBattery(battery);
+                }
+              }}
             >
               <div className="flex justify-between items-start mb-2">
                 <h3 className="font-medium text-white">{battery.name}</h3>
@@ -435,7 +446,7 @@ export function BatterySection({ onError }: BatterySectionProps) {
             <label className="block text-sm font-medium text-slate-300 mb-1">Cell Count *</label>
             <select
               value={formState.cells}
-              onChange={e => setFormState(prev => ({ ...prev, cells: parseInt(e.target.value) }))}
+              onChange={e => setFormState(prev => ({ ...prev, cells: parseInt(e.target.value, 10) }))}
               className={`w-full px-3 py-2 bg-slate-900 border rounded-lg text-white focus:outline-none focus:border-primary-500 ${formErrors.cells ? 'border-red-500' : 'border-slate-700'}`}
             >
               {CELL_COUNT_OPTIONS.map(count => (
@@ -453,7 +464,7 @@ export function BatterySection({ onError }: BatterySectionProps) {
             <input
               type="number"
               value={formState.capacity_mah}
-              onChange={e => setFormState(prev => ({ ...prev, capacity_mah: parseInt(e.target.value) || 0 }))}
+              onChange={e => setFormState(prev => ({ ...prev, capacity_mah: parseInt(e.target.value, 10) || 0 }))}
               className={`w-full px-3 py-2 bg-slate-900 border rounded-lg text-white focus:outline-none focus:border-primary-500 ${formErrors.capacity_mah ? 'border-red-500' : 'border-slate-700'}`}
               min="1"
               max="50000"
@@ -464,8 +475,8 @@ export function BatterySection({ onError }: BatterySectionProps) {
             <label className="block text-sm font-medium text-slate-300 mb-1">Discharge Rating</label>
             <input
               type="text"
-              value={formState.discharge_rating}
-              onChange={e => setFormState(prev => ({ ...prev, discharge_rating: e.target.value }))}
+              value={formState.c_rating}
+              onChange={e => setFormState(prev => ({ ...prev, c_rating: e.target.value }))}
               className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-primary-500"
               placeholder="e.g., 75C"
             />
@@ -605,10 +616,10 @@ export function BatterySection({ onError }: BatterySectionProps) {
                   <span className="text-slate-400">Capacity:</span>
                   <span className="ml-2 font-medium text-white">{formatCapacity(selectedBattery.capacity_mah)}</span>
                 </div>
-                {selectedBattery.discharge_rating && (
+                {selectedBattery.c_rating && (
                   <div>
                     <span className="text-slate-400">Discharge:</span>
-                    <span className="ml-2 font-medium text-white">{selectedBattery.discharge_rating}</span>
+                    <span className="ml-2 font-medium text-white">{selectedBattery.c_rating}</span>
                   </div>
                 )}
                 {selectedBattery.brand && (
@@ -675,9 +686,11 @@ export function BatterySection({ onError }: BatterySectionProps) {
                           {log.cycle_count !== undefined && (
                             <span className="ml-3 text-slate-400">Cycles: {log.cycle_count}</span>
                           )}
-                          {log.voltage_per_cell !== undefined && (
+                          {(log.min_cell_v !== undefined || log.max_cell_v !== undefined) && (
                             <span className="ml-3 text-slate-400">
-                              Voltage: {log.voltage_per_cell.toFixed(2)}V/cell
+                              Voltage: {log.min_cell_v !== undefined && log.max_cell_v !== undefined && log.min_cell_v === log.max_cell_v 
+                                ? `${log.min_cell_v.toFixed(2)}V/cell` 
+                                : `${log.min_cell_v?.toFixed(2) || 'N/A'}-${log.max_cell_v?.toFixed(2) || 'N/A'}V/cell`}
                             </span>
                           )}
                           {log.storage_voltage_ok !== undefined && (
@@ -762,9 +775,23 @@ export function BatterySection({ onError }: BatterySectionProps) {
 
         {/* Log Modal */}
         {showLogModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
-            <div className="bg-slate-800 rounded-lg p-6 max-w-md w-full mx-4 border border-slate-700">
-              <h3 className="text-lg font-medium text-white mb-4">Add Health Log</h3>
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50"
+            onClick={() => setShowLogModal(false)}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="log-modal-title"
+          >
+            <div 
+              className="bg-slate-800 rounded-lg p-6 max-w-md w-full mx-4 border border-slate-700"
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setShowLogModal(false);
+                }
+              }}
+            >
+              <h3 id="log-modal-title" className="text-lg font-medium text-white mb-4">Add Health Log</h3>
 
               <div className="space-y-4">
                 <div>
@@ -789,12 +816,23 @@ export function BatterySection({ onError }: BatterySectionProps) {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">Voltage/Cell</label>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Min Voltage/Cell</label>
                     <input
                       type="number"
                       step="0.01"
-                      value={logFormState.voltage_per_cell}
-                      onChange={e => setLogFormState(prev => ({ ...prev, voltage_per_cell: e.target.value }))}
+                      value={logFormState.min_cell_v}
+                      onChange={e => setLogFormState(prev => ({ ...prev, min_cell_v: e.target.value }))}
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-primary-500"
+                      placeholder="e.g., 3.80"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Max Voltage/Cell</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={logFormState.max_cell_v}
+                      onChange={e => setLogFormState(prev => ({ ...prev, max_cell_v: e.target.value }))}
                       className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-primary-500"
                       placeholder="e.g., 3.85"
                     />
