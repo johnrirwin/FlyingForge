@@ -118,8 +118,8 @@ export function RadioSection({ onError }: RadioSectionProps) {
 
     try {
       const updated = await updateRadio(selectedRadio.id, {
-        firmwareFamily: editFirmware === '' ? null : editFirmware,
-        notes: editNotes === '' ? null : editNotes,
+        firmwareFamily: editFirmware === '' ? undefined : editFirmware,
+        notes: editNotes === '' ? undefined : editNotes,
       });
       setSelectedRadio(updated);
       setRadios(prev => prev.map(r => r.id === updated.id ? updated : r));

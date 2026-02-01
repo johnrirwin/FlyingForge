@@ -1,6 +1,7 @@
 import type { Aircraft } from '../aircraftTypes';
 import type { InventoryItem } from '../equipmentTypes';
 import type { FeedItem, SourceInfo } from '../types';
+import { getAircraftImageUrl } from '../aircraftApi';
 
 interface DashboardProps {
   // Data
@@ -80,8 +81,6 @@ function DashboardAircraftCard({
   aircraft: Aircraft;
   onClick: () => void;
 }) {
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
-  
   return (
     <button
       onClick={onClick}
@@ -90,7 +89,7 @@ function DashboardAircraftCard({
       <div className="flex gap-4">
         {aircraft.hasImage ? (
           <img
-            src={`${API_BASE}/api/aircraft/${aircraft.id}/image`}
+            src={getAircraftImageUrl(aircraft.id)}
             alt={aircraft.name}
             className="w-16 h-16 rounded-lg object-cover flex-shrink-0"
           />
