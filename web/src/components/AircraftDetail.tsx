@@ -7,7 +7,7 @@ import type {
   SetComponentParams 
 } from '../aircraftTypes';
 import { AIRCRAFT_TYPES, COMPONENT_CATEGORIES } from '../aircraftTypes';
-import type { InventoryItem, AddInventoryParams } from '../equipmentTypes';
+import type { InventoryItem, AddInventoryParams, EquipmentCategory } from '../equipmentTypes';
 import { getInventory } from '../equipmentApi';
 import { getAircraftImageUrl } from '../aircraftApi';
 
@@ -469,7 +469,7 @@ function QuickAddForm({ category, onSubmit, isSubmitting }: QuickAddFormProps) {
 
     onSubmit({
       name: name.trim(),
-      category: category.equipmentCategory as any,
+      category: category.equipmentCategory as EquipmentCategory,
       manufacturer: manufacturer.trim() || undefined,
       quantity: 1,
       condition: 'new',
