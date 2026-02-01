@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"net/http"
 	"strconv"
 	"strings"
@@ -53,10 +54,25 @@ func (api *BatteryAPI) listBatteries(w http.ResponseWriter, r *http.Request) {
 	userID := auth.GetUserID(r.Context())
 	query := r.URL.Query()
 
+	// Handle sort parameters
+	sort := query.Get("sort")
+	if sort == "" {
+		sortBy := query.Get("sort_by")
+		sortOrder := query.Get("sort_order")
+		if sortBy != "" {
+			if sortOrder != "" {
+				sort = fmt.Sprintf("%s_%s", sortBy, strings.ToLower(sortOrder))
+			} else {
+				sort = sortBy
+			}
+		}
+	}
+
 	params := models.BatteryListParams{
 		Chemistry: models.BatteryChemistry(query.Get("chemistry")),
 		Query:     query.Get("query"),
-		Sort:      query.Get("sort"),
+		Sort:      sort,
+		SortOrder: query.Get("sort_order"),
 	}
 
 	if cells := query.Get("cells"); cells != "" {
@@ -64,12 +80,12 @@ func (api *BatteryAPI) listBatteries(w http.ResponseWriter, r *http.Request) {
 			params.Cells = c
 		}
 	}
-	if minCap := query.Get("minCapacity"); minCap != "" {
+	if minCap := query.Get("min_capacity"); minCap != "" {
 		if c, err := strconv.Atoi(minCap); err == nil {
 			params.MinCapacity = c
 		}
 	}
-	if maxCap := query.Get("maxCapacity"); maxCap != "" {
+	if maxCap := query.Get("max_capacity"); maxCap != "" {
 		if c, err := strconv.Atoi(maxCap); err == nil {
 			params.MaxCapacity = c
 		}
@@ -358,8 +374,8 @@ func (api *BatteryAPI) handleLabel(w http.ResponseWriter, r *http.Request, batte
 
 // generateLabelHTML generates printer-friendly HTML for a battery label
 func (api *BatteryAPI) generateLabelHTML(b *models.Battery, size string) string {
-	// QR code URL - points to battery detail page
-	qrContent := fmt.Sprintf("/batteries/%s", b.ID)
+	// QR code content - use battery ID so scanners get a self-contained code
+	qrContent := b.ID
 
 	// Determine label dimensions based on size
 	var width, height, fontSize, qrSize string
@@ -389,7 +405,12 @@ func (api *BatteryAPI) generateLabelHTML(b *models.Battery, size string) string 
 	// Format capacity
 	capacityStr := fmt.Sprintf("%dmAh", b.CapacityMah)
 
-	html := fmt.Sprintf(`<!DOCTYPE html>
+	// Escape all user-provided content for HTML safety
+	batteryCodeEscaped := html.EscapeString(b.BatteryCode)
+	chemistryEscaped := html.EscapeString(chemistryDisplay)
+	qrContentEscaped := html.EscapeString(qrContent)
+
+	htmlContent := fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
@@ -492,15 +513,15 @@ func (api *BatteryAPI) generateLabelHTML(b *models.Battery, size string) string 
     </script>
 </body>
 </html>`,
-		b.BatteryCode,
+		batteryCodeEscaped,
 		width, height, fontSize,
 		qrSize, qrSize,
-		b.BatteryCode,
-		chemistryDisplay, b.Cells, capacityStr,
-		qrContent,
+		batteryCodeEscaped,
+		chemistryEscaped, b.Cells, capacityStr,
+		qrContentEscaped,
 	)
 
-	return html
+	return htmlContent
 }
 
 // writeJSON writes a JSON response

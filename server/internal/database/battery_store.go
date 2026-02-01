@@ -23,21 +23,21 @@ func NewBatteryStore(db *DB) *BatteryStore {
 // Create creates a new battery
 func (s *BatteryStore) Create(ctx context.Context, userID string, batteryCode string, params models.CreateBatteryParams) (*models.Battery, error) {
 	query := `
-		INSERT INTO batteries (user_id, battery_code, name, chemistry, cells, capacity_mah, c_rating, connector, purchase_date, notes)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		RETURNING id, user_id, battery_code, name, chemistry, cells, capacity_mah, c_rating, connector, purchase_date, notes, created_at, updated_at
+		INSERT INTO batteries (user_id, battery_code, name, chemistry, cells, capacity_mah, c_rating, connector, weight_grams, brand, model, purchase_date, notes)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		RETURNING id, user_id, battery_code, name, chemistry, cells, capacity_mah, c_rating, connector, weight_grams, brand, model, purchase_date, notes, created_at, updated_at
 	`
 
 	battery := &models.Battery{}
 	var (
-		scanName, scanConnector, scanNotes sql.NullString
-		scanCRating                         sql.NullInt32
-		scanPurchaseDate                    sql.NullTime
+		scanName, scanConnector, scanNotes, scanBrand, scanModel sql.NullString
+		scanCRating, scanWeightGrams                             sql.NullInt32
+		scanPurchaseDate                                         sql.NullTime
 	)
 
 	// Prepare nullable fields
-	var name, connector, notes sql.NullString
-	var cRating sql.NullInt32
+	var name, connector, notes, brand, model sql.NullString
+	var cRating, weightGrams sql.NullInt32
 	var purchaseDate sql.NullTime
 
 	if params.Name != "" {
@@ -49,8 +49,17 @@ func (s *BatteryStore) Create(ctx context.Context, userID string, batteryCode st
 	if params.Notes != "" {
 		notes = sql.NullString{String: params.Notes, Valid: true}
 	}
+	if params.Brand != "" {
+		brand = sql.NullString{String: params.Brand, Valid: true}
+	}
+	if params.Model != "" {
+		model = sql.NullString{String: params.Model, Valid: true}
+	}
 	if params.CRating != nil {
 		cRating = sql.NullInt32{Int32: int32(*params.CRating), Valid: true}
+	}
+	if params.WeightGrams != nil {
+		weightGrams = sql.NullInt32{Int32: int32(*params.WeightGrams), Valid: true}
 	}
 	if params.PurchaseDate != nil {
 		purchaseDate = sql.NullTime{Time: *params.PurchaseDate, Valid: true}
@@ -58,11 +67,11 @@ func (s *BatteryStore) Create(ctx context.Context, userID string, batteryCode st
 
 	err := s.db.QueryRowContext(ctx, query,
 		userID, batteryCode, name, string(params.Chemistry), params.Cells, params.CapacityMah,
-		cRating, connector, purchaseDate, notes,
+		cRating, connector, weightGrams, brand, model, purchaseDate, notes,
 	).Scan(
 		&battery.ID, &battery.UserID, &battery.BatteryCode, &scanName,
 		&battery.Chemistry, &battery.Cells, &battery.CapacityMah,
-		&scanCRating, &scanConnector, &scanPurchaseDate, &scanNotes,
+		&scanCRating, &scanConnector, &scanWeightGrams, &scanBrand, &scanModel, &scanPurchaseDate, &scanNotes,
 		&battery.CreatedAt, &battery.UpdatedAt,
 	)
 	if err != nil {
@@ -72,9 +81,15 @@ func (s *BatteryStore) Create(ctx context.Context, userID string, batteryCode st
 	battery.Name = scanName.String
 	battery.Connector = scanConnector.String
 	battery.Notes = scanNotes.String
+	battery.Brand = scanBrand.String
+	battery.Model = scanModel.String
 	if scanCRating.Valid {
 		v := int(scanCRating.Int32)
 		battery.CRating = &v
+	}
+	if scanWeightGrams.Valid {
+		v := int(scanWeightGrams.Int32)
+		battery.WeightGrams = &v
 	}
 	if scanPurchaseDate.Valid {
 		battery.PurchaseDate = &scanPurchaseDate.Time
@@ -87,7 +102,7 @@ func (s *BatteryStore) Create(ctx context.Context, userID string, batteryCode st
 func (s *BatteryStore) Get(ctx context.Context, id string, userID string) (*models.Battery, error) {
 	query := `
 		SELECT b.id, b.user_id, b.battery_code, b.name, b.chemistry, b.cells, b.capacity_mah,
-		       b.c_rating, b.connector, b.purchase_date, b.notes, b.created_at, b.updated_at,
+		       b.c_rating, b.connector, b.weight_grams, b.brand, b.model, b.purchase_date, b.notes, b.created_at, b.updated_at,
 		       COALESCE(SUM(l.cycle_delta), 0) as total_cycles,
 		       MAX(l.logged_at) as last_logged
 		FROM batteries b
@@ -98,15 +113,15 @@ func (s *BatteryStore) Get(ctx context.Context, id string, userID string) (*mode
 
 	battery := &models.Battery{}
 	var (
-		scanName, scanConnector, scanNotes sql.NullString
-		scanCRating                         sql.NullInt32
-		scanPurchaseDate, scanLastLogged    sql.NullTime
+		scanName, scanConnector, scanNotes, scanBrand, scanModel sql.NullString
+		scanCRating, scanWeightGrams                             sql.NullInt32
+		scanPurchaseDate, scanLastLogged                         sql.NullTime
 	)
 
 	err := s.db.QueryRowContext(ctx, query, id, userID).Scan(
 		&battery.ID, &battery.UserID, &battery.BatteryCode, &scanName,
 		&battery.Chemistry, &battery.Cells, &battery.CapacityMah,
-		&scanCRating, &scanConnector, &scanPurchaseDate, &scanNotes,
+		&scanCRating, &scanConnector, &scanWeightGrams, &scanBrand, &scanModel, &scanPurchaseDate, &scanNotes,
 		&battery.CreatedAt, &battery.UpdatedAt,
 		&battery.TotalCycles, &scanLastLogged,
 	)
@@ -120,9 +135,15 @@ func (s *BatteryStore) Get(ctx context.Context, id string, userID string) (*mode
 	battery.Name = scanName.String
 	battery.Connector = scanConnector.String
 	battery.Notes = scanNotes.String
+	battery.Brand = scanBrand.String
+	battery.Model = scanModel.String
 	if scanCRating.Valid {
 		v := int(scanCRating.Int32)
 		battery.CRating = &v
+	}
+	if scanWeightGrams.Valid {
+		v := int(scanWeightGrams.Int32)
+		battery.WeightGrams = &v
 	}
 	if scanPurchaseDate.Valid {
 		battery.PurchaseDate = &scanPurchaseDate.Time
@@ -138,7 +159,7 @@ func (s *BatteryStore) Get(ctx context.Context, id string, userID string) (*mode
 func (s *BatteryStore) GetByCode(ctx context.Context, batteryCode string, userID string) (*models.Battery, error) {
 	query := `
 		SELECT b.id, b.user_id, b.battery_code, b.name, b.chemistry, b.cells, b.capacity_mah,
-		       b.c_rating, b.connector, b.purchase_date, b.notes, b.created_at, b.updated_at,
+		       b.c_rating, b.connector, b.weight_grams, b.brand, b.model, b.purchase_date, b.notes, b.created_at, b.updated_at,
 		       COALESCE(SUM(l.cycle_delta), 0) as total_cycles,
 		       MAX(l.logged_at) as last_logged
 		FROM batteries b
@@ -149,15 +170,15 @@ func (s *BatteryStore) GetByCode(ctx context.Context, batteryCode string, userID
 
 	battery := &models.Battery{}
 	var (
-		scanName, scanConnector, scanNotes sql.NullString
-		scanCRating                         sql.NullInt32
-		scanPurchaseDate, scanLastLogged    sql.NullTime
+		scanName, scanConnector, scanNotes, scanBrand, scanModel sql.NullString
+		scanCRating, scanWeightGrams                             sql.NullInt32
+		scanPurchaseDate, scanLastLogged                         sql.NullTime
 	)
 
 	err := s.db.QueryRowContext(ctx, query, batteryCode, userID).Scan(
 		&battery.ID, &battery.UserID, &battery.BatteryCode, &scanName,
 		&battery.Chemistry, &battery.Cells, &battery.CapacityMah,
-		&scanCRating, &scanConnector, &scanPurchaseDate, &scanNotes,
+		&scanCRating, &scanConnector, &scanWeightGrams, &scanBrand, &scanModel, &scanPurchaseDate, &scanNotes,
 		&battery.CreatedAt, &battery.UpdatedAt,
 		&battery.TotalCycles, &scanLastLogged,
 	)
@@ -171,9 +192,15 @@ func (s *BatteryStore) GetByCode(ctx context.Context, batteryCode string, userID
 	battery.Name = scanName.String
 	battery.Connector = scanConnector.String
 	battery.Notes = scanNotes.String
+	battery.Brand = scanBrand.String
+	battery.Model = scanModel.String
 	if scanCRating.Valid {
 		v := int(scanCRating.Int32)
 		battery.CRating = &v
+	}
+	if scanWeightGrams.Valid {
+		v := int(scanWeightGrams.Int32)
+		battery.WeightGrams = &v
 	}
 	if scanPurchaseDate.Valid {
 		battery.PurchaseDate = &scanPurchaseDate.Time
@@ -221,6 +248,21 @@ func (s *BatteryStore) Update(ctx context.Context, userID string, params models.
 		args = append(args, *params.Connector)
 		argIndex++
 	}
+	if params.WeightGrams != nil {
+		setClauses = append(setClauses, fmt.Sprintf("weight_grams = $%d", argIndex))
+		args = append(args, *params.WeightGrams)
+		argIndex++
+	}
+	if params.Brand != nil {
+		setClauses = append(setClauses, fmt.Sprintf("brand = $%d", argIndex))
+		args = append(args, *params.Brand)
+		argIndex++
+	}
+	if params.Model != nil {
+		setClauses = append(setClauses, fmt.Sprintf("model = $%d", argIndex))
+		args = append(args, *params.Model)
+		argIndex++
+	}
 	if params.PurchaseDate != nil {
 		setClauses = append(setClauses, fmt.Sprintf("purchase_date = $%d", argIndex))
 		args = append(args, *params.PurchaseDate)
@@ -235,22 +277,22 @@ func (s *BatteryStore) Update(ctx context.Context, userID string, params models.
 	query := fmt.Sprintf(`
 		UPDATE batteries SET %s
 		WHERE id = $%d AND user_id = $%d
-		RETURNING id, user_id, battery_code, name, chemistry, cells, capacity_mah, c_rating, connector, purchase_date, notes, created_at, updated_at
+		RETURNING id, user_id, battery_code, name, chemistry, cells, capacity_mah, c_rating, connector, weight_grams, brand, model, purchase_date, notes, created_at, updated_at
 	`, strings.Join(setClauses, ", "), argIndex, argIndex+1)
 
 	args = append(args, params.ID, userID)
 
 	battery := &models.Battery{}
 	var (
-		scanName, scanConnector, scanNotes sql.NullString
-		scanCRating                         sql.NullInt32
-		scanPurchaseDate                    sql.NullTime
+		scanName, scanConnector, scanNotes, scanBrand, scanModel sql.NullString
+		scanCRating, scanWeightGrams                             sql.NullInt32
+		scanPurchaseDate                                         sql.NullTime
 	)
 
 	err := s.db.QueryRowContext(ctx, query, args...).Scan(
 		&battery.ID, &battery.UserID, &battery.BatteryCode, &scanName,
 		&battery.Chemistry, &battery.Cells, &battery.CapacityMah,
-		&scanCRating, &scanConnector, &scanPurchaseDate, &scanNotes,
+		&scanCRating, &scanConnector, &scanWeightGrams, &scanBrand, &scanModel, &scanPurchaseDate, &scanNotes,
 		&battery.CreatedAt, &battery.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -263,9 +305,15 @@ func (s *BatteryStore) Update(ctx context.Context, userID string, params models.
 	battery.Name = scanName.String
 	battery.Connector = scanConnector.String
 	battery.Notes = scanNotes.String
+	battery.Brand = scanBrand.String
+	battery.Model = scanModel.String
 	if scanCRating.Valid {
 		v := int(scanCRating.Int32)
 		battery.CRating = &v
+	}
+	if scanWeightGrams.Valid {
+		v := int(scanWeightGrams.Int32)
+		battery.WeightGrams = &v
 	}
 	if scanPurchaseDate.Valid {
 		battery.PurchaseDate = &scanPurchaseDate.Time
@@ -316,9 +364,10 @@ func (s *BatteryStore) List(ctx context.Context, userID string, params models.Ba
 		argIndex++
 	}
 	if params.Query != "" {
-		whereClauses = append(whereClauses, fmt.Sprintf("(b.name ILIKE $%d OR b.battery_code ILIKE $%d)", argIndex, argIndex))
-		args = append(args, "%"+params.Query+"%")
-		argIndex++
+		whereClauses = append(whereClauses, fmt.Sprintf("(b.name ILIKE $%d OR b.battery_code ILIKE $%d)", argIndex, argIndex+1))
+		searchPattern := "%" + params.Query + "%"
+		args = append(args, searchPattern, searchPattern)
+		argIndex += 2
 	}
 
 	whereClause := strings.Join(whereClauses, " AND ")
@@ -330,23 +379,45 @@ func (s *BatteryStore) List(ctx context.Context, userID string, params models.Ba
 		return nil, fmt.Errorf("failed to count batteries: %w", err)
 	}
 
+	// Normalize and validate sort direction from params.SortOrder, if available.
+	// Only "ASC" and "DESC" are accepted; anything else falls back to the
+	// existing default for each sort field to preserve current behavior.
+	direction := strings.ToUpper(params.SortOrder)
+	validDirection := direction == "ASC" || direction == "DESC"
+
 	// Determine sort order
 	orderBy := "b.updated_at DESC"
 	switch params.Sort {
 	case "name":
-		orderBy = "COALESCE(NULLIF(b.name, ''), b.battery_code) ASC"
+		if !validDirection {
+			direction = "ASC"
+		}
+		orderBy = fmt.Sprintf("COALESCE(NULLIF(b.name, ''), b.battery_code) %s", direction)
 	case "logged":
-		orderBy = "last_logged DESC NULLS LAST"
+		if !validDirection {
+			direction = "DESC"
+		}
+		if direction == "ASC" {
+			orderBy = "last_logged ASC NULLS FIRST"
+		} else {
+			orderBy = "last_logged DESC NULLS LAST"
+		}
 	case "cycles":
-		orderBy = "total_cycles DESC"
+		if !validDirection {
+			direction = "DESC"
+		}
+		orderBy = fmt.Sprintf("total_cycles %s", direction)
 	case "updated":
-		orderBy = "b.updated_at DESC"
+		if !validDirection {
+			direction = "DESC"
+		}
+		orderBy = fmt.Sprintf("b.updated_at %s", direction)
 	}
 
 	// List query
 	query := fmt.Sprintf(`
 		SELECT b.id, b.user_id, b.battery_code, b.name, b.chemistry, b.cells, b.capacity_mah,
-		       b.c_rating, b.connector, b.purchase_date, b.notes, b.created_at, b.updated_at,
+		       b.c_rating, b.connector, b.weight_grams, b.brand, b.model, b.purchase_date, b.notes, b.created_at, b.updated_at,
 		       COALESCE(SUM(l.cycle_delta), 0) as total_cycles,
 		       MAX(l.logged_at) as last_logged
 		FROM batteries b
@@ -380,15 +451,15 @@ func (s *BatteryStore) List(ctx context.Context, userID string, params models.Ba
 	for rows.Next() {
 		battery := models.Battery{}
 		var (
-			scanName, scanConnector, scanNotes sql.NullString
-			scanCRating                         sql.NullInt32
-			scanPurchaseDate, scanLastLogged    sql.NullTime
+			scanName, scanConnector, scanNotes, scanBrand, scanModel sql.NullString
+			scanCRating, scanWeightGrams                             sql.NullInt32
+			scanPurchaseDate, scanLastLogged                         sql.NullTime
 		)
 
 		if err := rows.Scan(
 			&battery.ID, &battery.UserID, &battery.BatteryCode, &scanName,
 			&battery.Chemistry, &battery.Cells, &battery.CapacityMah,
-			&scanCRating, &scanConnector, &scanPurchaseDate, &scanNotes,
+			&scanCRating, &scanConnector, &scanWeightGrams, &scanBrand, &scanModel, &scanPurchaseDate, &scanNotes,
 			&battery.CreatedAt, &battery.UpdatedAt,
 			&battery.TotalCycles, &scanLastLogged,
 		); err != nil {
@@ -398,9 +469,15 @@ func (s *BatteryStore) List(ctx context.Context, userID string, params models.Ba
 		battery.Name = scanName.String
 		battery.Connector = scanConnector.String
 		battery.Notes = scanNotes.String
+		battery.Brand = scanBrand.String
+		battery.Model = scanModel.String
 		if scanCRating.Valid {
 			v := int(scanCRating.Int32)
 			battery.CRating = &v
+		}
+		if scanWeightGrams.Valid {
+			v := int(scanWeightGrams.Int32)
+			battery.WeightGrams = &v
 		}
 		if scanPurchaseDate.Valid {
 			battery.PurchaseDate = &scanPurchaseDate.Time

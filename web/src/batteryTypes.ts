@@ -21,14 +21,14 @@ export type LabelSize = 'small' | 'standard';
 
 // Battery model
 export interface Battery {
-  id: number;
-  user_id: number;
+  id: string;
+  user_id: string;
   battery_code: string;
   name: string;
   chemistry: BatteryChemistry;
   cells: number;
   capacity_mah: number;
-  discharge_rating?: string;
+  c_rating?: string;
   weight_grams?: number;
   brand?: string;
   model?: string;
@@ -40,12 +40,13 @@ export interface Battery {
 
 // Battery log for health tracking
 export interface BatteryLog {
-  id: number;
-  battery_id: number;
+  id: string;
+  battery_id: string;
   log_date: string;
   cycle_count?: number;
   ir_milliohms?: number[];
-  voltage_per_cell?: number;
+  min_cell_v?: number;
+  max_cell_v?: number;
   storage_voltage_ok?: boolean;
   notes?: string;
   created_at: string;
@@ -57,7 +58,7 @@ export interface CreateBatteryParams {
   chemistry: BatteryChemistry;
   cells: number;
   capacity_mah: number;
-  discharge_rating?: string;
+  c_rating?: string;
   weight_grams?: number;
   brand?: string;
   model?: string;
@@ -71,7 +72,7 @@ export interface UpdateBatteryParams {
   chemistry?: BatteryChemistry;
   cells?: number;
   capacity_mah?: number;
-  discharge_rating?: string;
+  c_rating?: string;
   weight_grams?: number;
   brand?: string;
   model?: string;
@@ -96,7 +97,8 @@ export interface CreateBatteryLogParams {
   log_date: string;
   cycle_count?: number;
   ir_milliohms?: number[];
-  voltage_per_cell?: number;
+  min_cell_v?: number;
+  max_cell_v?: number;
   storage_voltage_ok?: boolean;
   notes?: string;
 }
@@ -113,7 +115,7 @@ export interface BatteryFormState {
   chemistry: BatteryChemistry;
   cells: number;
   capacity_mah: number;
-  discharge_rating: string;
+  c_rating: string;
   weight_grams: string;
   brand: string;
   model: string;
@@ -127,7 +129,7 @@ export const INITIAL_BATTERY_FORM_STATE: BatteryFormState = {
   chemistry: 'LIPO',
   cells: 4,
   capacity_mah: 1500,
-  discharge_rating: '',
+  c_rating: '',
   weight_grams: '',
   brand: '',
   model: '',
@@ -140,7 +142,8 @@ export interface BatteryLogFormState {
   log_date: string;
   cycle_count: string;
   ir_milliohms: string[];
-  voltage_per_cell: string;
+  min_cell_v: string;
+  max_cell_v: string;
   storage_voltage_ok: boolean;
   notes: string;
 }
@@ -150,7 +153,8 @@ export const createInitialLogFormState = (cells: number): BatteryLogFormState =>
   log_date: new Date().toISOString().split('T')[0],
   cycle_count: '',
   ir_milliohms: Array(cells).fill(''),
-  voltage_per_cell: '',
+  min_cell_v: '',
+  max_cell_v: '',
   storage_voltage_ok: true,
   notes: '',
 });

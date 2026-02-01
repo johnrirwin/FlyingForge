@@ -65,7 +65,7 @@ export async function getBatteries(params?: BatteryListParams): Promise<BatteryL
 }
 
 // Get a single battery by ID
-export async function getBattery(id: number): Promise<Battery> {
+export async function getBattery(id: string): Promise<Battery> {
   return fetchAPI<Battery>(`/api/batteries/${id}`);
 }
 
@@ -83,7 +83,7 @@ export async function createBattery(params: CreateBatteryParams): Promise<Batter
 }
 
 // Update an existing battery
-export async function updateBattery(id: number, params: UpdateBatteryParams): Promise<Battery> {
+export async function updateBattery(id: string, params: UpdateBatteryParams): Promise<Battery> {
   return fetchAPI<Battery>(`/api/batteries/${id}`, {
     method: 'PUT',
     body: JSON.stringify(params),
@@ -91,7 +91,7 @@ export async function updateBattery(id: number, params: UpdateBatteryParams): Pr
 }
 
 // Delete a battery
-export async function deleteBattery(id: number): Promise<void> {
+export async function deleteBattery(id: string): Promise<void> {
   await fetchAPI<void>(`/api/batteries/${id}`, {
     method: 'DELETE',
   });
@@ -100,13 +100,13 @@ export async function deleteBattery(id: number): Promise<void> {
 // Battery Logs
 
 // List logs for a battery
-export async function getBatteryLogs(batteryId: number): Promise<BatteryLog[]> {
+export async function getBatteryLogs(batteryId: string): Promise<BatteryLog[]> {
   return fetchAPI<BatteryLog[]>(`/api/batteries/${batteryId}/logs`);
 }
 
 // Create a new log entry
 export async function createBatteryLog(
-  batteryId: number,
+  batteryId: string,
   params: CreateBatteryLogParams
 ): Promise<BatteryLog> {
   return fetchAPI<BatteryLog>(`/api/batteries/${batteryId}/logs`, {
@@ -116,7 +116,7 @@ export async function createBatteryLog(
 }
 
 // Delete a log entry
-export async function deleteBatteryLog(batteryId: number, logId: number): Promise<void> {
+export async function deleteBatteryLog(batteryId: string, logId: string): Promise<void> {
   await fetchAPI<void>(`/api/batteries/${batteryId}/logs/${logId}`, {
     method: 'DELETE',
   });
@@ -125,14 +125,12 @@ export async function deleteBatteryLog(batteryId: number, logId: number): Promis
 // Battery Label
 
 // Get label URL for printing
-export function getBatteryLabelUrl(batteryId: number, size: LabelSize = 'standard'): string {
-  const token = getAccessToken();
-  const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
-  return `${API_BASE}/api/batteries/${batteryId}/label?size=${size}${tokenParam}`;
+export function getBatteryLabelUrl(batteryId: string, size: LabelSize = 'standard'): string {
+  return `${API_BASE}/api/batteries/${batteryId}/label?size=${size}`;
 }
 
 // Open label in new window for printing
-export function printBatteryLabel(batteryId: number, size: LabelSize = 'standard'): void {
+export function printBatteryLabel(batteryId: string, size: LabelSize = 'standard'): void {
   const url = getBatteryLabelUrl(batteryId, size);
   window.open(url, '_blank', 'width=400,height=300,menubar=no,toolbar=no');
 }
