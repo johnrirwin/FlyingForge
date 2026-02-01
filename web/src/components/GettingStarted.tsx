@@ -262,16 +262,6 @@ const SAFETY_RULES: SafetyRule[] = [
   },
 ];
 
-interface YouTubeCreator {
-  id: string;
-  name: string;
-  description: string;
-  tags: string[];
-  url: string;
-  subscribers: string;
-  featured?: boolean;
-}
-
 const YOUTUBE_CREATORS: YouTubeCreator[] = [
   {
     id: 'joshua-bardwell',
@@ -424,7 +414,7 @@ function PathCardComponent({ path }: { path: PathCard }) {
         <div className="text-xs font-medium text-slate-500 uppercase mb-2">What you'll learn</div>
         <ul className="space-y-1">
           {path.whatYouLearn.map((item, i) => (
-            <li key={i} className="text-slate-300 text-sm flex items-start gap-2">
+            <li key={`${path.id}-learn-${i}`} className="text-slate-300 text-sm flex items-start gap-2">
               <svg className="w-4 h-4 text-primary-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4" />
               </svg>
@@ -438,7 +428,7 @@ function PathCardComponent({ path }: { path: PathCard }) {
         <div className="text-xs font-medium text-slate-500 uppercase mb-2">Gear checklist</div>
         <ul className="space-y-1">
           {path.checklist.map((item, i) => (
-            <li key={i} className="text-slate-400 text-sm flex items-start gap-2">
+            <li key={`${path.id}-gear-${i}`} className="text-slate-400 text-sm flex items-start gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-slate-500 mt-2 flex-shrink-0" />
               {item}
             </li>
@@ -464,6 +454,7 @@ function SimulatorCard({ sim }: { sim: Simulator }) {
         target="_blank"
         rel="noopener noreferrer"
         className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-400 hover:text-primary-300 transition-colors group"
+        aria-label={`Visit ${sim.name} on ${sim.linkType === 'steam' ? 'Steam' : 'official site'} (opens in new tab)`}
       >
         {sim.linkType === 'steam' ? (
           <>
@@ -499,6 +490,7 @@ function CreatorCard({ creator }: { creator: YouTubeCreator }) {
           ? 'border-primary-500/50 ring-1 ring-primary-500/20'
           : 'border-slate-700'
       }`}
+      aria-label={`Visit ${creator.name} on YouTube (opens in new tab)`}
     >
       <div className="flex items-start gap-4">
         {/* YouTube icon */}
