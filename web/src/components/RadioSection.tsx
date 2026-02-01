@@ -39,7 +39,13 @@ export function RadioSection({ onError }: RadioSectionProps) {
   useEffect(() => {
     getRadioModels()
       .then(response => setRadioModels(response.models))
-      .catch(err => console.error('Failed to load radio models:', err));
+      .catch(err => {
+        const message =
+          err instanceof Error ? err.message : 'Failed to load radio models';
+        console.error('Failed to load radio models:', err);
+        onError?.(message);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Load user's radios
@@ -112,8 +118,8 @@ export function RadioSection({ onError }: RadioSectionProps) {
 
     try {
       const updated = await updateRadio(selectedRadio.id, {
-        firmwareFamily: editFirmware || undefined,
-        notes: editNotes || undefined,
+        firmwareFamily: editFirmware === '' ? null : editFirmware,
+        notes: editNotes === '' ? null : editNotes,
       });
       setSelectedRadio(updated);
       setRadios(prev => prev.map(r => r.id === updated.id ? updated : r));
@@ -158,14 +164,17 @@ export function RadioSection({ onError }: RadioSectionProps) {
         setUploadProgress(prev => Math.min(prev + 10, 90));
       }, 200);
 
-      const newBackup = await createBackup(selectedRadio.id, params);
+      try {
+        const newBackup = await createBackup(selectedRadio.id, params);
 
-      clearInterval(progressInterval);
-      setUploadProgress(100);
+        setUploadProgress(100);
 
-      setBackups(prev => [newBackup, ...prev]);
-      setShowUploadModal(false);
-      resetUploadForm();
+        setBackups(prev => [newBackup, ...prev]);
+        setShowUploadModal(false);
+        resetUploadForm();
+      } finally {
+        clearInterval(progressInterval);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to upload backup';
       onError?.(message);

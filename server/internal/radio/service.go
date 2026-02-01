@@ -198,14 +198,23 @@ func (s *Service) CreateBackup(ctx context.Context, radioID string, userID strin
 	defer file.Close()
 
 	// Copy file content and calculate checksum
+	// Enforce max size while copying by using LimitReader
+	// We add 1 to the limit to detect if the stream exceeds the max size
 	hasher := sha256.New()
-	teeReader := io.TeeReader(fileReader, hasher)
+	limitedReader := io.LimitReader(fileReader, MaxBackupFileSize+1)
+	teeReader := io.TeeReader(limitedReader, hasher)
 
 	written, err := io.Copy(file, teeReader)
 	if err != nil {
 		os.Remove(storagePath)
 		s.logger.Error("Failed to write backup file", logging.WithField("error", err.Error()))
 		return nil, &ServiceError{Message: "failed to write backup file"}
+	}
+
+	// Verify actual written size doesn't exceed limit
+	if written > MaxBackupFileSize {
+		os.Remove(storagePath)
+		return nil, &ServiceError{Message: fmt.Sprintf("actual file size (%d bytes) exceeds maximum allowed (%d bytes)", written, MaxBackupFileSize)}
 	}
 
 	// Update params with actual values

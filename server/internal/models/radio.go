@@ -26,11 +26,11 @@ const (
 type BackupType string
 
 const (
-	BackupTypeEdgeTXModels BackupType = "edgetx-models"
+	BackupTypeEdgeTXModels  BackupType = "edgetx-models"
 	BackupTypeRadioFirmware BackupType = "radio-firmware"
-	BackupTypeSDCardPack   BackupType = "sd-card-pack"
-	BackupTypeFullBackup   BackupType = "full-backup"
-	BackupTypeOther        BackupType = "other"
+	BackupTypeSDCardPack    BackupType = "sd-card-pack"
+	BackupTypeFullBackup    BackupType = "full-backup"
+	BackupTypeOther         BackupType = "other"
 )
 
 // RadioModel represents a known radio model for selection

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -381,11 +382,24 @@ func (api *RadioAPI) handleDownloadBackup(w http.ResponseWriter, r *http.Request
 
 	// Set headers for file download
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", "attachment; filename=\""+backup.FileName+"\"")
+	// Use mime.FormatMediaType to safely format Content-Disposition and prevent header injection
+	disposition := mime.FormatMediaType("attachment", map[string]string{"filename": backup.FileName})
+	w.Header().Set("Content-Disposition", disposition)
 	w.Header().Set("Content-Length", strconv.FormatInt(backup.FileSize, 10))
 
 	// Stream the file
-	io.Copy(w, file)
+	bytesWritten, err := io.Copy(w, file)
+	if err != nil {
+		// We cannot send a JSON error here because headers/body may already be sent,
+		// but we can log the failure for observability.
+		api.logger.Error("failed to stream backup file", logging.WithFields(map[string]interface{}{
+			"radioID":      radioID,
+			"backupID":     backupID,
+			"userID":       userID,
+			"bytesWritten": bytesWritten,
+			"error":        err.Error(),
+		}))
+	}
 }
 
 // handleDeleteBackup deletes a backup
