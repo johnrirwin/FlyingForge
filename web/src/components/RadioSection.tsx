@@ -45,7 +45,8 @@ export function RadioSection({ onError }: RadioSectionProps) {
         console.error('Failed to load radio models:', err);
         onError?.(message);
       });
-  }, [onError]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Load user's radios
   const loadRadios = useCallback(async () => {
