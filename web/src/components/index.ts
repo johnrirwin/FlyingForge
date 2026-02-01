@@ -26,6 +26,7 @@ export { BatterySection } from './BatterySection';
 // Dashboard & Homepage
 export { Dashboard } from './Dashboard';
 export { Homepage } from './Homepage';
+export { GettingStarted } from './GettingStarted';
 
 // Auth components
 export { AuthCallback } from './AuthCallback';

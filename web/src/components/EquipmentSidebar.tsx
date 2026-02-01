@@ -112,6 +112,15 @@ export function EquipmentSidebar({
             />
           )}
 
+          {/* Getting Started - only shown when NOT authenticated */}
+          {!isAuthenticated && (
+            <NavItem
+              section="getting-started"
+              label="Getting Started"
+              icon={<span className="text-xl">🚀</span>}
+            />
+          )}
+
           {/* Dashboard - only shown when authenticated */}
           {isAuthenticated && (
             <NavItem

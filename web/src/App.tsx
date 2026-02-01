@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, EquipmentSidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, Homepage, RadioSection, BatterySection } from './components';
+import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, EquipmentSidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, Homepage, GettingStarted, RadioSection, BatterySection } from './components';
 import { LoginPage } from './components/LoginPage';
 import { SignupPage } from './components/SignupPage';
 import { getItems, getSources, refreshFeeds } from './api';
@@ -472,6 +472,13 @@ function App() {
           <Homepage
             onSignIn={() => setAuthModal('login')}
             onExploreNews={() => setActiveSection('news')}
+          />
+        )}
+
+        {/* Getting Started Section - public education page */}
+        {activeSection === 'getting-started' && (
+          <GettingStarted
+            onSignIn={() => setAuthModal('login')}
           />
         )}
 
