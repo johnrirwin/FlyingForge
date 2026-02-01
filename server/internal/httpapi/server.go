@@ -15,6 +15,7 @@ import (
 	"github.com/johnrirwin/rotorlife/internal/inventory"
 	"github.com/johnrirwin/rotorlife/internal/logging"
 	"github.com/johnrirwin/rotorlife/internal/models"
+	"github.com/johnrirwin/rotorlife/internal/radio"
 )
 
 type Server struct {
@@ -22,18 +23,20 @@ type Server struct {
 	equipmentSvc   *equipment.Service
 	inventorySvc   inventory.InventoryManager
 	aircraftSvc    *aircraft.Service
+	radioSvc       *radio.Service
 	authSvc        *auth.Service
 	authMiddleware *auth.Middleware
 	logger         *logging.Logger
 	server         *http.Server
 }
 
-func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, logger *logging.Logger) *Server {
+func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, radioSvc *radio.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, logger *logging.Logger) *Server {
 	return &Server{
 		agg:            agg,
 		equipmentSvc:   equipmentSvc,
 		inventorySvc:   inventorySvc,
 		aircraftSvc:    aircraftSvc,
+		radioSvc:       radioSvc,
 		authSvc:        authSvc,
 		authMiddleware: authMiddleware,
 		logger:         logger,
@@ -62,6 +65,12 @@ func (s *Server) Start(addr string) error {
 	if s.aircraftSvc != nil && s.authMiddleware != nil {
 		aircraftAPI := NewAircraftAPI(s.aircraftSvc, s.authMiddleware, s.logger)
 		aircraftAPI.RegisterRoutes(mux, s.corsMiddleware)
+	}
+
+	// Radio routes
+	if s.radioSvc != nil && s.authMiddleware != nil {
+		radioAPI := NewRadioAPI(s.radioSvc, s.authMiddleware, s.logger)
+		radioAPI.RegisterRoutes(mux, s.corsMiddleware)
 	}
 
 	// Health check

@@ -16,6 +16,7 @@ interface DashboardProps {
   onViewAllNews: () => void;
   onAddAircraft: () => void;
   onAddGear: () => void;
+  onAddRadio: () => void;
   onSelectAircraft: (aircraft: Aircraft) => void;
   onSelectNewsItem: (item: FeedItem) => void;
 }
@@ -162,7 +163,7 @@ function DashboardGearCard({ item }: { item: InventoryItem }) {
 }
 
 // Radio snapshot component
-function RadioSnapshot() {
+function RadioSnapshot({ onAddRadio }: { onAddRadio: () => void }) {
   // For now, show CTA to add radio - this could be expanded with real radio data
   return (
     <EmptyState
@@ -174,9 +175,7 @@ function RadioSnapshot() {
       title="No Radio Configured"
       description="Add your transmitter to track firmware and ELRS settings"
       actionLabel="Add Radio"
-      onAction={() => {
-        // TODO: Navigate to radio setup
-      }}
+      onAction={onAddRadio}
     />
   );
 }
@@ -237,6 +236,7 @@ export function Dashboard({
   onViewAllNews,
   onAddAircraft,
   onAddGear,
+  onAddRadio,
   onSelectAircraft,
   onSelectNewsItem,
 }: DashboardProps) {
@@ -367,7 +367,7 @@ export function Dashboard({
                 Radio
               </h2>
             </div>
-            <RadioSnapshot />
+            <RadioSnapshot onAddRadio={onAddRadio} />
           </section>
 
           {/* Quick News Peek */}

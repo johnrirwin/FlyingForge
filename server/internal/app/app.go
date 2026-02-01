@@ -14,6 +14,7 @@ import (
 	"github.com/johnrirwin/rotorlife/internal/inventory"
 	"github.com/johnrirwin/rotorlife/internal/logging"
 	"github.com/johnrirwin/rotorlife/internal/mcp"
+	"github.com/johnrirwin/rotorlife/internal/radio"
 	"github.com/johnrirwin/rotorlife/internal/ratelimit"
 	"github.com/johnrirwin/rotorlife/internal/sellers"
 	"github.com/johnrirwin/rotorlife/internal/sources"
@@ -29,6 +30,7 @@ type App struct {
 	EquipmentSvc   *equipment.Service
 	InventorySvc   inventory.InventoryManager
 	AircraftSvc    *aircraft.Service
+	RadioSvc       *radio.Service
 	AuthService    *auth.Service
 	AuthMiddleware *auth.Middleware
 	HTTPServer     *httpapi.Server
@@ -182,6 +184,10 @@ func (a *App) initDatabaseServices() {
 	aircraftStore := database.NewAircraftStore(db)
 	a.AircraftSvc = aircraft.NewService(aircraftStore, a.InventorySvc, a.Logger)
 
+	// Initialize radio
+	radioStore := database.NewRadioStore(db)
+	a.RadioSvc = radio.NewService(radioStore, "", a.Logger) // Empty string uses default storage dir
+
 	// Initialize auth
 	a.userStore = database.NewUserStore(db)
 	a.AuthService = auth.NewService(a.userStore, a.Config.Auth, a.Logger)
@@ -191,8 +197,8 @@ func (a *App) initDatabaseServices() {
 }
 
 func (a *App) initServers() {
-	// Initialize HTTP server with auth and aircraft
-	a.HTTPServer = httpapi.New(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.AircraftSvc, a.AuthService, a.AuthMiddleware, a.Logger)
+	// Initialize HTTP server with auth, aircraft, and radio
+	a.HTTPServer = httpapi.New(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.AircraftSvc, a.RadioSvc, a.AuthService, a.AuthMiddleware, a.Logger)
 
 	// Initialize MCP server
 	mcpHandler := mcp.NewHandler(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.Logger)

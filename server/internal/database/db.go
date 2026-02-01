@@ -90,6 +90,9 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationAircraftELRSSettings,
 		migrationAircraftIndexes,
 		migrationAircraftImageStorage,
+		migrationRadios,
+		migrationRadioBackups,
+		migrationRadioIndexes,
 	}
 
 	for i, migration := range migrations {
@@ -276,4 +279,38 @@ const migrationAircraftImageStorage = `
 ALTER TABLE aircraft ADD COLUMN IF NOT EXISTS image_data BYTEA;
 ALTER TABLE aircraft ADD COLUMN IF NOT EXISTS image_type VARCHAR(20);
 ALTER TABLE aircraft DROP COLUMN IF EXISTS image_url;
+`
+
+const migrationRadios = `
+CREATE TABLE IF NOT EXISTS radios (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    manufacturer VARCHAR(100) NOT NULL,
+    model VARCHAR(255) NOT NULL,
+    firmware_family VARCHAR(50),
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+`
+
+const migrationRadioBackups = `
+CREATE TABLE IF NOT EXISTS radio_backups (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    radio_id UUID NOT NULL REFERENCES radios(id) ON DELETE CASCADE,
+    backup_name VARCHAR(255) NOT NULL,
+    backup_type VARCHAR(50) NOT NULL,
+    file_name VARCHAR(512) NOT NULL,
+    file_size BIGINT NOT NULL,
+    checksum VARCHAR(128),
+    storage_path VARCHAR(1024) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+`
+
+const migrationRadioIndexes = `
+CREATE INDEX IF NOT EXISTS idx_radios_user ON radios(user_id);
+CREATE INDEX IF NOT EXISTS idx_radios_manufacturer ON radios(manufacturer);
+CREATE INDEX IF NOT EXISTS idx_radio_backups_radio ON radio_backups(radio_id);
+CREATE INDEX IF NOT EXISTS idx_radio_backups_created ON radio_backups(created_at DESC);
 `

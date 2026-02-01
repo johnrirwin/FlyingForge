@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, EquipmentSidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard } from './components';
+import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, EquipmentSidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, RadioSection } from './components';
 import { LoginPage } from './components/LoginPage';
 import { SignupPage } from './components/SignupPage';
 import { getItems, getSources, refreshFeeds } from './api';
@@ -12,6 +12,7 @@ import type { EquipmentItem, SellerInfo, InventoryItem, EquipmentSearchParams, E
 import type { Aircraft, AircraftDetailsResponse, CreateAircraftParams, UpdateAircraftParams, SetComponentParams, ELRSConfig } from './aircraftTypes';
 
 type AuthModal = 'none' | 'login' | 'signup';
+
 
 function App() {
   // Check if this is the OAuth callback
@@ -478,6 +479,7 @@ function App() {
               setEditingInventoryItem(null);
               setShowAddInventoryModal(true);
             }}
+            onAddRadio={() => setActiveSection('radio')}
             onSelectAircraft={handleSelectAircraft}
             onSelectNewsItem={setSelectedItem}
           />
@@ -584,6 +586,13 @@ function App() {
               onDelete={handleDeleteAircraft}
             />
           </>
+        )}
+
+        {/* Radio Section */}
+        {activeSection === 'radio' && (
+          <RadioSection
+            onError={(message) => setError(message)}
+          />
         )}
       </div>
 
