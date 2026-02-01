@@ -17,14 +17,9 @@ function App() {
   // Check if this is the OAuth callback
   const isAuthCallback = window.location.pathname === '/auth/callback';
   
-  // Auth state
+  // Auth state - ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
   const { isAuthenticated, user, logout, isLoading: authLoading } = useAuth();
   const [authModal, setAuthModal] = useState<AuthModal>('none');
-
-  // Handle OAuth callback
-  if (isAuthCallback) {
-    return <AuthCallback />;
-  }
 
   // Section state
   const [activeSection, setActiveSection] = useState<AppSection>('news');
@@ -66,6 +61,11 @@ function App() {
   // Filters
   const { filters, updateFilter } = useFilters();
   const debouncedQuery = useDebounce(filters.query, 300);
+
+  // Handle OAuth callback - AFTER all hooks are called
+  if (isAuthCallback) {
+    return <AuthCallback />;
+  }
 
   // Load sources and sellers on mount
   useEffect(() => {
