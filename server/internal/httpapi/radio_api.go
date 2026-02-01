@@ -288,6 +288,11 @@ func (api *RadioAPI) handleListBackups(w http.ResponseWriter, r *http.Request, r
 
 // handleCreateBackup creates a new backup
 func (api *RadioAPI) handleCreateBackup(w http.ResponseWriter, r *http.Request, radioID string, userID string) {
+	// Limit request body to slightly more than MaxBackupFileSize to account for multipart overhead
+	// MaxBackupFileSize is 100MB, so we allow 105MB total
+	const maxRequestSize = 105 * 1024 * 1024
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestSize)
+
 	// Parse multipart form (max 100MB)
 	if err := r.ParseMultipartForm(radiosvc.MaxBackupFileSize); err != nil {
 		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Failed to parse form: " + err.Error()})
