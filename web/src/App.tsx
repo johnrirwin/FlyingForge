@@ -475,6 +475,32 @@ function App() {
           />
         )}
 
+        {/* When on 'home' but authenticated, show the dashboard to avoid a blank state */}
+        {activeSection === 'home' && isAuthenticated && (
+          <Dashboard
+            recentAircraft={aircraftItems}
+            recentGear={inventoryItems}
+            recentNews={items}
+            sources={sources}
+            isAircraftLoading={isAircraftLoading}
+            isGearLoading={isInventoryLoading}
+            isNewsLoading={isLoading}
+            onViewAllNews={() => setActiveSection('news')}
+            onAddAircraft={() => {
+              setEditingAircraft(null);
+              setShowAircraftForm(true);
+            }}
+            onAddGear={() => {
+              setSelectedEquipmentForInventory(null);
+              setEditingInventoryItem(null);
+              setShowAddInventoryModal(true);
+            }}
+            onAddRadio={() => setActiveSection('radio')}
+            onSelectAircraft={handleSelectAircraft}
+            onSelectNewsItem={setSelectedItem}
+          />
+        )}
+
         {/* Dashboard Section - only for authenticated users */}
         {activeSection === 'dashboard' && isAuthenticated && (
           <Dashboard

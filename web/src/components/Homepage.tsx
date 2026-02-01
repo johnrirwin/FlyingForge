@@ -58,7 +58,7 @@ export function Homepage({ onSignIn, onExploreNews }: HomepageProps) {
           {/* Logo */}
           <div className="flex items-center justify-center gap-3 mb-8">
             <div className="w-14 h-14 bg-primary-600 rounded-xl flex items-center justify-center shadow-lg shadow-primary-600/30">
-              <svg className="w-8 h-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg className="w-8 h-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                 <circle cx="12" cy="12" r="3"/>
                 <path d="M12 1v4M12 19v4M1 12h4M19 12h4"/>
                 <path d="M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83"/>
@@ -85,7 +85,7 @@ export function Homepage({ onSignIn, onExploreNews }: HomepageProps) {
               onClick={onSignIn}
               className="w-full sm:w-auto px-8 py-4 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl transition-colors shadow-lg shadow-primary-600/25 flex items-center justify-center gap-2"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
               </svg>
               Get Started Free
@@ -94,7 +94,7 @@ export function Homepage({ onSignIn, onExploreNews }: HomepageProps) {
               onClick={onExploreNews}
               className="w-full sm:w-auto px-8 py-4 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-xl transition-colors border border-slate-700 flex items-center justify-center gap-2"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
               </svg>
               Explore News Feed
@@ -117,7 +117,7 @@ export function Homepage({ onSignIn, onExploreNews }: HomepageProps) {
             {/* Track Aircraft */}
             <FeatureCard
               icon={
-                <svg className="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                 </svg>
               }
@@ -128,7 +128,7 @@ export function Homepage({ onSignIn, onExploreNews }: HomepageProps) {
             {/* Track Gear */}
             <FeatureCard
               icon={
-                <svg className="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                 </svg>
               }
@@ -139,7 +139,7 @@ export function Homepage({ onSignIn, onExploreNews }: HomepageProps) {
             {/* Track Radio */}
             <FeatureCard
               icon={
-                <svg className="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.14 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
                 </svg>
               }
@@ -150,7 +150,7 @@ export function Homepage({ onSignIn, onExploreNews }: HomepageProps) {
             {/* Track Batteries */}
             <FeatureCard
               icon={
-                <svg className="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h14a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4a2 2 0 012-2zm16 3h2m-2 0v2" />
                 </svg>
               }
@@ -161,7 +161,7 @@ export function Homepage({ onSignIn, onExploreNews }: HomepageProps) {
             {/* News Feed */}
             <FeatureCard
               icon={
-                <svg className="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
                 </svg>
               }
@@ -172,7 +172,7 @@ export function Homepage({ onSignIn, onExploreNews }: HomepageProps) {
             {/* Shop */}
             <FeatureCard
               icon={
-                <svg className="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
                 </svg>
               }
@@ -217,7 +217,7 @@ export function Homepage({ onSignIn, onExploreNews }: HomepageProps) {
           <div className="flex items-center justify-center gap-8 mb-8">
             {/* Drone icon */}
             <div className="w-20 h-20 bg-slate-800 border border-slate-700 rounded-2xl flex items-center justify-center">
-              <svg className="w-10 h-10 text-primary-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <svg className="w-10 h-10 text-primary-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
                 <circle cx="12" cy="12" r="3"/>
                 <circle cx="5" cy="5" r="2"/>
                 <circle cx="19" cy="5" r="2"/>
@@ -229,7 +229,7 @@ export function Homepage({ onSignIn, onExploreNews }: HomepageProps) {
             <span className="text-4xl text-slate-600 font-light">+</span>
             {/* Fixed wing icon */}
             <div className="w-20 h-20 bg-slate-800 border border-slate-700 rounded-2xl flex items-center justify-center">
-              <svg className="w-10 h-10 text-primary-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <svg className="w-10 h-10 text-primary-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
                 <path d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
               </svg>
             </div>
@@ -280,7 +280,7 @@ export function Homepage({ onSignIn, onExploreNews }: HomepageProps) {
             {/* Logo & tagline */}
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center">
-                <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                   <circle cx="12" cy="12" r="3"/>
                   <path d="M12 1v4M12 19v4M1 12h4M19 12h4"/>
                   <path d="M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83"/>
@@ -291,14 +291,6 @@ export function Homepage({ onSignIn, onExploreNews }: HomepageProps) {
                 <div className="text-lg font-semibold text-white">RotorLife</div>
                 <div className="text-xs text-slate-500">Your flying life, organized.</div>
               </div>
-            </div>
-
-            {/* Links */}
-            <div className="flex items-center gap-6 text-sm">
-              <a href="#" className="text-slate-400 hover:text-white transition-colors">About</a>
-              <a href="#" className="text-slate-400 hover:text-white transition-colors">Contact</a>
-              <a href="#" className="text-slate-400 hover:text-white transition-colors">Privacy</a>
-              <a href="#" className="text-slate-400 hover:text-white transition-colors">Terms</a>
             </div>
 
             {/* Copyright */}
