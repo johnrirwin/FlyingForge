@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, EquipmentSidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, RadioSection } from './components';
+import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, EquipmentSidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, RadioSection, BatterySection } from './components';
 import { LoginPage } from './components/LoginPage';
 import { SignupPage } from './components/SignupPage';
 import { getItems, getSources, refreshFeeds } from './api';
@@ -418,8 +418,8 @@ function App() {
 
   // Handle section change with auth check for protected sections
   const handleSectionChange = useCallback((section: AppSection) => {
-    // Dashboard, inventory, and aircraft require authentication
-    if ((section === 'dashboard' || section === 'inventory' || section === 'aircraft') && !isAuthenticated) {
+    // Dashboard, inventory, aircraft, radio, and batteries require authentication
+    if ((section === 'dashboard' || section === 'inventory' || section === 'aircraft' || section === 'radio' || section === 'batteries') && !isAuthenticated) {
       setAuthModal('login');
       return;
     }
@@ -591,6 +591,13 @@ function App() {
         {/* Radio Section */}
         {activeSection === 'radio' && (
           <RadioSection
+            onError={(message) => setError(message)}
+          />
+        )}
+
+        {/* Battery Section */}
+        {activeSection === 'batteries' && (
+          <BatterySection
             onError={(message) => setError(message)}
           />
         )}

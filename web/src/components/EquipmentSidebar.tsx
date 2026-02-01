@@ -170,6 +170,18 @@ export function EquipmentSidebar({
               </svg>
             }
           />
+
+          {/* Batteries - requires auth */}
+          <NavItem
+            section="batteries"
+            label="Batteries"
+            requiresAuth
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h14a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4a2 2 0 012-2zm16 3h2m-2 0v2" />
+              </svg>
+            }
+          />
         </nav>
       </div>
 

@@ -93,6 +93,9 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationRadios,
 		migrationRadioBackups,
 		migrationRadioIndexes,
+		migrationBatteries,
+		migrationBatteryLogs,
+		migrationBatteryIndexes,
 	}
 
 	for i, migration := range migrations {
@@ -313,4 +316,52 @@ CREATE INDEX IF NOT EXISTS idx_radios_user ON radios(user_id);
 CREATE INDEX IF NOT EXISTS idx_radios_manufacturer ON radios(manufacturer);
 CREATE INDEX IF NOT EXISTS idx_radio_backups_radio ON radio_backups(radio_id);
 CREATE INDEX IF NOT EXISTS idx_radio_backups_created ON radio_backups(created_at DESC);
+`
+
+const migrationBatteries = `
+CREATE TABLE IF NOT EXISTS batteries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    battery_code VARCHAR(20) NOT NULL,
+    name VARCHAR(255),
+    chemistry VARCHAR(20) NOT NULL,
+    cells INTEGER NOT NULL CHECK (cells >= 1 AND cells <= 8),
+    capacity_mah INTEGER NOT NULL CHECK (capacity_mah > 0 AND capacity_mah <= 50000),
+    c_rating INTEGER,
+    connector VARCHAR(50),
+    weight_grams INTEGER,
+    brand VARCHAR(100),
+    model VARCHAR(100),
+    purchase_date DATE,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id, battery_code)
+);
+`
+
+const migrationBatteryLogs = `
+CREATE TABLE IF NOT EXISTS battery_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    battery_id UUID NOT NULL REFERENCES batteries(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    logged_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    cycle_delta INTEGER DEFAULT 0,
+    ir_mohm_per_cell JSONB,
+    min_cell_v DECIMAL(4,2),
+    max_cell_v DECIMAL(4,2),
+    storage_ok BOOLEAN,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+`
+
+const migrationBatteryIndexes = `
+CREATE INDEX IF NOT EXISTS idx_batteries_user ON batteries(user_id);
+CREATE INDEX IF NOT EXISTS idx_batteries_chemistry ON batteries(chemistry);
+CREATE INDEX IF NOT EXISTS idx_batteries_cells ON batteries(cells);
+CREATE INDEX IF NOT EXISTS idx_batteries_code ON batteries(battery_code);
+CREATE INDEX IF NOT EXISTS idx_battery_logs_battery ON battery_logs(battery_id);
+CREATE INDEX IF NOT EXISTS idx_battery_logs_user ON battery_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_battery_logs_logged_at ON battery_logs(logged_at DESC);
 `

@@ -20,6 +20,9 @@ export { AircraftDetail } from './AircraftDetail';
 // Radio components
 export { RadioSection } from './RadioSection';
 
+// Battery components
+export { BatterySection } from './BatterySection';
+
 // Dashboard
 export { Dashboard } from './Dashboard';
 
