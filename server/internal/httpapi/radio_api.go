@@ -39,9 +39,6 @@ func (api *RadioAPI) RegisterRoutes(mux *http.ServeMux, corsMiddleware func(http
 	// Radios (require authentication)
 	mux.HandleFunc("/api/radios", corsMiddleware(api.authMiddleware.RequireAuth(api.handleRadios)))
 	mux.HandleFunc("/api/radios/", corsMiddleware(api.authMiddleware.RequireAuth(api.handleRadioItem)))
-
-	// Backups (require authentication)
-	mux.HandleFunc("/api/radios/", corsMiddleware(api.authMiddleware.RequireAuth(api.handleRadioItem)))
 }
 
 // handleGetRadioModels returns the list of available radio models
