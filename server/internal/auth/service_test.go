@@ -1,7 +1,15 @@
 package auth
 
 import (
+	"context"
+	"fmt"
 	"testing"
+	"time"
+
+	"github.com/johnrirwin/rotorlife/internal/config"
+	"github.com/johnrirwin/rotorlife/internal/database"
+	"github.com/johnrirwin/rotorlife/internal/models"
+	"github.com/johnrirwin/rotorlife/internal/testutil"
 )
 
 func TestAuthError(t *testing.T) {
@@ -41,11 +49,30 @@ func TestAuthError(t *testing.T) {
 	}
 }
 
-func TestValidatePassword(t *testing.T) {
+func TestPasswordValidation(t *testing.T) {
+	testDB := testutil.NewTestDB(t)
+	defer testDB.Close()
+
+	// Wrap in database.DB
+	db := &database.DB{DB: testDB.DB}
+	userStore := database.NewUserStore(db)
+	logger := testutil.NullLogger()
+	cfg := config.AuthConfig{
+		JWTSecret:        "test-secret-key-minimum-32-chars-long",
+		JWTIssuer:        "rotorlife-test",
+		JWTAudience:      "rotorlife-users",
+		AccessTokenTTL:   15 * time.Minute,
+		RefreshTokenTTL:  7 * 24 * time.Hour,
+		GoogleClientID:   "test-client-id",
+		GoogleRedirectURI: "http://localhost:3000/auth/callback",
+	}
+	service := NewService(userStore, cfg, logger)
+
 	tests := []struct {
 		name     string
 		password string
 		wantErr  bool
+		errCode  string
 	}{
 		{
 			name:     "valid password",
@@ -61,37 +88,69 @@ func TestValidatePassword(t *testing.T) {
 			name:     "too short",
 			password: "1234567",
 			wantErr:  true,
+			errCode:  "invalid_input",
 		},
 		{
 			name:     "empty password",
 			password: "",
 			wantErr:  true,
+			errCode:  "invalid_input",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Password validation logic
-			if tt.password == "" {
-				if !tt.wantErr {
-					t.Error("Expected error for empty password")
-				}
-				return
-			}
-			if len(tt.password) < 8 {
-				if !tt.wantErr {
-					t.Error("Expected error for short password")
-				}
-				return
-			}
+			// Test password validation through the actual SignupWithEmail method
+			ctx := context.Background()
+			email := fmt.Sprintf("test-%s@example.com", tt.name)
+			
+			_, err := service.SignupWithEmail(ctx, models.SignupParams{
+				Email:       email,
+				Password:    tt.password,
+				DisplayName: "Test User",
+			})
+
 			if tt.wantErr {
-				t.Errorf("Did not expect error for password: %s", tt.password)
+				if err == nil {
+					t.Error("Expected error but got none")
+					return
+				}
+				authErr, ok := err.(*AuthError)
+				if !ok {
+					t.Errorf("Expected AuthError but got %T: %v", err, err)
+					return
+				}
+				if authErr.Code != tt.errCode {
+					t.Errorf("Expected error code %s but got %s", tt.errCode, authErr.Code)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
 			}
 		})
 	}
 }
 
 func TestDefaultDisplayName(t *testing.T) {
+	testDB := testutil.NewTestDB(t)
+	defer testDB.Close()
+
+	// Wrap in database.DB
+	db := &database.DB{DB: testDB.DB}
+	userStore := database.NewUserStore(db)
+	logger := testutil.NullLogger()
+	cfg := config.AuthConfig{
+		JWTSecret:        "test-secret-key-minimum-32-chars-long",
+		JWTIssuer:        "rotorlife-test",
+		JWTAudience:      "rotorlife-users",
+		AccessTokenTTL:   15 * time.Minute,
+		RefreshTokenTTL:  7 * 24 * time.Hour,
+		GoogleClientID:   "test-client-id",
+		GoogleRedirectURI: "http://localhost:3000/auth/callback",
+	}
+	service := NewService(userStore, cfg, logger)
+
 	tests := []struct {
 		name         string
 		email        string
@@ -100,7 +159,7 @@ func TestDefaultDisplayName(t *testing.T) {
 	}{
 		{
 			name:         "uses provided display name",
-			email:        "test@example.com",
+			email:        "test1@example.com",
 			displayName:  "Test User",
 			expectedName: "Test User",
 		},
@@ -114,20 +173,21 @@ func TestDefaultDisplayName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var result string
-			if tt.displayName != "" {
-				result = tt.displayName
-			} else {
-				// Extract username from email
-				for i, c := range tt.email {
-					if c == '@' {
-						result = tt.email[:i]
-						break
-					}
-				}
+			ctx := context.Background()
+			
+			// Test through actual SignupWithEmail method
+			authResp, err := service.SignupWithEmail(ctx, models.SignupParams{
+				Email:       tt.email,
+				Password:    "validpassword123",
+				DisplayName: tt.displayName,
+			})
+
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
 			}
-			if result != tt.expectedName {
-				t.Errorf("Display name = %s, want %s", result, tt.expectedName)
+
+			if authResp.User.DisplayName != tt.expectedName {
+				t.Errorf("Display name = %s, want %s", authResp.User.DisplayName, tt.expectedName)
 			}
 		})
 	}

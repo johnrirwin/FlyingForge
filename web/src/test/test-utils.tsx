@@ -3,12 +3,7 @@ import { render, RenderOptions } from '@testing-library/react'
 import { AuthProvider } from '../contexts/AuthContext'
 
 // Custom render that wraps components with providers
-interface CustomRenderOptions extends Omit<RenderOptions, 'wrapper'> {
-  initialAuthState?: {
-    isAuthenticated: boolean
-    user: { id: string; email: string; displayName: string } | null
-  }
-}
+type CustomRenderOptions = Omit<RenderOptions, 'wrapper'>
 
 function AllTheProviders({ children }: { children: React.ReactNode }) {
   return (

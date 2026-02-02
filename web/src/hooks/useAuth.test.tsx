@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { useAuth } from './useAuth'
 import { AuthProvider } from '../contexts/AuthContext'
 
@@ -9,7 +10,7 @@ describe('useAuth', () => {
   })
 
   it('returns auth context when used within AuthProvider', async () => {
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
+    const wrapper = ({ children }: { children: ReactNode }) => (
       <AuthProvider>{children}</AuthProvider>
     )
 
@@ -39,7 +40,7 @@ describe('useAuth', () => {
   })
 
   it('starts unauthenticated with no stored tokens', async () => {
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
+    const wrapper = ({ children }: { children: ReactNode }) => (
       <AuthProvider>{children}</AuthProvider>
     )
 

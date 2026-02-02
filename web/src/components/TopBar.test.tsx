@@ -40,39 +40,28 @@ describe('TopBar', () => {
   })
 
   it('shows clear button when query is not empty', () => {
-    const { container } = render(<TopBar {...defaultProps} query="test" />)
+    render(<TopBar {...defaultProps} query="test" />)
 
-    // The clear button should be visible
-    const buttons = container.querySelectorAll('button')
-    const clearButton = Array.from(buttons).find(btn => 
-      btn.querySelector('svg path[d*="M6 18L18 6"]')
-    )
+    // The clear button for the search input should be visible
+    const clearButton = screen.getByRole('button', { name: /clear search/i })
     expect(clearButton).toBeInTheDocument()
   })
 
   it('does not show clear button in search input when query is empty', () => {
     render(<TopBar {...defaultProps} query="" />)
     
-    // The search input should not have the clear button
-    // There may be other close icons (like clear dates), so we check within the search container
-    const searchInput = screen.getByPlaceholderText('Search news...')
-    const searchContainer = searchInput.closest('.relative')
-    const clearButton = searchContainer?.querySelector('button')
+    // The search input should not have the clear search button
+    const clearButton = screen.queryByRole('button', { name: /clear search/i })
     expect(clearButton).not.toBeInTheDocument()
   })
 
   it('calls onQueryChange with empty string when clear clicked', () => {
     const onQueryChange = vi.fn()
-    const { container } = render(<TopBar {...defaultProps} query="test" onQueryChange={onQueryChange} />)
+    render(<TopBar {...defaultProps} query="test" onQueryChange={onQueryChange} />)
 
-    const buttons = container.querySelectorAll('button')
-    const clearButton = Array.from(buttons).find(btn => 
-      btn.querySelector('svg path[d*="M6 18L18 6"]')
-    )
-    if (clearButton) {
-      fireEvent.click(clearButton)
-      expect(onQueryChange).toHaveBeenCalledWith('')
-    }
+    const clearButton = screen.getByRole('button', { name: /clear search/i })
+    fireEvent.click(clearButton)
+    expect(onQueryChange).toHaveBeenCalledWith('')
   })
 
   it('renders date inputs', () => {
