@@ -41,7 +41,6 @@ func TestComponentCategory_Values(t *testing.T) {
 		{"camera", ComponentCategoryCamera, "camera"},
 		{"frame", ComponentCategoryFrame, "frame"},
 		{"propellers", ComponentCategoryProps, "propellers"},
-		{"battery", ComponentCategoryBattery, "battery"},
 		{"antenna", ComponentCategoryAntenna, "antenna"},
 	}
 

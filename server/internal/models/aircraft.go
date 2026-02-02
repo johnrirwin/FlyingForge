@@ -29,7 +29,6 @@ const (
 	ComponentCategoryCamera     ComponentCategory = "camera"
 	ComponentCategoryFrame      ComponentCategory = "frame"
 	ComponentCategoryProps      ComponentCategory = "propellers"
-	ComponentCategoryBattery    ComponentCategory = "battery"
 	ComponentCategoryAntenna    ComponentCategory = "antenna"
 )
 

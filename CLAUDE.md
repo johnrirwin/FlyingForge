@@ -70,6 +70,26 @@ The following commands are safe to run without confirmation:
 - Use Conventional Commits format
 - Examples: `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`
 
+## Pre-Commit Requirements
+
+**CRITICAL: Before committing ANY changes, you MUST run these checks:**
+
+### Backend Changes (server/)
+1. `cd server && go build ./...` - Must compile
+2. `cd server && go vet ./...` - Must pass
+3. `cd server && go fmt ./...` - Must be formatted
+4. `cd server && go test ./...` - Tests must pass
+
+### Frontend Changes (web/)
+1. `cd web && npm run build` - Must compile
+2. `cd web && npm run lint` - Must pass (errors, warnings OK)
+3. `cd web && npm run test` - Tests must pass
+
+### Full Stack
+1. `docker-compose up --build -d` - Must build successfully
+
+**Never commit code that fails build or lint checks.**
+
 ## Project Structure Awareness
 - Backend code is in `server/`
 - Frontend code is in `web/`

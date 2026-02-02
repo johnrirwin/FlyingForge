@@ -1,82 +1,227 @@
-# MCP News Feed Server Architecture
+# FlyingForge Server Architecture
 
-This document provides a comprehensive overview of the drone news aggregator MCP server architecture, including all components, endpoints, and data flows.
+This document provides a comprehensive overview of the FlyingForge MCP server architecture, including all components, endpoints, data storage, and deployment considerations.
 
 ## Table of Contents
 
 1. [Overview](#overview)
 2. [Architecture Diagram](#architecture-diagram)
-3. [Core Components](#core-components)
-4. [Operating Modes](#operating-modes)
-5. [HTTP API Endpoints](#http-api-endpoints)
-6. [MCP Protocol](#mcp-protocol)
-7. [Data Models](#data-models)
-8. [Source Fetchers](#source-fetchers)
-9. [Configuration](#configuration)
+3. [Infrastructure](#infrastructure)
+4. [Core Components](#core-components)
+5. [Operating Modes](#operating-modes)
+6. [HTTP API Endpoints](#http-api-endpoints)
+7. [MCP Protocol](#mcp-protocol)
+8. [Data Models](#data-models)
+9. [Source Fetchers](#source-fetchers)
+10. [Configuration](#configuration)
+11. [Production Deployment](#production-deployment)
 
 ---
 
 ## Overview
 
-The MCP News Feed Server is a Go application that aggregates drone-related news and community content from multiple sources. It operates in two modes:
+FlyingForge is a Go application that provides drone equipment management, news aggregation, and inventory tracking. It operates in two modes:
 
 1. **HTTP Mode** (default): Serves a REST API for the React frontend
 2. **MCP Mode**: Provides tools to AI assistants via the Model Context Protocol
 
-The server fetches content from RSS feeds and Reddit, applies automatic tagging, deduplicates entries, and serves the aggregated data through either interface.
+The server manages user authentication, equipment catalogs from multiple sellers, personal inventory, aircraft configurations, radio setups, battery tracking, and aggregated news from RSS feeds and Reddit.
 
 ---
 
 ## Architecture Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              MCP News Feed Server                           │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌─────────────┐     ┌─────────────┐     ┌─────────────────────────────┐   │
-│  │  HTTP API   │     │  MCP Server │     │         Aggregator          │   │
-│  │  (port 8080)│     │   (stdio)   │     │                             │   │
-│  │             │     │             │     │  ┌───────┐  ┌───────────┐   │   │
-│  │ /api/items  │────▶│ tools/call  │────▶│  │ Cache │  │  Tagger   │   │   │
-│  │ /api/sources│     │ tools/list  │     │  └───────┘  └───────────┘   │   │
-│  │ /api/refresh│     │ initialize  │     │                             │   │
-│  │ /health     │     │             │     │       ┌─────────────┐       │   │
-│  └─────────────┘     └─────────────┘     │       │ Rate Limiter│       │   │
-│         │                   │            │       └─────────────┘       │   │
-│         └───────────────────┴────────────┴──────────────┬──────────────┘   │
-│                                                         │                   │
-│  ┌──────────────────────────────────────────────────────┴──────────────┐   │
-│  │                          Source Fetchers                             │   │
-│  │                                                                      │   │
-│  │  ┌─────────────┐  ┌─────────────────┐  ┌─────────────────────────┐  │   │
-│  │  │ RSS Fetcher │  │ Reddit Fetcher  │  │    Forum Fetcher        │  │   │
-│  │  │             │  │                 │  │    (extensible)         │  │   │
-│  │  │ - DroneDJ   │  │ - r/drones      │  │                         │  │   │
-│  │  │ - DroneLife │  │ - r/djimavic    │  │                         │  │   │
-│  │  │ - sUAS News │  │ - r/fpv         │  │                         │  │   │
-│  │  │ - DroneBlog │  │ - r/Multicopter │  │                         │  │   │
-│  │  │ - etc.      │  │                 │  │                         │  │   │
-│  │  └─────────────┘  └─────────────────┘  └─────────────────────────┘  │   │
-│  └──────────────────────────────────────────────────────────────────────┘   │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-                    ┌─────────────────────────────────────┐
-                    │          External Sources           │
-                    │                                     │
-                    │  • RSS Feeds (dronedj.com, etc.)   │
-                    │  • Reddit JSON API                  │
-                    │  • Web Forums (HTML scraping)       │
-                    └─────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                                  FlyingForge Server                                      │
+├─────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                          │
+│  ┌─────────────┐     ┌─────────────┐     ┌─────────────────────────────────────────┐    │
+│  │  HTTP API   │     │  MCP Server │     │              Services                   │    │
+│  │  (port 8080)│     │   (stdio)   │     │                                         │    │
+│  │             │     │             │     │  ┌─────────┐  ┌───────────┐  ┌───────┐  │    │
+│  │ /api/auth/* │────▶│ tools/call  │────▶│  │  Auth   │  │ Equipment │  │ Radio │  │    │
+│  │ /api/equip/*│     │ tools/list  │     │  └────┬────┘  └─────┬─────┘  └───┬───┘  │    │
+│  │ /api/inv/*  │     │ initialize  │     │       │             │            │       │    │
+│  │ /api/items  │     │             │     │  ┌────┴────┐  ┌─────┴─────┐  ┌───┴────┐ │    │
+│  │ /api/aircraft│    └─────────────┘     │  │Aircraft │  │ Inventory │  │Battery │ │    │
+│  │ /api/radio  │                         │  └─────────┘  └───────────┘  └────────┘ │    │
+│  │ /api/battery│                         │                                         │    │
+│  │ /health     │                         │       ┌─────────────────────┐           │    │
+│  └──────┬──────┘                         │       │     Aggregator      │           │    │
+│         │                                │       │  (News/RSS/Reddit)  │           │    │
+│         │                                │       └──────────┬──────────┘           │    │
+│         │                                └──────────────────┼──────────────────────┘    │
+│         │                                                   │                           │
+│  ┌──────┴───────────────────────────────────────────────────┴──────────────────────┐   │
+│  │                              Data Access Layer                                   │   │
+│  │                                                                                  │   │
+│  │  ┌───────────────────┐       ┌─────────────────────┐       ┌────────────────┐   │   │
+│  │  │  Database Stores  │       │   Cache Interface   │       │  Rate Limiter  │   │   │
+│  │  │                   │       │                     │       │                │   │   │
+│  │  │ • UserStore       │       │  • Memory Cache     │       │  Per-host      │   │   │
+│  │  │ • EquipmentStore  │       │  • Redis Cache      │       │  throttling    │   │   │
+│  │  │ • InventoryStore  │       │    (production)     │       │  (1s default)  │   │   │
+│  │  │ • AircraftStore   │       │                     │       │                │   │   │
+│  │  │ • RadioStore      │       │                     │       │                │   │   │
+│  │  │ • BatteryStore    │       │                     │       │                │   │   │
+│  │  └─────────┬─────────┘       └──────────┬──────────┘       └────────────────┘   │   │
+│  │            │                            │                                        │   │
+│  └────────────┼────────────────────────────┼────────────────────────────────────────┘   │
+│               │                            │                                            │
+└───────────────┼────────────────────────────┼────────────────────────────────────────────┘
+                │                            │
+                ▼                            ▼
+┌───────────────────────────┐    ┌───────────────────────────┐
+│        PostgreSQL         │    │          Redis            │
+│         (port 5432)       │    │        (port 6379)        │
+│                           │    │                           │
+│  • users                  │    │  • Session cache          │
+│  • user_identities        │    │  • Feed item cache        │
+│  • refresh_tokens         │    │  • Rate limit tracking    │
+│  • equipment_items        │    │  • API response cache     │
+│  • inventory_items        │    │                           │
+│  • sellers                │    │  TTL: 5 minutes (default) │
+│  • aircraft               │    │  Prefix: mcp-news:        │
+│  • aircraft_components    │    │                           │
+│  • radios                 │    │  Persistence: AOF         │
+│  • radio_backups          │    │                           │
+│  • batteries              │    │                           │
+│  • battery_logs           │    │                           │
+└───────────────────────────┘    └───────────────────────────┘
 ```
+
+---
+
+## Infrastructure
+
+### PostgreSQL Database
+
+FlyingForge uses PostgreSQL 16 as its primary data store for all persistent data.
+
+**Connection Configuration:**
+
+| Setting | Default | Environment Variable |
+|---------|---------|---------------------|
+| Host | `localhost` | `DB_HOST` |
+| Port | `5432` | `DB_PORT` |
+| User | `postgres` | `DB_USER` |
+| Password | `postgres` | `DB_PASSWORD` |
+| Database | `mcp_drone` | `DB_NAME` |
+| SSL Mode | `disable` | `DB_SSLMODE` |
+| Max Open Connections | `25` | - |
+| Max Idle Connections | `5` | - |
+| Connection Max Lifetime | `5m` | - |
+
+**Database Schema:**
+
+The server automatically runs migrations on startup. Key tables include:
+
+| Table | Description |
+|-------|-------------|
+| `users` | User accounts with email, password hash, display name, avatar |
+| `user_identities` | OAuth provider links (Google, etc.) |
+| `refresh_tokens` | JWT refresh token storage with expiration |
+| `sellers` | Equipment retailer information |
+| `equipment_items` | Catalog of drone equipment from sellers |
+| `inventory_items` | User's personal equipment inventory |
+| `aircraft` | User's drone configurations |
+| `aircraft_components` | Components assigned to aircraft |
+| `aircraft_elrs_settings` | ELRS radio configuration per aircraft |
+| `radios` | User's radio transmitter configurations |
+| `radio_backups` | Radio configuration backup storage |
+| `batteries` | User's battery inventory with specs |
+| `battery_logs` | Battery charge/discharge cycle history |
+
+**Production Recommendations:**
+- Enable SSL mode (`DB_SSLMODE=require`) 
+- Use connection pooling (PgBouncer) for high-traffic deployments
+- Set up read replicas for scalability
+- Configure automated backups
+- Monitor with pg_stat_statements
+
+### Redis Cache
+
+Redis 7 provides high-performance caching for API responses and session data.
+
+**Connection Configuration:**
+
+| Setting | Default | Environment Variable |
+|---------|---------|---------------------|
+| Address | `localhost:6379` | `REDIS_ADDR` |
+| Password | (none) | `REDIS_PASSWORD` |
+| Database | `0` | `REDIS_DB` |
+| Key Prefix | `mcp-news:` | - |
+
+**Cache Usage:**
+
+| Key Pattern | Purpose | TTL |
+|-------------|---------|-----|
+| `mcp-news:items:*` | Aggregated feed items | 5 minutes |
+| `mcp-news:sources` | Source list | 5 minutes |
+| `mcp-news:equipment:*` | Equipment search results | 5 minutes |
+
+**Features:**
+- Append-only file (AOF) persistence enabled
+- Automatic key expiration
+- Thread-safe operations via go-redis client
+
+**Production Recommendations:**
+- Enable Redis AUTH with a strong password
+- Configure maxmemory and eviction policy
+- Enable TLS for encrypted connections
+- Set up Redis Sentinel or Cluster for HA
+- Monitor memory usage and hit rates
 
 ---
 
 ## Core Components
 
-### 1. Aggregator (`internal/aggregator/aggregator.go`)
+### 1. Application (`internal/app/app.go`)
+
+The main application coordinator that initializes all services and dependencies.
+
+**Responsibilities:**
+- Database connection management
+- Cache initialization (memory or Redis)
+- Service dependency injection
+- HTTP server lifecycle
+- Graceful shutdown handling
+
+### 2. Authentication Service (`internal/auth/service.go`)
+
+Handles user authentication and authorization.
+
+**Features:**
+- JWT access/refresh token management
+- Google OAuth integration
+- Password hashing (bcrypt)
+- Session management via refresh tokens
+
+**Key Methods:**
+
+| Method | Description |
+|--------|-------------|
+| `SignUp(email, password, name)` | Create new user account |
+| `SignIn(email, password)` | Authenticate with credentials |
+| `GoogleAuth(code)` | OAuth authentication via Google |
+| `RefreshTokens(refreshToken)` | Issue new token pair |
+| `ValidateAccessToken(token)` | Verify JWT and extract claims |
+
+### 3. Database Stores (`internal/database/`)
+
+Data access layer for PostgreSQL operations.
+
+| Store | Responsibilities |
+|-------|-----------------|
+| `UserStore` | User CRUD, identity linking, token management |
+| `EquipmentStore` | Equipment catalog queries, seller management |
+| `InventoryStore` | User inventory CRUD, search, filtering |
+| `AircraftStore` | Aircraft configs, components, ELRS settings |
+| `RadioStore` | Radio profiles, configuration backups |
+| `BatteryStore` | Battery inventory, charge logs, health tracking |
+
+### 4. Aggregator (`internal/aggregator/aggregator.go`)
 
 The central component that coordinates all data fetching and processing.
 
@@ -113,25 +258,35 @@ FilterParams {
 }
 ```
 
-### 2. Cache (`internal/cache/cache.go`)
+### 5. Cache (`internal/cache/`)
 
-In-memory TTL-based cache for storing aggregated results.
+Caching layer supporting both in-memory and Redis backends.
+
+**Interface:**
+```go
+type Cache interface {
+    Get(key string) (interface{}, bool)
+    Set(key string, value interface{})
+    SetWithTTL(key string, value interface{}, ttl time.Duration)
+    Delete(key string)
+    Clear()
+}
+```
+
+**Implementations:**
+
+| Backend | Use Case | Configuration |
+|---------|----------|---------------|
+| `MemoryCache` | Development, single-instance | `CACHE_BACKEND=memory` |
+| `RedisCache` | Production, multi-instance | `CACHE_BACKEND=redis` |
 
 **Features:**
-- Thread-safe with RWMutex
+- Thread-safe operations
 - Configurable TTL (default: 5 minutes)
 - Automatic cleanup of expired entries
-- Simple key-value interface
+- JSON serialization for Redis
 
-**Methods:**
-
-| Method | Description |
-|--------|-------------|
-| `Get(key)` | Retrieve cached value if not expired |
-| `Set(key, value)` | Store value with default TTL |
-| `SetWithTTL(key, value, ttl)` | Store value with custom TTL |
-
-### 3. Tagger (`internal/tagging/tagger.go`)
+### 6. Tagger (`internal/tagging/tagger.go`)
 
 Automatic tag inference based on keyword matching.
 
@@ -157,7 +312,7 @@ Automatic tag inference based on keyword matching.
 | Technology | technology, tech, innovation, sensor, battery |
 | Autonomous | autonomous, ai, machine learning, obstacle avoidance |
 
-### 4. Rate Limiter (`internal/ratelimit/limiter.go`)
+### 7. Rate Limiter (`internal/ratelimit/limiter.go`)
 
 Prevents overwhelming external sources with requests.
 
@@ -590,13 +745,49 @@ HTML scraping fetcher for web forums. Currently configured but no active sources
 
 ### Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `HTTP_ADDR` | HTTP server address (overrides `-http`) |
-| `MCP_MODE` | Set to `true` or `1` for MCP mode |
-| `CACHE_TTL` | Cache TTL (e.g., `10m`, `1h`) |
-| `RATE_LIMIT` | Rate limit interval (e.g., `2s`) |
-| `LOG_LEVEL` | Log level (debug/info/warn/error) |
+#### Server Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HTTP_ADDR` | `:8080` | HTTP server address |
+| `MCP_MODE` | `false` | Set to `true` or `1` for MCP mode |
+| `LOG_LEVEL` | `info` | Log level (debug/info/warn/error) |
+| `RATE_LIMIT` | `1s` | Rate limit interval between requests |
+| `CORS_ORIGIN` | `*` | Allowed CORS origins |
+
+#### Database Configuration (PostgreSQL)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DB_HOST` | `localhost` | PostgreSQL host |
+| `DB_PORT` | `5432` | PostgreSQL port |
+| `DB_USER` | `postgres` | Database username |
+| `DB_PASSWORD` | `postgres` | Database password |
+| `DB_NAME` | `mcp_drone` | Database name |
+| `DB_SSLMODE` | `disable` | SSL mode (disable/require/verify-full) |
+
+#### Cache Configuration (Redis)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CACHE_BACKEND` | `memory` | Cache backend (`memory` or `redis`) |
+| `CACHE_TTL` | `5m` | Cache TTL (e.g., `10m`, `1h`) |
+| `REDIS_ADDR` | `localhost:6379` | Redis server address |
+| `REDIS_PASSWORD` | (empty) | Redis password |
+| `REDIS_DB` | `0` | Redis database number |
+
+#### Authentication Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AUTH_JWT_SECRET` | (required) | Secret key for JWT signing |
+| `AUTH_JWT_ISSUER` | `flyingforge` | JWT issuer claim |
+| `AUTH_JWT_AUDIENCE` | `flyingforge-users` | JWT audience claim |
+| `ACCESS_TOKEN_TTL` | `15m` | Access token expiration |
+| `REFRESH_TOKEN_TTL` | `7d` | Refresh token expiration |
+| `GOOGLE_CLIENT_ID` | (required for OAuth) | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | (required for OAuth) | Google OAuth client secret |
+| `GOOGLE_REDIRECT_URI` | (required for OAuth) | OAuth callback URL |
 
 ### Adding New Sources
 
@@ -674,3 +865,124 @@ The server uses structured JSON logging.
 {"timestamp":"2026-01-30T12:00:01Z","level":"WARN","message":"Failed to fetch from source","fields":{"source":"DroneLife","error":"403 Forbidden"}}
 {"timestamp":"2026-01-30T12:00:02Z","level":"INFO","message":"Aggregation complete","fields":{"total_items":228,"sources_used":10}}
 ```
+
+---
+
+## Production Deployment
+
+### Docker Compose Stack
+
+FlyingForge is deployed as a multi-container application using Docker Compose:
+
+```yaml
+services:
+  postgres:     # PostgreSQL 16 - Primary data store
+  redis:        # Redis 7 - Caching layer
+  server:       # Go API server
+  web:          # React frontend (Nginx)
+```
+
+### Service Dependencies
+
+```
+┌─────────────┐
+│     web     │
+│   (nginx)   │
+└──────┬──────┘
+       │ HTTP
+       ▼
+┌─────────────┐
+│   server    │
+│   (Go API)  │
+└──────┬──────┘
+       │
+   ┌───┴───┐
+   │       │
+   ▼       ▼
+┌──────┐ ┌──────┐
+│ psql │ │redis │
+└──────┘ └──────┘
+```
+
+### Health Checks
+
+All services include health checks for orchestration:
+
+| Service | Check | Interval |
+|---------|-------|----------|
+| PostgreSQL | `pg_isready -U postgres` | 10s |
+| Redis | `redis-cli ping` | 10s |
+| Server | `GET /health` | 30s |
+
+### Production Environment Variables
+
+Create a `.env` file for production secrets:
+
+```bash
+# Database
+DB_HOST=postgres
+DB_PORT=5432
+DB_USER=flyingforge
+DB_PASSWORD=<strong-password>
+DB_NAME=flyingforge
+DB_SSLMODE=require
+
+# Redis
+CACHE_BACKEND=redis
+REDIS_ADDR=redis:6379
+REDIS_PASSWORD=<strong-password>
+
+# Authentication
+AUTH_JWT_SECRET=<256-bit-random-secret>
+GOOGLE_CLIENT_ID=<google-oauth-client-id>
+GOOGLE_CLIENT_SECRET=<google-oauth-client-secret>
+GOOGLE_REDIRECT_URI=https://flyingforge.app/api/auth/google/callback
+
+# Server
+CORS_ORIGIN=https://flyingforge.app
+LOG_LEVEL=info
+```
+
+### Security Considerations
+
+1. **Database Security**
+   - Use strong, unique passwords
+   - Enable SSL connections (`DB_SSLMODE=require`)
+   - Restrict network access to database ports
+   - Regular automated backups
+
+2. **Redis Security**
+   - Enable AUTH with password
+   - Consider Redis TLS for encrypted connections
+   - Don't expose Redis to public network
+
+3. **JWT Security**
+   - Use cryptographically secure random secret (256+ bits)
+   - Rotate secrets periodically
+   - Short access token TTL (15 minutes)
+   - Store refresh tokens securely
+
+4. **Network Security**
+   - Use HTTPS/TLS for all external traffic
+   - Configure proper CORS origins
+   - Use reverse proxy (nginx) for SSL termination
+
+### Scaling Considerations
+
+| Component | Horizontal Scaling | Notes |
+|-----------|-------------------|-------|
+| Web (Nginx) | ✅ Stateless | Load balancer required |
+| Server (Go) | ✅ Stateless | Redis required for shared cache |
+| PostgreSQL | ⚠️ Primary + Replicas | Use read replicas for scaling reads |
+| Redis | ⚠️ Cluster/Sentinel | For HA and scaling |
+
+### Monitoring Recommendations
+
+- **Metrics**: Prometheus + Grafana for server/database metrics
+- **Logging**: Aggregate logs with Loki or ELK stack
+- **Alerts**: Set up alerts for:
+  - Database connection failures
+  - Redis connection failures
+  - High error rates
+  - Slow API response times
+  - Disk space on volumes

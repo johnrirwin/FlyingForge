@@ -28,7 +28,7 @@ export interface Battery {
   chemistry: BatteryChemistry;
   cells: number;
   capacity_mah: number;
-  c_rating?: string;
+  c_rating?: number;
   weight_grams?: number;
   brand?: string;
   model?: string;
@@ -58,7 +58,7 @@ export interface CreateBatteryParams {
   chemistry: BatteryChemistry;
   cells: number;
   capacity_mah: number;
-  c_rating?: string;
+  c_rating?: number;
   weight_grams?: number;
   brand?: string;
   model?: string;
@@ -72,7 +72,7 @@ export interface UpdateBatteryParams {
   chemistry?: BatteryChemistry;
   cells?: number;
   capacity_mah?: number;
-  c_rating?: string;
+  c_rating?: number;
   weight_grams?: number;
   brand?: string;
   model?: string;

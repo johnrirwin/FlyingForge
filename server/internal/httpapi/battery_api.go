@@ -381,14 +381,14 @@ func (api *BatteryAPI) generateLabelHTML(b *models.Battery, size string) string 
 	var width, height, fontSize, qrSize string
 	if size == "small" {
 		width = "1.5in"
-		height = "1in"
+		height = "1.25in" // more height for bottom margin
 		fontSize = "10pt"
-		qrSize = "60"
+		qrSize = "44"
 	} else {
 		width = "2.5in"
-		height = "1.5in"
+		height = "1.85in" // more height for bottom margin
 		fontSize = "12pt"
-		qrSize = "80"
+		qrSize = "60"
 	}
 
 	// Chemistry display
@@ -409,6 +409,132 @@ func (api *BatteryAPI) generateLabelHTML(b *models.Battery, size string) string 
 	batteryCodeEscaped := html.EscapeString(b.BatteryCode)
 	chemistryEscaped := html.EscapeString(chemistryDisplay)
 	qrContentEscaped := html.EscapeString(qrContent)
+
+	if size == "small" {
+		htmlContent := fmt.Sprintf(`<!DOCTYPE html>
+		<html>
+		<head>
+		    <meta charset="utf-8">
+		    <title>Battery Label - %s</title>
+		    <style>
+		        @media print {
+		            @page {
+		                size: auto;
+		                margin: 0;
+		            }
+		            body {
+		                margin: 0;
+		            }
+		        }
+		        body {
+		            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+		            margin: 0;
+		            padding: 0;
+		            background: white;
+		        }
+		        .label {
+		            width: %s;
+		            height: %s;
+		            padding: 8px 8px 8px 12px;
+		            box-sizing: border-box;
+		            border: 1px dashed #ccc;
+		            display: flex;
+		            flex-direction: row;
+		            justify-content: space-between;
+		            align-items: center;
+		        }
+		        .label-left {
+		            display: flex;
+		            flex-direction: column;
+		            justify-content: center;
+		            align-items: flex-start;
+		            flex: 1;
+		            min-width: 0;
+		        }
+		        .battery-code {
+		            font-size: 13pt;
+		            font-weight: bold;
+		            text-align: left;
+		            margin-bottom: 2px;
+		            white-space: nowrap;
+		        }
+		        .specs {
+		            font-size: %s;
+		            text-align: left;
+		            margin-bottom: 0;
+		            white-space: nowrap;
+		        }
+		        .qr-section {
+		            display: flex;
+		            justify-content: center;
+		            align-items: center;
+		            margin-left: 8px;
+		        }
+		        .qr-code {
+		            width: %spx;
+		            height: %spx;
+		            margin: 0;
+		        }
+		        .print-btn {
+		            position: fixed;
+		            top: 10px;
+		            right: 10px;
+		            padding: 10px 20px;
+		            background: #0066cc;
+		            color: white;
+		            border: none;
+		            border-radius: 4px;
+		            cursor: pointer;
+		            font-size: 14px;
+		        }
+		        .print-btn:hover {
+		            background: #0055aa;
+		        }
+		        @media print {
+		            .print-btn {
+		                display: none;
+		            }
+		            .label {
+		                border: none;
+		            }
+		        }
+		    </style>
+		    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+		</head>
+		<body>
+		    <button class="print-btn" onclick="window.print()">🖨️ Print Label</button>
+		    <div class="label">
+		        <div class="label-left">
+		            <div class="battery-code">%s</div>
+		            <div class="specs">%s • %dS • %s</div>
+		        </div>
+		        <div class="qr-section">
+		            <div id="qrcode" class="qr-code"></div>
+		        </div>
+		    </div>
+		    <script>
+		        var qr = qrGenerator(0, 'M');
+		        qr.addData('%s');
+		        qr.make();
+		        document.getElementById('qrcode').innerHTML = qr.createSvgTag({
+		            cellSize: 2,
+		            margin: 0
+		        });
+		        function qrGenerator(typeNumber, errorCorrectionLevel) {
+		            return qrcode(typeNumber, errorCorrectionLevel);
+		        }
+		    </script>
+		</body>
+		</html>`,
+			batteryCodeEscaped,
+			width, height, fontSize,
+			qrSize, qrSize,
+			batteryCodeEscaped,
+			chemistryEscaped, b.Cells, capacityStr,
+			qrContentEscaped,
+		)
+		return htmlContent
+	}
 
 	htmlContent := fmt.Sprintf(`<!DOCTYPE html>
 <html>
@@ -431,16 +557,17 @@ func (api *BatteryAPI) generateLabelHTML(b *models.Battery, size string) string 
             padding: 0;
             background: white;
         }
-        .label {
-            width: %s;
-            height: %s;
-            padding: 8px;
-            box-sizing: border-box;
-            border: 1px dashed #ccc;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-        }
+		.label {
+			width: %s;
+			height: %s;
+			padding: 12px 12px 28px 12px;
+			box-sizing: border-box;
+			border: 1px dashed #ccc;
+			display: flex;
+			flex-direction: column;
+			justify-content: center;
+			align-items: center;
+		}
         .battery-code {
             font-size: 18pt;
             font-weight: bold;
@@ -457,10 +584,11 @@ func (api *BatteryAPI) generateLabelHTML(b *models.Battery, size string) string 
             justify-content: center;
             align-items: center;
         }
-        .qr-code {
-            width: %spx;
-            height: %spx;
-        }
+		.qr-code {
+			width: %spx;
+			height: %spx;
+			margin: 4px;
+		}
         .print-btn {
             position: fixed;
             top: 10px;
@@ -502,10 +630,10 @@ func (api *BatteryAPI) generateLabelHTML(b *models.Battery, size string) string 
         var qr = qrGenerator(0, 'M');
         qr.addData('%s');
         qr.make();
-        document.getElementById('qrcode').innerHTML = qr.createSvgTag({
-            cellSize: 3,
-            margin: 0
-        });
+		document.getElementById('qrcode').innerHTML = qr.createSvgTag({
+			cellSize: 3,
+			margin: 4
+		});
         
         function qrGenerator(typeNumber, errorCorrectionLevel) {
             return qrcode(typeNumber, errorCorrectionLevel);
@@ -520,7 +648,6 @@ func (api *BatteryAPI) generateLabelHTML(b *models.Battery, size string) string 
 		chemistryEscaped, b.Cells, capacityStr,
 		qrContentEscaped,
 	)
-
 	return htmlContent
 }
 

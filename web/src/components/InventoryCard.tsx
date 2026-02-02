@@ -151,13 +151,14 @@ export function InventoryCard({ item, onEdit, onDelete, onAdjustQuantity }: Inve
 interface InventoryListProps {
   items: InventoryItem[];
   isLoading: boolean;
+  hasLoaded: boolean;
   error: string | null;
   onEdit: (item: InventoryItem) => void;
   onDelete: (item: InventoryItem) => void;
   onAdjustQuantity: (item: InventoryItem, delta: number) => void;
 }
 
-export function InventoryList({ items, isLoading, error, onEdit, onDelete, onAdjustQuantity }: InventoryListProps) {
+export function InventoryList({ items, isLoading, hasLoaded, error, onEdit, onDelete, onAdjustQuantity }: InventoryListProps) {
   if (error) {
     return (
       <div className="flex-1 flex items-center justify-center p-8">
@@ -174,7 +175,8 @@ export function InventoryList({ items, isLoading, error, onEdit, onDelete, onAdj
     );
   }
 
-  if (isLoading && items.length === 0) {
+  // Only show skeleton on initial load (never loaded yet), not when filtering
+  if (isLoading && !hasLoaded) {
     return (
       <div className="flex-1 p-6 space-y-4">
         {[...Array(4)].map((_, i) => (
@@ -196,7 +198,7 @@ export function InventoryList({ items, isLoading, error, onEdit, onDelete, onAdj
     );
   }
 
-  if (items.length === 0) {
+  if (!isLoading && items.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="text-center max-w-md">
@@ -215,8 +217,14 @@ export function InventoryList({ items, isLoading, error, onEdit, onDelete, onAdj
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-6">
-      <div className="space-y-3 max-w-4xl mx-auto">
+    <div className="flex-1 overflow-y-auto p-6 relative">
+      {/* Show subtle loading overlay when filtering existing items */}
+      {isLoading && items.length > 0 && (
+        <div className="absolute inset-0 bg-slate-900/50 flex items-center justify-center z-10">
+          <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
+      <div className={`space-y-3 max-w-4xl mx-auto ${isLoading ? 'opacity-50' : ''}`}>
         {items.map(item => (
           <InventoryCard
             key={item.id}
@@ -227,11 +235,6 @@ export function InventoryList({ items, isLoading, error, onEdit, onDelete, onAdj
           />
         ))}
       </div>
-      {isLoading && (
-        <div className="flex items-center justify-center py-8">
-          <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
-        </div>
-      )}
     </div>
   );
 }

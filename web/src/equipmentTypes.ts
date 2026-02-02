@@ -10,7 +10,6 @@ export type EquipmentCategory =
   | 'motors'
   | 'propellers'
   | 'receivers'
-  | 'batteries'
   | 'cameras'
   | 'antennas'
   | 'accessories';
@@ -24,7 +23,6 @@ export const EQUIPMENT_CATEGORIES: { value: EquipmentCategory; label: string }[]
   { value: 'motors', label: 'Motors' },
   { value: 'propellers', label: 'Propellers' },
   { value: 'receivers', label: 'Receivers' },
-  { value: 'batteries', label: 'Batteries' },
   { value: 'cameras', label: 'Cameras' },
   { value: 'antennas', label: 'Antennas' },
   { value: 'accessories', label: 'Accessories' },

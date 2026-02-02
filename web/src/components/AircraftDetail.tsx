@@ -229,7 +229,6 @@ export function AircraftDetail({
                           {cat.value === 'camera' && '📷'}
                           {cat.value === 'frame' && '🏗️'}
                           {cat.value === 'props' && '🍃'}
-                          {cat.value === 'battery' && '🔋'}
                           {cat.value === 'antenna' && '📶'}
                         </div>
                         <div>

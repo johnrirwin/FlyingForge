@@ -140,7 +140,7 @@ export function BatterySection({ onError }: BatterySectionProps) {
       chemistry: battery.chemistry,
       cells: battery.cells,
       capacity_mah: battery.capacity_mah,
-      c_rating: battery.c_rating || '',
+      c_rating: battery.c_rating?.toString() || '',
       weight_grams: battery.weight_grams?.toString() || '',
       brand: battery.brand || '',
       model: battery.model || '',
@@ -160,7 +160,7 @@ export function BatterySection({ onError }: BatterySectionProps) {
         chemistry: formState.chemistry,
         cells: formState.cells,
         capacity_mah: formState.capacity_mah,
-        c_rating: formState.c_rating || undefined,
+        c_rating: formState.c_rating ? parseInt(formState.c_rating, 10) : undefined,
         weight_grams: formState.weight_grams ? parseInt(formState.weight_grams, 10) : undefined,
         brand: formState.brand || undefined,
         model: formState.model || undefined,
@@ -186,7 +186,7 @@ export function BatterySection({ onError }: BatterySectionProps) {
         chemistry: formState.chemistry,
         cells: formState.cells,
         capacity_mah: formState.capacity_mah,
-        c_rating: formState.c_rating || undefined,
+        c_rating: formState.c_rating ? parseInt(formState.c_rating, 10) : undefined,
         weight_grams: formState.weight_grams ? parseInt(formState.weight_grams, 10) : undefined,
         brand: formState.brand || undefined,
         model: formState.model || undefined,
@@ -218,8 +218,13 @@ export function BatterySection({ onError }: BatterySectionProps) {
     }
   };
 
-  const handlePrintLabel = (battery: Battery, size: LabelSize) => {
-    printBatteryLabel(battery.id, size);
+  const handlePrintLabel = async (battery: Battery, size: LabelSize) => {
+    try {
+      await printBatteryLabel(battery.id, size);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      alert('Failed to print label: ' + message);
+    }
   };
 
   // Log handlers

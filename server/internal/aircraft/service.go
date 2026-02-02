@@ -318,8 +318,6 @@ func mapComponentToEquipmentCategory(category models.ComponentCategory) models.E
 		return models.CategoryFrames
 	case models.ComponentCategoryProps:
 		return models.CategoryPropellers
-	case models.ComponentCategoryBattery:
-		return models.CategoryBatteries
 	case models.ComponentCategoryAntenna:
 		return models.CategoryAntennas
 	default:

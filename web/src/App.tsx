@@ -1,22 +1,52 @@
 import { useState, useEffect, useCallback } from 'react';
-import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, EquipmentSidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, Homepage, GettingStarted, RadioSection, BatterySection } from './components';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, Sidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, Homepage, GettingStarted, RadioSection, BatterySection } from './components';
 import { LoginPage } from './components/LoginPage';
 import { SignupPage } from './components/SignupPage';
 import { getItems, getSources, refreshFeeds } from './api';
-import { getSellers, getInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem, getInventorySummary, addEquipmentToInventory } from './equipmentApi';
+import { getInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem, getInventorySummary, addEquipmentToInventory } from './equipmentApi';
 import { listAircraft, createAircraft, updateAircraft, deleteAircraft, getAircraftDetails, setAircraftComponent, setELRSSettings } from './aircraftApi';
 import { useFilters, useDebounce } from './hooks';
 import { useAuth } from './hooks/useAuth';
 import type { FeedItem, SourceInfo, FilterParams } from './types';
-import type { EquipmentItem, SellerInfo, InventoryItem, EquipmentSearchParams, EquipmentCategory, ItemCondition, AddInventoryParams, InventorySummary, AppSection } from './equipmentTypes';
+import type { EquipmentItem, InventoryItem, EquipmentSearchParams, EquipmentCategory, ItemCondition, AddInventoryParams, InventorySummary, AppSection } from './equipmentTypes';
 import type { Aircraft, AircraftDetailsResponse, CreateAircraftParams, UpdateAircraftParams, SetComponentParams, ELRSConfig } from './aircraftTypes';
 
 type AuthModal = 'none' | 'login' | 'signup';
 
 
+// Map URL paths to AppSection values
+const pathToSection: Record<string, AppSection> = {
+  '/': 'home',
+  '/getting-started': 'getting-started',
+  '/dashboard': 'dashboard',
+  '/news': 'news',
+  '/shop': 'equipment',
+  '/inventory': 'inventory',
+  '/aircraft': 'aircraft',
+  '/radio': 'radio',
+  '/batteries': 'batteries',
+};
+
+const sectionToPath: Record<AppSection, string> = {
+  'home': '/',
+  'getting-started': '/getting-started',
+  'dashboard': '/dashboard',
+  'news': '/news',
+  'equipment': '/shop',
+  'inventory': '/inventory',
+  'aircraft': '/aircraft',
+  'radio': '/radio',
+  'batteries': '/batteries',
+};
+
 function App() {
+  // Router hooks
+  const location = useLocation();
+  const navigate = useNavigate();
+  
   // Check if this is the OAuth callback
-  const isAuthCallback = window.location.pathname === '/auth/callback';
+  const isAuthCallback = location.pathname === '/auth/callback';
   
   // Auth state - ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
   const { isAuthenticated, user, logout, isLoading: authLoading } = useAuth();
@@ -25,8 +55,8 @@ function App() {
   // Track previous auth state to detect logout
   const [wasAuthenticated, setWasAuthenticated] = useState<boolean | null>(null);
 
-  // Section state - starts as 'home' (public homepage for logged out, will redirect to dashboard for logged in)
-  const [activeSection, setActiveSection] = useState<AppSection>('home');
+  // Derive activeSection from URL path
+  const activeSection: AppSection = pathToSection[location.pathname] || 'home';
 
   // News feed state
   const [items, setItems] = useState<FeedItem[]>([]);
@@ -38,7 +68,6 @@ function App() {
   const [totalCount, setTotalCount] = useState(0);
 
   // Equipment state (for search params only)
-  const [sellers, setSellers] = useState<SellerInfo[]>([]);
   const [equipmentSearchParams, setEquipmentSearchParams] = useState<EquipmentSearchParams>({});
 
   // Inventory state
@@ -47,6 +76,7 @@ function App() {
   const [inventoryCategory, setInventoryCategory] = useState<EquipmentCategory | null>(null);
   const [inventoryCondition, setInventoryCondition] = useState<string | null>(null);
   const [isInventoryLoading, setIsInventoryLoading] = useState(false);
+  const [inventoryHasLoaded, setInventoryHasLoaded] = useState(false);
   const [inventoryError, setInventoryError] = useState<string | null>(null);
 
   // Modal state
@@ -73,30 +103,28 @@ function App() {
     // On initial load after auth check completes
     if (wasAuthenticated === null) {
       setWasAuthenticated(isAuthenticated);
-      // Set initial section based on auth state
-      // If authenticated, go to dashboard; if not, stay on home
-      if (isAuthenticated) {
-        setActiveSection('dashboard');
-      } else {
-        setActiveSection('home');
+      // Only redirect if we're on the root path and authenticated
+      // This preserves the current section on refresh
+      if (isAuthenticated && location.pathname === '/') {
+        navigate('/dashboard', { replace: true });
       }
       return;
     }
     
     // Detect logout: was authenticated, now not
     if (wasAuthenticated && !isAuthenticated) {
-      setActiveSection('home');
+      navigate('/', { replace: true });
     }
     
     // Detect login: was not authenticated, now is
     if (!wasAuthenticated && isAuthenticated) {
-      setActiveSection('dashboard');
+      navigate('/dashboard', { replace: true });
     }
     
     setWasAuthenticated(isAuthenticated);
-  }, [isAuthenticated, authLoading, wasAuthenticated]);
+  }, [isAuthenticated, authLoading, wasAuthenticated, navigate, location.pathname]);
 
-  // Load sources and sellers on mount
+  // Load sources on mount
   useEffect(() => {
     getSources()
       .then(response => {
@@ -104,14 +132,6 @@ function App() {
       })
       .catch(err => {
         console.error('Failed to load sources:', err);
-      });
-
-    getSellers()
-      .then(response => {
-        setSellers(response.sellers);
-      })
-      .catch(err => {
-        console.error('Failed to load sellers:', err);
       });
   }, []);
 
@@ -188,6 +208,7 @@ function App() {
         
         setInventoryItems(inventoryResponse.items || []);
         setInventorySummary(summaryResponse);
+        setInventoryHasLoaded(true);
       } catch (err) {
         setInventoryError(err instanceof Error ? err.message : 'Failed to load inventory');
         setInventoryItems([]);
@@ -423,7 +444,7 @@ function App() {
   const handleSectionChange = useCallback((section: AppSection) => {
     // When authenticated user clicks home, redirect to dashboard
     if (section === 'home' && isAuthenticated) {
-      setActiveSection('dashboard');
+      navigate('/dashboard');
       return;
     }
     // Dashboard, inventory, aircraft, radio, and batteries require authentication
@@ -431,8 +452,8 @@ function App() {
       setAuthModal('login');
       return;
     }
-    setActiveSection(section);
-  }, [isAuthenticated]);
+    navigate(sectionToPath[section]);
+  }, [isAuthenticated, navigate]);
 
   // Handle logout with redirect to news feed
   const handleLogout = useCallback(async () => {
@@ -448,12 +469,11 @@ function App() {
   return (
     <div className="flex h-screen bg-slate-900 text-white overflow-hidden">
       {/* Sidebar with section navigation */}
-      <EquipmentSidebar
+      <Sidebar
         activeSection={activeSection}
         onSectionChange={handleSectionChange}
         searchParams={equipmentSearchParams}
         onSearchChange={handleEquipmentSearchChange}
-        sellers={sellers}
         inventorySummary={inventorySummary}
         inventoryCategory={inventoryCategory}
         inventoryCondition={inventoryCondition}
@@ -471,7 +491,7 @@ function App() {
         {activeSection === 'home' && !isAuthenticated && (
           <Homepage
             onSignIn={() => setAuthModal('login')}
-            onExploreNews={() => setActiveSection('news')}
+            onExploreNews={() => navigate('/news')}
           />
         )}
 
@@ -492,7 +512,7 @@ function App() {
             isAircraftLoading={isAircraftLoading}
             isGearLoading={isInventoryLoading}
             isNewsLoading={isLoading}
-            onViewAllNews={() => setActiveSection('news')}
+            onViewAllNews={() => navigate('/news')}
             onAddAircraft={() => {
               setEditingAircraft(null);
               setShowAircraftForm(true);
@@ -502,7 +522,7 @@ function App() {
               setEditingInventoryItem(null);
               setShowAddInventoryModal(true);
             }}
-            onAddRadio={() => setActiveSection('radio')}
+            onAddRadio={() => navigate('/radio')}
             onSelectAircraft={handleSelectAircraft}
             onSelectNewsItem={setSelectedItem}
           />
@@ -518,7 +538,7 @@ function App() {
             isAircraftLoading={isAircraftLoading}
             isGearLoading={isInventoryLoading}
             isNewsLoading={isLoading}
-            onViewAllNews={() => setActiveSection('news')}
+            onViewAllNews={() => navigate('/news')}
             onAddAircraft={() => {
               setEditingAircraft(null);
               setShowAircraftForm(true);
@@ -528,7 +548,7 @@ function App() {
               setEditingInventoryItem(null);
               setShowAddInventoryModal(true);
             }}
-            onAddRadio={() => setActiveSection('radio')}
+            onAddRadio={() => navigate('/radio')}
             onSelectAircraft={handleSelectAircraft}
             onSelectNewsItem={setSelectedItem}
           />
@@ -592,6 +612,7 @@ function App() {
             <InventoryList
               items={inventoryItems}
               isLoading={isInventoryLoading}
+              hasLoaded={inventoryHasLoaded}
               error={inventoryError}
               onEdit={handleEditInventoryItem}
               onDelete={handleDeleteInventoryItem}

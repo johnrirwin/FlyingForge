@@ -220,6 +220,34 @@ describe('ComponentName', () => {
 | `tagging` | Tag inference, rule management |
 | **Frontend** | FeedCard, Sidebar, TopBar, useAuth |
 
+## Pre-Commit Requirements
+
+**IMPORTANT: Before committing any changes, you MUST run the following checks:**
+
+### Backend (Go)
+```bash
+cd server
+go build ./...       # Must compile without errors
+go vet ./...         # Must pass static analysis
+go fmt ./...         # Must be properly formatted
+go test ./...        # Must pass all tests
+```
+
+### Frontend (React/TypeScript)
+```bash
+cd web
+npm run build        # Must compile without errors
+npm run lint         # Must pass linting (errors only, warnings OK)
+npm run test         # Must pass all tests
+```
+
+### Docker (Full Stack)
+```bash
+docker-compose up --build -d   # Must build successfully
+```
+
+**Do NOT commit code that fails any of these checks.**
+
 ## Conventions
 
 - **Commits**: Conventional Commits format (`feat:`, `fix:`, `chore:`, etc.)

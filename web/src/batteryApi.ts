@@ -99,9 +99,15 @@ export async function deleteBattery(id: string): Promise<void> {
 
 // Battery Logs
 
+interface BatteryLogListResponse {
+  logs: BatteryLog[];
+  totalCount: number;
+}
+
 // List logs for a battery
 export async function getBatteryLogs(batteryId: string): Promise<BatteryLog[]> {
-  return fetchAPI<BatteryLog[]>(`/api/batteries/${batteryId}/logs`);
+  const response = await fetchAPI<BatteryLogListResponse>(`/api/batteries/${batteryId}/logs`);
+  return response.logs || [];
 }
 
 // Create a new log entry
@@ -130,7 +136,17 @@ export function getBatteryLabelUrl(batteryId: string, size: LabelSize = 'standar
 }
 
 // Open label in new window for printing
-export function printBatteryLabel(batteryId: string, size: LabelSize = 'standard'): void {
+export async function printBatteryLabel(batteryId: string, size: LabelSize = 'standard'): Promise<void> {
   const url = getBatteryLabelUrl(batteryId, size);
-  window.open(url, '_blank', 'width=400,height=300,menubar=no,toolbar=no');
+  const token = getAccessToken();
+  const response = await fetch(url, {
+    headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Request failed' }));
+    throw new Error(error.message || error.error || `HTTP ${response.status}`);
+  }
+  const blob = await response.blob();
+  const blobUrl = window.URL.createObjectURL(blob);
+  window.open(blobUrl, '_blank', 'width=400,height=300,menubar=no,toolbar=no');
 }
