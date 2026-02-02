@@ -398,10 +398,10 @@ func (s *AircraftStore) RemoveComponent(ctx context.Context, aircraftID string, 
 	return nil
 }
 
-// SetELRSSettings sets or updates ELRS settings for an aircraft
-func (s *AircraftStore) SetELRSSettings(ctx context.Context, aircraftID string, settings json.RawMessage) (*models.AircraftELRSSettings, error) {
+// SetReceiverSettings sets or updates receiver settings for an aircraft
+func (s *AircraftStore) SetReceiverSettings(ctx context.Context, aircraftID string, settings json.RawMessage) (*models.AircraftReceiverSettings, error) {
 	query := `
-		INSERT INTO aircraft_elrs_settings (aircraft_id, settings_json)
+		INSERT INTO aircraft_receiver_settings (aircraft_id, settings_json)
 		VALUES ($1, $2)
 		ON CONFLICT (aircraft_id) DO UPDATE SET
 			settings_json = EXCLUDED.settings_json,
@@ -409,40 +409,40 @@ func (s *AircraftStore) SetELRSSettings(ctx context.Context, aircraftID string, 
 		RETURNING id, aircraft_id, settings_json, created_at, updated_at
 	`
 
-	elrs := &models.AircraftELRSSettings{}
+	rx := &models.AircraftReceiverSettings{}
 	err := s.db.QueryRowContext(ctx, query, aircraftID, settings).Scan(
-		&elrs.ID, &elrs.AircraftID, &elrs.Settings, &elrs.CreatedAt, &elrs.UpdatedAt,
+		&rx.ID, &rx.AircraftID, &rx.Settings, &rx.CreatedAt, &rx.UpdatedAt,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to set ELRS settings: %w", err)
+		return nil, fmt.Errorf("failed to set receiver settings: %w", err)
 	}
 
-	return elrs, nil
+	return rx, nil
 }
 
-// GetELRSSettings retrieves ELRS settings for an aircraft
-func (s *AircraftStore) GetELRSSettings(ctx context.Context, aircraftID string) (*models.AircraftELRSSettings, error) {
+// GetReceiverSettings retrieves receiver settings for an aircraft
+func (s *AircraftStore) GetReceiverSettings(ctx context.Context, aircraftID string) (*models.AircraftReceiverSettings, error) {
 	query := `
 		SELECT id, aircraft_id, settings_json, created_at, updated_at
-		FROM aircraft_elrs_settings
+		FROM aircraft_receiver_settings
 		WHERE aircraft_id = $1
 	`
 
-	elrs := &models.AircraftELRSSettings{}
+	rx := &models.AircraftReceiverSettings{}
 	err := s.db.QueryRowContext(ctx, query, aircraftID).Scan(
-		&elrs.ID, &elrs.AircraftID, &elrs.Settings, &elrs.CreatedAt, &elrs.UpdatedAt,
+		&rx.ID, &rx.AircraftID, &rx.Settings, &rx.CreatedAt, &rx.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to get ELRS settings: %w", err)
+		return nil, fmt.Errorf("failed to get receiver settings: %w", err)
 	}
 
-	return elrs, nil
+	return rx, nil
 }
 
-// GetDetails retrieves full aircraft details including components and ELRS settings
+// GetDetails retrieves full aircraft details including components and receiver settings
 func (s *AircraftStore) GetDetails(ctx context.Context, id string, userID string) (*models.AircraftDetailsResponse, error) {
 	aircraft, err := s.Get(ctx, id, userID)
 	if err != nil {
@@ -457,15 +457,15 @@ func (s *AircraftStore) GetDetails(ctx context.Context, id string, userID string
 		return nil, err
 	}
 
-	elrsSettings, err := s.GetELRSSettings(ctx, id)
+	receiverSettings, err := s.GetReceiverSettings(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
 	return &models.AircraftDetailsResponse{
-		Aircraft:     *aircraft,
-		Components:   components,
-		ELRSSettings: elrsSettings,
+		Aircraft:         *aircraft,
+		Components:       components,
+		ReceiverSettings: receiverSettings,
 	}, nil
 }
 

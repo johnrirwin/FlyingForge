@@ -2,13 +2,13 @@ import type {
   Aircraft,
   AircraftComponent,
   AircraftDetailsResponse,
-  AircraftELRSSettings,
+  AircraftReceiverSettings,
   AircraftListParams,
   AircraftListResponse,
   ComponentsResponse,
   CreateAircraftParams,
   SetComponentParams,
-  SetELRSSettingsParams,
+  SetReceiverSettingsParams,
   UpdateAircraftParams,
 } from './aircraftTypes';
 
@@ -130,17 +130,17 @@ export async function removeAircraftComponent(
   });
 }
 
-// ELRS Settings
+// Receiver Settings
 
-export async function getELRSSettings(aircraftId: string): Promise<AircraftELRSSettings> {
-  return fetchAPI<AircraftELRSSettings>(`/api/aircraft/${aircraftId}/elrs`);
+export async function getReceiverSettings(aircraftId: string): Promise<AircraftReceiverSettings> {
+  return fetchAPI<AircraftReceiverSettings>(`/api/aircraft/${aircraftId}/receiver`);
 }
 
-export async function setELRSSettings(
+export async function setReceiverSettings(
   aircraftId: string,
-  params: SetELRSSettingsParams
-): Promise<AircraftELRSSettings> {
-  return fetchAPI<AircraftELRSSettings>(`/api/aircraft/${aircraftId}/elrs`, {
+  params: SetReceiverSettingsParams
+): Promise<AircraftReceiverSettings> {
+  return fetchAPI<AircraftReceiverSettings>(`/api/aircraft/${aircraftId}/receiver`, {
     method: 'POST',
     body: JSON.stringify(params),
   });

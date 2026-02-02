@@ -27,24 +27,21 @@ export interface PilotSearchResponse {
   total: number;
 }
 
-// Sanitized ELRS settings (safe for public display)
-// CRITICAL: This type intentionally OMITS sensitive fields like bindPhrase, modelMatch, uid
-export interface ELRSSanitizedSettings {
-  receiverModel?: string;    // e.g., "EP1", "RP1", "RP3"
-  packetRate?: string;       // e.g., "250Hz", "500Hz"
-  telemetryRatio?: string;   // e.g., "1:128", "1:64"
-  switchMode?: string;       // e.g., "Hybrid", "Wide"
-  outputPower?: string;      // e.g., "250mW", "500mW", "Dynamic"
-  regulatoryDomain?: string; // e.g., "FCC", "LBT"
-  firmwareVersion?: string;  // e.g., "3.4.0"
-  rxProtocol?: string;       // Protocol type if applicable
+// Sanitized receiver settings (safe for public display)
+// CRITICAL: This type intentionally OMITS sensitive fields like bindingPhrase, modelMatch, uid
+// Uses the SAME field names as ReceiverConfig for simplicity
+export interface ReceiverSanitizedSettings {
+  rate?: number;             // Packet rate in Hz (e.g., 250, 500)
+  tlm?: number;              // Telemetry ratio denominator (e.g., 8 for 1:8, 0 for off)
+  power?: number;            // TX power in mW (e.g., 100, 250, 500)
+  deviceName?: string;       // Device name
 }
 
 // Component category types
 export type ComponentCategory = 
   | 'fc' 
   | 'esc' 
-  | 'elrs_module' 
+  | 'receiver' 
   | 'vtx' 
   | 'motors' 
   | 'camera' 
@@ -71,7 +68,7 @@ export interface AircraftPublic {
   description?: string;
   createdAt: string;
   components?: AircraftComponentPublic[];
-  elrsSettings?: ELRSSanitizedSettings; // Sanitized ELRS data
+  receiverSettings?: ReceiverSanitizedSettings; // Sanitized receiver data
 }
 
 // Full pilot profile (from /api/pilots/:id)

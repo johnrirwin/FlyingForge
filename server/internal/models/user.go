@@ -274,15 +274,15 @@ type FollowListResponse struct {
 
 // AircraftPublic represents aircraft info for public pilot profiles
 type AircraftPublic struct {
-	ID           string                    `json:"id"`
-	Name         string                    `json:"name"`
-	Nickname     string                    `json:"nickname,omitempty"`
-	Type         AircraftType              `json:"type,omitempty"`
-	HasImage     bool                      `json:"hasImage"`
-	Description  string                    `json:"description,omitempty"`
-	CreatedAt    time.Time                 `json:"createdAt"`
-	Components   []AircraftComponentPublic `json:"components,omitempty"`
-	ELRSSettings *ELRSSanitizedSettings    `json:"elrsSettings,omitempty"` // Sanitized ELRS data
+	ID               string                     `json:"id"`
+	Name             string                     `json:"name"`
+	Nickname         string                     `json:"nickname,omitempty"`
+	Type             AircraftType               `json:"type,omitempty"`
+	HasImage         bool                       `json:"hasImage"`
+	Description      string                     `json:"description,omitempty"`
+	CreatedAt        time.Time                  `json:"createdAt"`
+	Components       []AircraftComponentPublic  `json:"components,omitempty"`
+	ReceiverSettings *ReceiverSanitizedSettings `json:"receiverSettings,omitempty"` // Sanitized receiver data
 }
 
 // AircraftComponentPublic represents component info for public view
@@ -294,17 +294,14 @@ type AircraftComponentPublic struct {
 	ImageURL     string            `json:"imageUrl,omitempty"`
 }
 
-// ELRSSanitizedSettings contains only safe-to-share ELRS configuration
+// ReceiverSanitizedSettings contains only safe-to-share receiver configuration
 // CRITICAL: This struct MUST NOT contain BindPhrase, ModelMatch, UID, or any secrets
-type ELRSSanitizedSettings struct {
-	ReceiverModel    string `json:"receiverModel,omitempty"`    // e.g., "EP1", "RP1", "RP3"
-	PacketRate       string `json:"packetRate,omitempty"`       // e.g., "250Hz", "500Hz"
-	TelemetryRatio   string `json:"telemetryRatio,omitempty"`   // e.g., "1:128", "1:64"
-	SwitchMode       string `json:"switchMode,omitempty"`       // e.g., "Hybrid", "Wide"
-	OutputPower      string `json:"outputPower,omitempty"`      // e.g., "250mW", "500mW", "Dynamic"
-	RegulatoryDomain string `json:"regulatoryDomain,omitempty"` // e.g., "FCC", "LBT"
-	FirmwareVersion  string `json:"firmwareVersion,omitempty"`  // e.g., "3.4.0"
-	RXProtocol       string `json:"rxProtocol,omitempty"`       // Protocol type if applicable
+// Uses the SAME field names as the frontend ReceiverConfig for simplicity
+type ReceiverSanitizedSettings struct {
+	Rate       *int   `json:"rate,omitempty"`       // Packet rate in Hz (e.g., 250, 500)
+	Tlm        *int   `json:"tlm,omitempty"`        // Telemetry ratio denominator (e.g., 8 for 1:8, 0 for off)
+	Power      *int   `json:"power,omitempty"`      // TX power in mW (e.g., 100, 250, 500)
+	DeviceName string `json:"deviceName,omitempty"` // Device name
 }
 
 // CallSign validation

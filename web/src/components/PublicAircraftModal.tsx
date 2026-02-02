@@ -1,5 +1,5 @@
 // Read-only aircraft detail modal for public pilot profiles
-// Shows components and sanitized ELRS settings (no sensitive data)
+// Shows components and sanitized receiver settings (no sensitive data)
 
 import { useState } from 'react';
 import type { AircraftPublic, ComponentCategory } from '../socialTypes';
@@ -10,13 +10,13 @@ interface PublicAircraftModalProps {
   onClose: () => void;
 }
 
-type ViewMode = 'components' | 'elrs';
+type ViewMode = 'components' | 'receiver';
 
 // Component category display info
 const COMPONENT_INFO: Record<ComponentCategory, { label: string; icon: string }> = {
   fc: { label: 'Flight Controller', icon: '🧠' },
   esc: { label: 'ESC', icon: '⚡' },
-  elrs_module: { label: 'ELRS Receiver', icon: '📡' },
+  receiver: { label: 'Receiver', icon: '📡' },
   vtx: { label: 'Video Transmitter', icon: '📺' },
   motors: { label: 'Motors', icon: '🔄' },
   camera: { label: 'Camera', icon: '📷' },
@@ -27,7 +27,7 @@ const COMPONENT_INFO: Record<ComponentCategory, { label: string; icon: string }>
 
 // All component categories in display order
 const CATEGORY_ORDER: ComponentCategory[] = [
-  'fc', 'esc', 'elrs_module', 'vtx', 'motors', 'camera', 'frame', 'propellers', 'antenna'
+  'fc', 'esc', 'receiver', 'vtx', 'motors', 'camera', 'frame', 'propellers', 'antenna'
 ];
 
 export function PublicAircraftModal({ aircraft, onClose }: PublicAircraftModalProps) {
@@ -35,8 +35,8 @@ export function PublicAircraftModal({ aircraft, onClose }: PublicAircraftModalPr
   const [imageError, setImageError] = useState(false);
 
   const hasComponents = aircraft.components && aircraft.components.length > 0;
-  const hasElrsSettings = aircraft.elrsSettings && 
-    Object.values(aircraft.elrsSettings).some(v => v);
+  const hasReceiverSettings = aircraft.receiverSettings && 
+    Object.values(aircraft.receiverSettings).some(v => v);
 
   // Get component by category
   const getComponentByCategory = (category: ComponentCategory) => {
@@ -108,15 +108,15 @@ export function PublicAircraftModal({ aircraft, onClose }: PublicAircraftModalPr
             Components
           </button>
           <button
-            onClick={() => setViewMode('elrs')}
+            onClick={() => setViewMode('receiver')}
             className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-              viewMode === 'elrs'
+              viewMode === 'receiver'
                 ? 'text-primary-400 border-b-2 border-primary-400'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            ELRS Settings
-            {hasElrsSettings && (
+            Receiver Settings
+            {hasReceiverSettings && (
               <span className="ml-2 px-1.5 py-0.5 bg-green-500/20 text-green-400 text-[10px] rounded">
                 Safe View
               </span>
@@ -174,9 +174,9 @@ export function PublicAircraftModal({ aircraft, onClose }: PublicAircraftModalPr
             </div>
           )}
 
-          {viewMode === 'elrs' && (
+          {viewMode === 'receiver' && (
             <div className="space-y-4">
-              {hasElrsSettings ? (
+              {hasReceiverSettings ? (
                 <>
                   {/* Safe view notice */}
                   <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
@@ -188,19 +188,27 @@ export function PublicAircraftModal({ aircraft, onClose }: PublicAircraftModalPr
                     </div>
                   </div>
 
-                  {/* ELRS Settings Display */}
+                  {/* Receiver Settings Display */}
                   <div className="bg-slate-700/50 border border-slate-700 rounded-lg p-4 space-y-3">
-                    <h4 className="text-white font-medium mb-4">ELRS Configuration</h4>
+                    <h4 className="text-white font-medium mb-4">Receiver Configuration</h4>
                     
                     <div className="grid grid-cols-2 gap-4">
-                      <ElrsField label="Receiver Model" value={aircraft.elrsSettings?.receiverModel} />
-                      <ElrsField label="Packet Rate" value={aircraft.elrsSettings?.packetRate} />
-                      <ElrsField label="Telemetry Ratio" value={aircraft.elrsSettings?.telemetryRatio} />
-                      <ElrsField label="TX Power" value={aircraft.elrsSettings?.outputPower} />
-                      <ElrsField label="Switch Mode" value={aircraft.elrsSettings?.switchMode} />
-                      <ElrsField label="Regulatory Domain" value={aircraft.elrsSettings?.regulatoryDomain} />
-                      <ElrsField label="Firmware Version" value={aircraft.elrsSettings?.firmwareVersion} />
-                      <ElrsField label="RX Protocol" value={aircraft.elrsSettings?.rxProtocol} />
+                      <ReceiverField 
+                        label="Packet Rate" 
+                        value={aircraft.receiverSettings?.rate ? `${aircraft.receiverSettings.rate} Hz` : undefined} 
+                      />
+                      <ReceiverField 
+                        label="Telemetry Ratio" 
+                        value={aircraft.receiverSettings?.tlm !== undefined 
+                          ? aircraft.receiverSettings.tlm === 0 ? 'Off' : `1:${aircraft.receiverSettings.tlm}`
+                          : undefined
+                        } 
+                      />
+                      <ReceiverField 
+                        label="TX Power" 
+                        value={aircraft.receiverSettings?.power ? `${aircraft.receiverSettings.power} mW` : undefined} 
+                      />
+                      <ReceiverField label="Device Name" value={aircraft.receiverSettings?.deviceName} />
                     </div>
                   </div>
 
@@ -214,7 +222,7 @@ export function PublicAircraftModal({ aircraft, onClose }: PublicAircraftModalPr
                   <svg className="w-12 h-12 mx-auto mb-3 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
-                  <p>No ELRS settings configured for this aircraft.</p>
+                  <p>No receiver settings configured for this aircraft.</p>
                 </div>
               )}
             </div>
@@ -230,8 +238,8 @@ export function PublicAircraftModal({ aircraft, onClose }: PublicAircraftModalPr
   );
 }
 
-// Helper component for displaying ELRS fields
-function ElrsField({ label, value }: { label: string; value?: string }) {
+// Helper component for displaying receiver fields
+function ReceiverField({ label, value }: { label: string; value?: string }) {
   return (
     <div>
       <label className="block text-xs font-medium text-slate-400 mb-1">

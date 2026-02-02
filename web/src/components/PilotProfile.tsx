@@ -234,7 +234,7 @@ function AircraftCard({ aircraft, onClick }: { aircraft: AircraftPublic; onClick
     return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
 
-  const hasElrsSettings = aircraft.elrsSettings && Object.values(aircraft.elrsSettings).some(v => v);
+  const hasReceiverSettings = aircraft.receiverSettings && Object.values(aircraft.receiverSettings).some(v => v);
   const componentCount = aircraft.components?.length || 0;
 
   return (
@@ -281,9 +281,9 @@ function AircraftCard({ aircraft, onClick }: { aircraft: AircraftPublic; onClick
               {componentCount} component{componentCount !== 1 ? 's' : ''}
             </span>
           )}
-          {hasElrsSettings && (
+          {hasReceiverSettings && (
             <span className="px-2 py-0.5 bg-green-500/20 text-green-400 rounded text-xs">
-              ELRS
+              Receiver
             </span>
           )}
         </div>

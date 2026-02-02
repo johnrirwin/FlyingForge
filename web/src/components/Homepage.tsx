@@ -144,7 +144,7 @@ export function Homepage({ onSignIn, onExploreNews }: HomepageProps) {
                 </svg>
               }
               title="Track Your Radio"
-              description="Keep your transmitter configs organized. Track ELRS settings, model match IDs, and have backup configs ready to go."
+              description="Keep your transmitter configs organized. Track receiver settings, model match IDs, and have backup configs ready to go."
             />
 
             {/* Track Batteries */}
@@ -200,7 +200,7 @@ export function Homepage({ onSignIn, onExploreNews }: HomepageProps) {
             <Step
               number={2}
               title="Link & Configure"
-              description="Connect parts to specific aircraft, set up ELRS bindings, and organize your radio model configs."
+              description="Connect parts to specific aircraft, set up receiver bindings, and organize your radio model configs."
             />
             <Step
               number={3}

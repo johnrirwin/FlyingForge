@@ -87,7 +87,7 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationIndexes,
 		migrationAircraft,
 		migrationAircraftComponents,
-		migrationAircraftELRSSettings,
+		migrationAircraftReceiverSettings,
 		migrationAircraftIndexes,
 		migrationAircraftImageStorage,
 		migrationRadios,
@@ -99,6 +99,7 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationUserProfiles,
 		migrationSocialSettings,
 		migrationFollows,
+		migrationRenameElrsToReceiver,
 	}
 
 	for i, migration := range migrations {
@@ -262,8 +263,8 @@ CREATE TABLE IF NOT EXISTS aircraft_components (
 );
 `
 
-const migrationAircraftELRSSettings = `
-CREATE TABLE IF NOT EXISTS aircraft_elrs_settings (
+const migrationAircraftReceiverSettings = `
+CREATE TABLE IF NOT EXISTS aircraft_receiver_settings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     aircraft_id UUID NOT NULL REFERENCES aircraft(id) ON DELETE CASCADE UNIQUE,
     settings_json JSONB DEFAULT '{}',
@@ -278,7 +279,7 @@ CREATE INDEX IF NOT EXISTS idx_aircraft_type ON aircraft(type);
 CREATE INDEX IF NOT EXISTS idx_aircraft_name_search ON aircraft USING gin(to_tsvector('english', name));
 CREATE INDEX IF NOT EXISTS idx_aircraft_components_aircraft ON aircraft_components(aircraft_id);
 CREATE INDEX IF NOT EXISTS idx_aircraft_components_inventory ON aircraft_components(inventory_item_id);
-CREATE INDEX IF NOT EXISTS idx_aircraft_elrs_aircraft ON aircraft_elrs_settings(aircraft_id);
+CREATE INDEX IF NOT EXISTS idx_aircraft_receiver_aircraft ON aircraft_receiver_settings(aircraft_id);
 `
 
 const migrationAircraftImageStorage = `
@@ -414,4 +415,18 @@ CREATE TABLE IF NOT EXISTS follows (
 CREATE INDEX IF NOT EXISTS idx_follows_follower ON follows(follower_user_id);
 CREATE INDEX IF NOT EXISTS idx_follows_followed ON follows(followed_user_id);
 CREATE INDEX IF NOT EXISTS idx_follows_created ON follows(created_at DESC);
+`
+
+// Migration to rename elrs table to receiver (for existing databases)
+const migrationRenameElrsToReceiver = `
+-- Rename table if old name exists
+DO $$ 
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'aircraft_elrs_settings') 
+    AND NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'aircraft_receiver_settings') 
+    THEN
+        ALTER TABLE aircraft_elrs_settings RENAME TO aircraft_receiver_settings;
+        ALTER INDEX IF EXISTS idx_aircraft_elrs_aircraft RENAME TO idx_aircraft_receiver_aircraft;
+    END IF;
+END $$;
 `

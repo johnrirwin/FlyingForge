@@ -145,7 +145,7 @@ func (api *PilotAPI) handlePilotProfile(w http.ResponseWriter, r *http.Request) 
 			aircraft = []*models.Aircraft{}
 		}
 
-		// Build public aircraft list with sanitized ELRS data and components
+		// Build public aircraft list with sanitized receiver data and components
 		publicAircraft = make([]models.AircraftPublic, 0, len(aircraft))
 		for _, a := range aircraft {
 			aircraftPublic := models.AircraftPublic{
@@ -177,13 +177,11 @@ func (api *PilotAPI) handlePilotProfile(w http.ResponseWriter, r *http.Request) 
 				aircraftPublic.Components = publicComponents
 			}
 
-			// Only include sanitized ELRS settings for non-owners
-			if !isOwner {
-				// Get ELRS settings and sanitize them
-				elrsSettings, err := api.aircraftStore.GetELRSSettings(ctx, a.ID)
-				if err == nil && elrsSettings != nil {
-					aircraftPublic.ELRSSettings = models.SanitizeELRSSettings(elrsSettings)
-				}
+			// Get receiver settings - sanitize for non-owners (hide sensitive data)
+			receiverSettings, err := api.aircraftStore.GetReceiverSettings(ctx, a.ID)
+			if err == nil && receiverSettings != nil {
+				// Always sanitize - removes bind phrase, model match, uid etc.
+				aircraftPublic.ReceiverSettings = models.SanitizeReceiverSettings(receiverSettings)
 			}
 
 			publicAircraft = append(publicAircraft, aircraftPublic)

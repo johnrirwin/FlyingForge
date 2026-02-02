@@ -112,7 +112,7 @@ func (api *AircraftAPI) createAircraft(w http.ResponseWriter, r *http.Request) {
 	api.writeJSON(w, http.StatusCreated, aircraft)
 }
 
-// handleAircraftItem handles single aircraft operations (get, update, delete, components, elrs)
+// handleAircraftItem handles single aircraft operations (get, update, delete, components, receiver)
 func (api *AircraftAPI) handleAircraftItem(w http.ResponseWriter, r *http.Request) {
 	// Extract path after /api/aircraft/
 	path := strings.TrimPrefix(r.URL.Path, "/api/aircraft/")
@@ -125,14 +125,14 @@ func (api *AircraftAPI) handleAircraftItem(w http.ResponseWriter, r *http.Reques
 
 	aircraftID := parts[0]
 
-	// Check for sub-resources: /api/aircraft/{id}/components or /api/aircraft/{id}/elrs
+	// Check for sub-resources: /api/aircraft/{id}/components or /api/aircraft/{id}/receiver
 	if len(parts) > 1 {
 		switch parts[1] {
 		case "components":
 			api.handleComponents(w, r, aircraftID)
 			return
-		case "elrs":
-			api.handleELRS(w, r, aircraftID)
+		case "receiver":
+			api.handleReceiver(w, r, aircraftID)
 			return
 		case "details":
 			api.getAircraftDetails(w, r, aircraftID)
@@ -186,7 +186,7 @@ func (api *AircraftAPI) getAircraft(w http.ResponseWriter, r *http.Request, id s
 	api.writeJSON(w, http.StatusOK, aircraft)
 }
 
-// getAircraftDetails retrieves full aircraft details including components and ELRS settings
+// getAircraftDetails retrieves full aircraft details including components and receiver settings
 func (api *AircraftAPI) getAircraftDetails(w http.ResponseWriter, r *http.Request, id string) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -380,28 +380,28 @@ func (api *AircraftAPI) removeComponent(w http.ResponseWriter, r *http.Request, 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// handleELRS handles ELRS settings operations
-func (api *AircraftAPI) handleELRS(w http.ResponseWriter, r *http.Request, aircraftID string) {
+// handleReceiver handles receiver settings operations
+func (api *AircraftAPI) handleReceiver(w http.ResponseWriter, r *http.Request, aircraftID string) {
 	switch r.Method {
 	case http.MethodGet:
-		api.getELRSSettings(w, r, aircraftID)
+		api.getReceiverSettings(w, r, aircraftID)
 	case http.MethodPost, http.MethodPut:
-		api.setELRSSettings(w, r, aircraftID)
+		api.setReceiverSettings(w, r, aircraftID)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
-// getELRSSettings retrieves ELRS settings for an aircraft
-func (api *AircraftAPI) getELRSSettings(w http.ResponseWriter, r *http.Request, aircraftID string) {
+// getReceiverSettings retrieves receiver settings for an aircraft
+func (api *AircraftAPI) getReceiverSettings(w http.ResponseWriter, r *http.Request, aircraftID string) {
 	userID := auth.GetUserID(r.Context())
 
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
-	settings, err := api.aircraftSvc.GetELRSSettings(ctx, aircraftID, userID)
+	settings, err := api.aircraftSvc.GetReceiverSettings(ctx, aircraftID, userID)
 	if err != nil {
-		api.logger.Error("Get ELRS settings failed", logging.WithFields(map[string]interface{}{
+		api.logger.Error("Get receiver settings failed", logging.WithFields(map[string]interface{}{
 			"aircraft_id": aircraftID,
 			"error":       err.Error(),
 		}))
@@ -423,11 +423,11 @@ func (api *AircraftAPI) getELRSSettings(w http.ResponseWriter, r *http.Request, 
 	api.writeJSON(w, http.StatusOK, settings)
 }
 
-// setELRSSettings sets ELRS settings for an aircraft
-func (api *AircraftAPI) setELRSSettings(w http.ResponseWriter, r *http.Request, aircraftID string) {
+// setReceiverSettings sets receiver settings for an aircraft
+func (api *AircraftAPI) setReceiverSettings(w http.ResponseWriter, r *http.Request, aircraftID string) {
 	userID := auth.GetUserID(r.Context())
 
-	var params models.SetELRSSettingsParams
+	var params models.SetReceiverSettingsParams
 
 	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -438,9 +438,9 @@ func (api *AircraftAPI) setELRSSettings(w http.ResponseWriter, r *http.Request, 
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
-	settings, err := api.aircraftSvc.SetELRSSettings(ctx, userID, params)
+	settings, err := api.aircraftSvc.SetReceiverSettings(ctx, userID, params)
 	if err != nil {
-		api.logger.Error("Set ELRS settings failed", logging.WithFields(map[string]interface{}{
+		api.logger.Error("Set receiver settings failed", logging.WithFields(map[string]interface{}{
 			"aircraft_id": aircraftID,
 			"error":       err.Error(),
 		}))

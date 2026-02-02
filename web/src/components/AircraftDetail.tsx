@@ -3,7 +3,7 @@ import type {
   AircraftDetailsResponse, 
   AircraftComponent, 
   ComponentCategory,
-  ELRSConfig,
+  ReceiverConfig,
   SetComponentParams 
 } from '../aircraftTypes';
 import { AIRCRAFT_TYPES, COMPONENT_CATEGORIES } from '../aircraftTypes';
@@ -15,17 +15,17 @@ interface AircraftDetailProps {
   details: AircraftDetailsResponse;
   onClose: () => void;
   onSetComponent: (params: SetComponentParams) => Promise<void>;
-  onSetELRSSettings: (settings: ELRSConfig) => Promise<void>;
+  onSetReceiverSettings: (settings: ReceiverConfig) => Promise<void>;
   onRefresh: () => void;
 }
 
-type ViewMode = 'components' | 'elrs';
+type ViewMode = 'components' | 'receiver';
 
 export function AircraftDetail({
   details,
   onClose,
   onSetComponent,
-  onSetELRSSettings,
+  onSetReceiverSettings,
   onRefresh,
 }: AircraftDetailProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('components');
@@ -34,12 +34,12 @@ export function AircraftDetail({
   const [selectedCategory, setSelectedCategory] = useState<ComponentCategory | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // ELRS settings state
-  const [elrsSettings, setElrsSettings] = useState<ELRSConfig>(
-    details.elrsSettings?.settings || {}
+  // Receiver settings state
+  const [receiverSettings, setReceiverSettings] = useState<ReceiverConfig>(
+    details.receiverSettings?.settings || {}
   );
-  const [isSavingElrs, setIsSavingElrs] = useState(false);
-  const [elrsSaved, setElrsSaved] = useState(false);
+  const [isSavingReceiver, setIsSavingReceiver] = useState(false);
+  const [receiverSaved, setReceiverSaved] = useState(false);
 
   const { aircraft, components } = details;
   const aircraftType = AIRCRAFT_TYPES.find(t => t.value === aircraft.type);
@@ -122,20 +122,20 @@ export function AircraftDetail({
     }
   };
 
-  // Handle ELRS settings save
-  const handleSaveElrs = async () => {
-    setIsSavingElrs(true);
-    setElrsSaved(false);
+  // Handle receiver settings save
+  const handleSaveReceiver = async () => {
+    setIsSavingReceiver(true);
+    setReceiverSaved(false);
     try {
-      await onSetELRSSettings(elrsSettings);
+      await onSetReceiverSettings(receiverSettings);
       await onRefresh();
-      setElrsSaved(true);
+      setReceiverSaved(true);
       // Reset saved state after 2 seconds
-      setTimeout(() => setElrsSaved(false), 2000);
+      setTimeout(() => setReceiverSaved(false), 2000);
     } catch (err) {
-      console.error('Failed to save ELRS settings:', err);
+      console.error('Failed to save receiver settings:', err);
     } finally {
-      setIsSavingElrs(false);
+      setIsSavingReceiver(false);
     }
   };
 
@@ -192,14 +192,14 @@ export function AircraftDetail({
             Components
           </button>
           <button
-            onClick={() => setViewMode('elrs')}
+            onClick={() => setViewMode('receiver')}
             className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-              viewMode === 'elrs'
+              viewMode === 'receiver'
                 ? 'text-primary-400 border-b-2 border-primary-400'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            ELRS Settings
+            Receiver Settings
           </button>
         </div>
 
@@ -223,7 +223,7 @@ export function AircraftDetail({
                         <div className="w-10 h-10 bg-slate-600 rounded-lg flex items-center justify-center text-xl">
                           {cat.value === 'fc' && '🧠'}
                           {cat.value === 'esc' && '⚡'}
-                          {cat.value === 'elrs_module' && '📡'}
+                          {cat.value === 'receiver' && '📡'}
                           {cat.value === 'vtx' && '📺'}
                           {cat.value === 'motors' && '🔄'}
                           {cat.value === 'camera' && '📷'}
@@ -314,10 +314,10 @@ export function AircraftDetail({
             </div>
           )}
 
-          {viewMode === 'elrs' && (
+          {viewMode === 'receiver' && (
             <div className="space-y-4">
               <div className="bg-slate-700/50 border border-slate-700 rounded-lg p-4">
-                <h4 className="text-white font-medium mb-4">ELRS Configuration</h4>
+                <h4 className="text-white font-medium mb-4">Receiver Configuration</h4>
                 
                 <div className="space-y-4">
                   {/* Binding Phrase */}
@@ -327,8 +327,8 @@ export function AircraftDetail({
                     </label>
                     <input
                       type="text"
-                      value={elrsSettings.bindingPhrase || ''}
-                      onChange={(e) => setElrsSettings({ ...elrsSettings, bindingPhrase: e.target.value })}
+                      value={receiverSettings.bindingPhrase || ''}
+                      onChange={(e) => setReceiverSettings({ ...receiverSettings, bindingPhrase: e.target.value })}
                       placeholder="Your binding phrase"
                       className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
                     />
@@ -343,8 +343,8 @@ export function AircraftDetail({
                       type="number"
                       min="0"
                       max="63"
-                      value={elrsSettings.modelMatch ?? ''}
-                      onChange={(e) => setElrsSettings({ ...elrsSettings, modelMatch: e.target.value ? parseInt(e.target.value) : undefined })}
+                      value={receiverSettings.modelMatch ?? ''}
+                      onChange={(e) => setReceiverSettings({ ...receiverSettings, modelMatch: e.target.value ? parseInt(e.target.value) : undefined })}
                       placeholder="0-63 (optional)"
                       className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
                     />
@@ -357,8 +357,8 @@ export function AircraftDetail({
                       Packet Rate (Hz)
                     </label>
                     <select
-                      value={elrsSettings.rate || ''}
-                      onChange={(e) => setElrsSettings({ ...elrsSettings, rate: parseInt(e.target.value) || undefined })}
+                      value={receiverSettings.rate || ''}
+                      onChange={(e) => setReceiverSettings({ ...receiverSettings, rate: parseInt(e.target.value) || undefined })}
                       className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-primary-500"
                     >
                       <option value="">Select rate...</option>
@@ -379,8 +379,8 @@ export function AircraftDetail({
                       Telemetry Ratio
                     </label>
                     <select
-                      value={elrsSettings.tlm || ''}
-                      onChange={(e) => setElrsSettings({ ...elrsSettings, tlm: parseInt(e.target.value) || undefined })}
+                      value={receiverSettings.tlm || ''}
+                      onChange={(e) => setReceiverSettings({ ...receiverSettings, tlm: parseInt(e.target.value) || undefined })}
                       className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-primary-500"
                     >
                       <option value="">Select ratio...</option>
@@ -401,8 +401,8 @@ export function AircraftDetail({
                       TX Power (mW)
                     </label>
                     <select
-                      value={elrsSettings.power || ''}
-                      onChange={(e) => setElrsSettings({ ...elrsSettings, power: parseInt(e.target.value) || undefined })}
+                      value={receiverSettings.power || ''}
+                      onChange={(e) => setReceiverSettings({ ...receiverSettings, power: parseInt(e.target.value) || undefined })}
                       className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-primary-500"
                     >
                       <option value="">Select power...</option>
@@ -423,8 +423,8 @@ export function AircraftDetail({
                     </label>
                     <input
                       type="text"
-                      value={elrsSettings.deviceName || ''}
-                      onChange={(e) => setElrsSettings({ ...elrsSettings, deviceName: e.target.value })}
+                      value={receiverSettings.deviceName || ''}
+                      onChange={(e) => setReceiverSettings({ ...receiverSettings, deviceName: e.target.value })}
                       placeholder="e.g., MyQuad RX"
                       className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
                     />
@@ -433,16 +433,16 @@ export function AircraftDetail({
 
                 <div className="mt-6 flex justify-end">
                   <button
-                    onClick={handleSaveElrs}
-                    disabled={isSavingElrs}
-                    className={`px-4 py-2 ${elrsSaved ? 'bg-green-600' : 'bg-primary-600 hover:bg-primary-700'} disabled:bg-primary-600/50 text-white font-medium rounded-lg transition-colors flex items-center gap-2`}
+                    onClick={handleSaveReceiver}
+                    disabled={isSavingReceiver}
+                    className={`px-4 py-2 ${receiverSaved ? 'bg-green-600' : 'bg-primary-600 hover:bg-primary-700'} disabled:bg-primary-600/50 text-white font-medium rounded-lg transition-colors flex items-center gap-2`}
                   >
-                    {isSavingElrs ? (
+                    {isSavingReceiver ? (
                       <>
                         <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white" />
                         Saving...
                       </>
-                    ) : elrsSaved ? (
+                    ) : receiverSaved ? (
                       <>
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -450,7 +450,7 @@ export function AircraftDetail({
                         Saved!
                       </>
                     ) : (
-                      'Save ELRS Settings'
+                      'Save Receiver Settings'
                     )}
                   </button>
                 </div>

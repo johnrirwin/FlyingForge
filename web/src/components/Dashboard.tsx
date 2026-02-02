@@ -172,7 +172,7 @@ function RadioSnapshot({ onAddRadio }: { onAddRadio: () => void }) {
         </svg>
       }
       title="No Radio Configured"
-      description="Add your transmitter to track firmware and ELRS settings"
+      description="Add your transmitter to track firmware and receiver settings"
       actionLabel="Add Radio"
       onAction={onAddRadio}
     />

@@ -5,28 +5,27 @@ import (
 	"testing"
 )
 
-// TestELRSSanitizationStripsSensitiveData verifies that bind phrase, model match,
-// and other sensitive fields are NEVER present in sanitized ELRS settings.
+// TestReceiverSanitizationStripsSensitiveData verifies that bind phrase, model match,
+// and other sensitive fields are NEVER present in sanitized receiver settings.
 // This is a CRITICAL security test.
-func TestELRSSanitizationStripsSensitiveData(t *testing.T) {
-	// Create ELRS settings with sensitive data
-	fullSettings := &ELRSSettingsData{
+func TestReceiverSanitizationStripsSensitiveData(t *testing.T) {
+	// Create receiver settings with sensitive data
+	fullSettings := &ReceiverSettingsData{
 		// SENSITIVE fields that must be stripped
-		BindPhrase: "super-secret-bind-phrase",
-		ModelMatch: boolPtr(true),
-		ModelID:    intPtr(42),
-		UID:        "rx-unique-id-12345",
+		BindPhrase:    "super-secret-bind-phrase",
+		BindingPhrase: "super-secret-bind-phrase",
+		ModelMatch:    intPtr(42),
+		ModelMatchNum: intPtr(42),
+		ModelID:       intPtr(42),
+		UID:           "rx-unique-id-12345",
+		WifiPassword:  "secret-wifi-pass",
+		WifiSSID:      "MyHomeNetwork",
 
-		// SAFE fields that should be preserved
-		ReceiverModel:    "EP1",
-		PacketRate:       "500Hz",
-		TelemetryRatio:   "1:64",
-		SwitchMode:       "Hybrid",
-		OutputPower:      "250mW",
-		RegulatoryDomain: "FCC",
-		FirmwareVersion:  "3.4.0",
-		RXProtocol:       "CRSF",
-		RFProfile:        "D500",
+		// SAFE fields that should be preserved (using frontend field names)
+		Rate:       intPtr(500),
+		Tlm:        intPtr(64),
+		Power:      intPtr(250),
+		DeviceName: "MyReceiver",
 	}
 
 	// Sanitize the settings
@@ -48,10 +47,15 @@ func TestELRSSanitizationStripsSensitiveData(t *testing.T) {
 	sensitiveValues := []string{
 		"super-secret-bind-phrase",
 		"bindPhrase",
+		"bindingPhrase",
 		"modelMatch",
 		"modelId",
 		"rx-unique-id-12345",
 		"uid",
+		"secret-wifi-pass",
+		"wifiPassword",
+		"MyHomeNetwork",
+		"wifiSSID",
 	}
 
 	for _, sensitive := range sensitiveValues {
@@ -61,58 +65,44 @@ func TestELRSSanitizationStripsSensitiveData(t *testing.T) {
 	}
 
 	// Verify safe fields ARE present
-	if sanitized.ReceiverModel != "EP1" {
-		t.Errorf("Expected ReceiverModel 'EP1', got '%s'", sanitized.ReceiverModel)
+	if sanitized.Rate == nil || *sanitized.Rate != 500 {
+		t.Errorf("Expected Rate 500, got %v", sanitized.Rate)
 	}
-	if sanitized.PacketRate != "500Hz" {
-		t.Errorf("Expected PacketRate '500Hz', got '%s'", sanitized.PacketRate)
+	if sanitized.Tlm == nil || *sanitized.Tlm != 64 {
+		t.Errorf("Expected Tlm 64, got %v", sanitized.Tlm)
 	}
-	if sanitized.TelemetryRatio != "1:64" {
-		t.Errorf("Expected TelemetryRatio '1:64', got '%s'", sanitized.TelemetryRatio)
+	if sanitized.Power == nil || *sanitized.Power != 250 {
+		t.Errorf("Expected Power 250, got %v", sanitized.Power)
 	}
-	if sanitized.SwitchMode != "Hybrid" {
-		t.Errorf("Expected SwitchMode 'Hybrid', got '%s'", sanitized.SwitchMode)
-	}
-	if sanitized.OutputPower != "250mW" {
-		t.Errorf("Expected OutputPower '250mW', got '%s'", sanitized.OutputPower)
-	}
-	if sanitized.RegulatoryDomain != "FCC" {
-		t.Errorf("Expected RegulatoryDomain 'FCC', got '%s'", sanitized.RegulatoryDomain)
-	}
-	if sanitized.FirmwareVersion != "3.4.0" {
-		t.Errorf("Expected FirmwareVersion '3.4.0', got '%s'", sanitized.FirmwareVersion)
+	if sanitized.DeviceName != "MyReceiver" {
+		t.Errorf("Expected DeviceName 'MyReceiver', got '%s'", sanitized.DeviceName)
 	}
 }
 
-// TestSanitizeELRSSettingsFromRawJSON tests the SanitizeELRSSettings function
+// TestSanitizeReceiverSettingsFromRawJSON tests the SanitizeReceiverSettings function
 // which parses raw JSON and returns sanitized settings.
-func TestSanitizeELRSSettingsFromRawJSON(t *testing.T) {
-	// Create a raw JSON ELRS settings object
+func TestSanitizeReceiverSettingsFromRawJSON(t *testing.T) {
+	// Create a raw JSON receiver settings object (using frontend field names)
 	rawJSON := `{
-		"bindPhrase": "my-secret-phrase",
-		"modelMatch": true,
-		"modelId": 7,
+		"bindingPhrase": "my-secret-phrase",
+		"modelMatch": 7,
 		"uid": "receiver-uid-xyz",
-		"receiverModel": "RP3",
-		"packetRate": "250Hz",
-		"telemetryRatio": "1:128",
-		"switchMode": "Wide",
-		"outputPower": "100mW",
-		"regulatoryDomain": "LBT",
-		"firmwareVersion": "3.3.2",
-		"rxProtocol": "CRSF"
+		"rate": 250,
+		"tlm": 128,
+		"power": 100,
+		"deviceName": "TestDevice"
 	}`
 
-	aircraftSettings := &AircraftELRSSettings{
+	aircraftSettings := &AircraftReceiverSettings{
 		ID:         "test-id",
 		AircraftID: "aircraft-id",
 		Settings:   json.RawMessage(rawJSON),
 	}
 
-	sanitized := SanitizeELRSSettings(aircraftSettings)
+	sanitized := SanitizeReceiverSettings(aircraftSettings)
 
 	if sanitized == nil {
-		t.Fatal("SanitizeELRSSettings returned nil")
+		t.Fatal("SanitizeReceiverSettings returned nil")
 	}
 
 	// Verify JSON output doesn't contain sensitive data
@@ -126,6 +116,7 @@ func TestSanitizeELRSSettingsFromRawJSON(t *testing.T) {
 		"my-secret-phrase",
 		"receiver-uid-xyz",
 		"bindPhrase",
+		"bindingPhrase",
 		"modelMatch",
 		"modelId",
 		"uid",
@@ -138,48 +129,54 @@ func TestSanitizeELRSSettingsFromRawJSON(t *testing.T) {
 	}
 
 	// Verify safe fields are preserved
-	if sanitized.ReceiverModel != "RP3" {
-		t.Errorf("Expected ReceiverModel 'RP3', got '%s'", sanitized.ReceiverModel)
+	if sanitized.Rate == nil || *sanitized.Rate != 250 {
+		t.Errorf("Expected Rate 250, got %v", sanitized.Rate)
 	}
-	if sanitized.PacketRate != "250Hz" {
-		t.Errorf("Expected PacketRate '250Hz', got '%s'", sanitized.PacketRate)
+	if sanitized.Tlm == nil || *sanitized.Tlm != 128 {
+		t.Errorf("Expected Tlm 128, got %v", sanitized.Tlm)
+	}
+	if sanitized.Power == nil || *sanitized.Power != 100 {
+		t.Errorf("Expected Power 100, got %v", sanitized.Power)
+	}
+	if sanitized.DeviceName != "TestDevice" {
+		t.Errorf("Expected DeviceName 'TestDevice', got '%s'", sanitized.DeviceName)
 	}
 }
 
 // TestSanitizeNilSettings verifies that sanitizing nil settings returns nil
 func TestSanitizeNilSettings(t *testing.T) {
-	var settings *ELRSSettingsData = nil
+	var settings *ReceiverSettingsData = nil
 	sanitized := settings.Sanitize()
 	if sanitized != nil {
 		t.Error("Expected nil result for nil settings")
 	}
 
-	result := SanitizeELRSSettings(nil)
+	result := SanitizeReceiverSettings(nil)
 	if result != nil {
-		t.Error("Expected nil result for nil AircraftELRSSettings")
+		t.Error("Expected nil result for nil AircraftReceiverSettings")
 	}
 }
 
 // TestSanitizeEmptySettings verifies that sanitizing empty settings works
 func TestSanitizeEmptySettings(t *testing.T) {
-	settings := &ELRSSettingsData{}
+	settings := &ReceiverSettingsData{}
 	sanitized := settings.Sanitize()
 
 	if sanitized == nil {
 		t.Fatal("Expected non-nil result for empty settings")
 	}
 
-	// All fields should be empty
-	if sanitized.ReceiverModel != "" || sanitized.PacketRate != "" {
-		t.Error("Expected empty fields for empty settings")
+	// All fields should be nil/empty
+	if sanitized.Rate != nil || sanitized.Tlm != nil || sanitized.Power != nil || sanitized.DeviceName != "" {
+		t.Error("Expected empty/nil fields for empty settings")
 	}
 }
 
-// TestELRSSanitizedSettingsHasNoSensitiveFields verifies that the
-// ELRSSanitizedSettings struct itself has no sensitive fields defined.
+// TestReceiverSanitizedSettingsHasNoSensitiveFields verifies that the
+// ReceiverSanitizedSettings struct itself has no sensitive fields defined.
 // This is a compile-time-like check through reflection.
-func TestELRSSanitizedSettingsHasNoSensitiveFields(t *testing.T) {
-	sanitized := &ELRSSanitizedSettings{}
+func TestReceiverSanitizedSettingsHasNoSensitiveFields(t *testing.T) {
+	sanitized := &ReceiverSanitizedSettings{}
 	
 	// Marshal to JSON and check structure
 	jsonBytes, _ := json.Marshal(sanitized)
@@ -201,16 +198,12 @@ func TestELRSSanitizedSettingsHasNoSensitiveFields(t *testing.T) {
 	// This test documents the expectation
 	for _, field := range forbiddenFields {
 		if _, exists := fieldMap[field]; exists {
-			t.Errorf("SECURITY VIOLATION: ELRSSanitizedSettings should not have field '%s'", field)
+			t.Errorf("SECURITY VIOLATION: ReceiverSanitizedSettings should not have field '%s'", field)
 		}
 	}
 }
 
 // Helper functions
-func boolPtr(b bool) *bool {
-	return &b
-}
-
 func intPtr(i int) *int {
 	return &i
 }

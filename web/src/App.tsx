@@ -5,12 +5,12 @@ import { LoginPage } from './components/LoginPage';
 import { SignupPage } from './components/SignupPage';
 import { getItems, getSources, refreshFeeds } from './api';
 import { getInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem, getInventorySummary, addEquipmentToInventory } from './equipmentApi';
-import { listAircraft, createAircraft, updateAircraft, deleteAircraft, getAircraftDetails, setAircraftComponent, setELRSSettings } from './aircraftApi';
+import { listAircraft, createAircraft, updateAircraft, deleteAircraft, getAircraftDetails, setAircraftComponent, setReceiverSettings } from './aircraftApi';
 import { useFilters, useDebounce } from './hooks';
 import { useAuth } from './hooks/useAuth';
 import type { FeedItem, SourceInfo, FilterParams } from './types';
 import type { EquipmentItem, InventoryItem, EquipmentSearchParams, EquipmentCategory, ItemCondition, AddInventoryParams, InventorySummary, AppSection } from './equipmentTypes';
-import type { Aircraft, AircraftDetailsResponse, CreateAircraftParams, UpdateAircraftParams, SetComponentParams, ELRSConfig } from './aircraftTypes';
+import type { Aircraft, AircraftDetailsResponse, CreateAircraftParams, UpdateAircraftParams, SetComponentParams, ReceiverConfig } from './aircraftTypes';
 
 type AuthModal = 'none' | 'login' | 'signup';
 
@@ -403,9 +403,9 @@ function App() {
     await setAircraftComponent(selectedAircraftDetails.aircraft.id, params);
   }, [selectedAircraftDetails]);
 
-  const handleSetELRSSettings = useCallback(async (settings: ELRSConfig) => {
+  const handleSetReceiverSettings = useCallback(async (settings: ReceiverConfig) => {
     if (!selectedAircraftDetails) return;
-    await setELRSSettings(selectedAircraftDetails.aircraft.id, { settings });
+    await setReceiverSettings(selectedAircraftDetails.aircraft.id, { settings });
   }, [selectedAircraftDetails]);
 
   const refreshAircraftDetails = useCallback(async () => {
@@ -636,7 +636,7 @@ function App() {
               <div>
                 <h1 className="text-xl font-semibold text-white">My Aircraft</h1>
                 <p className="text-sm text-slate-400">
-                  Manage your drones, components, and ELRS settings
+                  Manage your drones, components, and receiver settings
                 </p>
               </div>
               <button
@@ -747,7 +747,7 @@ function App() {
           details={selectedAircraftDetails}
           onClose={() => setSelectedAircraftDetails(null)}
           onSetComponent={handleSetAircraftComponent}
-          onSetELRSSettings={handleSetELRSSettings}
+          onSetReceiverSettings={handleSetReceiverSettings}
           onRefresh={refreshAircraftDetails}
         />
       )}
