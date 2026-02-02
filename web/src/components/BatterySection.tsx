@@ -221,8 +221,9 @@ export function BatterySection({ onError }: BatterySectionProps) {
   const handlePrintLabel = async (battery: Battery, size: LabelSize) => {
     try {
       await printBatteryLabel(battery.id, size);
-    } catch (err: any) {
-      alert('Failed to print label: ' + (err?.message || err));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      alert('Failed to print label: ' + message);
     }
   };
 
