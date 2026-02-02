@@ -4,12 +4,12 @@ import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, Sidebar
 import { LoginPage } from './components/LoginPage';
 import { SignupPage } from './components/SignupPage';
 import { getItems, getSources, refreshFeeds } from './api';
-import { getSellers, getInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem, getInventorySummary, addEquipmentToInventory } from './equipmentApi';
+import { getInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem, getInventorySummary, addEquipmentToInventory } from './equipmentApi';
 import { listAircraft, createAircraft, updateAircraft, deleteAircraft, getAircraftDetails, setAircraftComponent, setELRSSettings } from './aircraftApi';
 import { useFilters, useDebounce } from './hooks';
 import { useAuth } from './hooks/useAuth';
 import type { FeedItem, SourceInfo, FilterParams } from './types';
-import type { EquipmentItem, SellerInfo, InventoryItem, EquipmentSearchParams, EquipmentCategory, ItemCondition, AddInventoryParams, InventorySummary, AppSection } from './equipmentTypes';
+import type { EquipmentItem, InventoryItem, EquipmentSearchParams, EquipmentCategory, ItemCondition, AddInventoryParams, InventorySummary, AppSection } from './equipmentTypes';
 import type { Aircraft, AircraftDetailsResponse, CreateAircraftParams, UpdateAircraftParams, SetComponentParams, ELRSConfig } from './aircraftTypes';
 
 type AuthModal = 'none' | 'login' | 'signup';
@@ -68,7 +68,6 @@ function App() {
   const [totalCount, setTotalCount] = useState(0);
 
   // Equipment state (for search params only)
-  const [sellers, setSellers] = useState<SellerInfo[]>([]);
   const [equipmentSearchParams, setEquipmentSearchParams] = useState<EquipmentSearchParams>({});
 
   // Inventory state
@@ -125,7 +124,7 @@ function App() {
     setWasAuthenticated(isAuthenticated);
   }, [isAuthenticated, authLoading, wasAuthenticated, navigate, location.pathname]);
 
-  // Load sources and sellers on mount
+  // Load sources on mount
   useEffect(() => {
     getSources()
       .then(response => {
@@ -133,14 +132,6 @@ function App() {
       })
       .catch(err => {
         console.error('Failed to load sources:', err);
-      });
-
-    getSellers()
-      .then(response => {
-        setSellers(response.sellers);
-      })
-      .catch(err => {
-        console.error('Failed to load sellers:', err);
       });
   }, []);
 
@@ -483,7 +474,6 @@ function App() {
         onSectionChange={handleSectionChange}
         searchParams={equipmentSearchParams}
         onSearchChange={handleEquipmentSearchChange}
-        sellers={sellers}
         inventorySummary={inventorySummary}
         inventoryCategory={inventoryCategory}
         inventoryCondition={inventoryCondition}

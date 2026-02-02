@@ -304,17 +304,4 @@ describe('Sidebar', () => {
       expect(spinner).toBeInTheDocument()
     })
   })
-
-  describe('Equipment section behavior', () => {
-    it('calls onSearchChange when category selected in equipment section', () => {
-      const onSearchChange = vi.fn()
-      render(<Sidebar {...createDefaultProps({ 
-        activeSection: 'equipment',
-        onSearchChange
-      })} />)
-      
-      // Equipment section doesn't show category sidebar by default in current implementation
-      // This test documents the expected behavior when it does
-    })
-  })
 })

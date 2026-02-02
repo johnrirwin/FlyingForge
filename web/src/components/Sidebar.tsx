@@ -1,4 +1,5 @@
-import type { EquipmentCategory, EquipmentSearchParams, SellerInfo, InventorySummary } from '../equipmentTypes';
+import type { ReactNode } from 'react';
+import type { EquipmentCategory, EquipmentSearchParams, InventorySummary } from '../equipmentTypes';
 import { EQUIPMENT_CATEGORIES, ITEM_CONDITIONS } from '../equipmentTypes';
 import type { AppSection } from '../equipmentTypes';
 import type { User } from '../authTypes';
@@ -8,7 +9,6 @@ interface SidebarProps {
   onSectionChange: (section: AppSection) => void;
   searchParams: EquipmentSearchParams;
   onSearchChange: (params: Partial<EquipmentSearchParams>) => void;
-  sellers: SellerInfo[];
   inventorySummary: InventorySummary | null;
   inventoryCategory: EquipmentCategory | null;
   inventoryCondition: string | null;
@@ -57,7 +57,7 @@ export function Sidebar({
     badge,
   }: {
     section: AppSection;
-    icon: React.ReactNode;
+    icon: ReactNode;
     label: string;
     requiresAuth?: boolean;
     badge?: number;
