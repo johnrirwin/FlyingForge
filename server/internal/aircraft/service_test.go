@@ -3,7 +3,7 @@ package aircraft
 import (
 	"testing"
 
-	"github.com/johnrirwin/rotorlife/internal/models"
+	"github.com/johnrirwin/flyingforge/internal/models"
 )
 
 func TestServiceError(t *testing.T) {

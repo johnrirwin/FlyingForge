@@ -131,8 +131,8 @@ func loadAuthConfig() AuthConfig {
 
 	return AuthConfig{
 		JWTSecret:          getEnvOrDefault("AUTH_JWT_SECRET", "change-me-in-production"),
-		JWTIssuer:          getEnvOrDefault("AUTH_JWT_ISSUER", "rotorlife"),
-		JWTAudience:        getEnvOrDefault("AUTH_JWT_AUDIENCE", "rotorlife-users"),
+		JWTIssuer:          getEnvOrDefault("AUTH_JWT_ISSUER", "flyingforge"),
+		JWTAudience:        getEnvOrDefault("AUTH_JWT_AUDIENCE", "flyingforge-users"),
 		AccessTokenTTL:     accessTTL,
 		RefreshTokenTTL:    refreshTTL,
 		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),

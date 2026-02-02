@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/johnrirwin/rotorlife/internal/models"
+	"github.com/johnrirwin/flyingforge/internal/models"
 )
 
 // UserStore handles user database operations

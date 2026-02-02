@@ -1,7 +1,7 @@
 package testutil
 
 import (
-	"github.com/johnrirwin/rotorlife/internal/logging"
+	"github.com/johnrirwin/flyingforge/internal/logging"
 )
 
 // NullLogger returns a logger that discards most output

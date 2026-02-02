@@ -8,15 +8,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/johnrirwin/rotorlife/internal/aggregator"
-	"github.com/johnrirwin/rotorlife/internal/aircraft"
-	"github.com/johnrirwin/rotorlife/internal/auth"
-	"github.com/johnrirwin/rotorlife/internal/battery"
-	"github.com/johnrirwin/rotorlife/internal/equipment"
-	"github.com/johnrirwin/rotorlife/internal/inventory"
-	"github.com/johnrirwin/rotorlife/internal/logging"
-	"github.com/johnrirwin/rotorlife/internal/models"
-	"github.com/johnrirwin/rotorlife/internal/radio"
+	"github.com/johnrirwin/flyingforge/internal/aggregator"
+	"github.com/johnrirwin/flyingforge/internal/aircraft"
+	"github.com/johnrirwin/flyingforge/internal/auth"
+	"github.com/johnrirwin/flyingforge/internal/battery"
+	"github.com/johnrirwin/flyingforge/internal/equipment"
+	"github.com/johnrirwin/flyingforge/internal/inventory"
+	"github.com/johnrirwin/flyingforge/internal/logging"
+	"github.com/johnrirwin/flyingforge/internal/models"
+	"github.com/johnrirwin/flyingforge/internal/radio"
 )
 
 type Server struct {

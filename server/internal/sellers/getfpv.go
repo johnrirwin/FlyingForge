@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/johnrirwin/rotorlife/internal/cache"
-	"github.com/johnrirwin/rotorlife/internal/models"
-	"github.com/johnrirwin/rotorlife/internal/ratelimit"
+	"github.com/johnrirwin/flyingforge/internal/cache"
+	"github.com/johnrirwin/flyingforge/internal/models"
+	"github.com/johnrirwin/flyingforge/internal/ratelimit"
 )
 
 // GetFPV is the adapter for GetFPV.com

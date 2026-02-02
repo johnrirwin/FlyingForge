@@ -6,10 +6,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/johnrirwin/rotorlife/internal/cache"
-	"github.com/johnrirwin/rotorlife/internal/logging"
-	"github.com/johnrirwin/rotorlife/internal/models"
-	"github.com/johnrirwin/rotorlife/internal/sellers"
+	"github.com/johnrirwin/flyingforge/internal/cache"
+	"github.com/johnrirwin/flyingforge/internal/logging"
+	"github.com/johnrirwin/flyingforge/internal/models"
+	"github.com/johnrirwin/flyingforge/internal/sellers"
 )
 
 // Service handles equipment aggregation from multiple sellers

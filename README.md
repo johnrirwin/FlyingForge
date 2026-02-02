@@ -28,7 +28,7 @@ A complete drone news aggregator featuring an MCP (Model Context Protocol) serve
 ## Folder Structure
 
 ```
-rotorlife/
+flyingforge/
 ├── server/                    # Go MCP server
 │   ├── cmd/
 │   │   └── server/
@@ -303,8 +303,8 @@ The web app will be available at `http://localhost:3000`.
 1. Build the server:
 ```bash
 cd server
-go build -o rotorlife ./cmd/server
-./rotorlife
+go build -o flyingforge ./cmd/server
+./flyingforge
 ```
 
 2. Build the web app:
@@ -322,7 +322,7 @@ Add to your MCP client configuration (e.g., Claude Desktop):
 {
   "mcpServers": {
     "drone-news-feed": {
-      "command": "/path/to/rotorlife",
+      "command": "/path/to/flyingforge",
       "args": ["-mcp"],
       "env": {
         "LOG_LEVEL": "info"
@@ -340,7 +340,7 @@ Or using `go run`:
     "drone-news-feed": {
       "command": "go",
       "args": ["run", "./cmd/server", "-mcp"],
-      "cwd": "/path/to/rotorlife/server"
+      "cwd": "/path/to/flyingforge/server"
     }
   }
 }

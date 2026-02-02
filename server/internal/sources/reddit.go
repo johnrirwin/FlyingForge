@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/johnrirwin/rotorlife/internal/models"
-	"github.com/johnrirwin/rotorlife/internal/ratelimit"
+	"github.com/johnrirwin/flyingforge/internal/models"
+	"github.com/johnrirwin/flyingforge/internal/ratelimit"
 )
 
 type RedditFetcher struct {

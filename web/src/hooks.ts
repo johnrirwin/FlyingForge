@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { FiltersState } from './types';
 
-const STORAGE_KEY = 'rotorlife-filters';
+const STORAGE_KEY = 'flyingforge-filters';
 
 const defaultFilters: FiltersState = {
   sources: [],

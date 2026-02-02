@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/johnrirwin/rotorlife/internal/models"
+	"github.com/johnrirwin/flyingforge/internal/models"
 )
 
 type Fetcher interface {

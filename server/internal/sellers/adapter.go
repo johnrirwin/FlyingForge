@@ -3,7 +3,7 @@ package sellers
 import (
 	"context"
 
-	"github.com/johnrirwin/rotorlife/internal/models"
+	"github.com/johnrirwin/flyingforge/internal/models"
 )
 
 // Adapter is the interface that all seller integrations must implement

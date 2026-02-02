@@ -10,7 +10,7 @@ RUN go mod download
 COPY server/ .
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux go build -o /rotorlife ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -o /flyingforge ./cmd/server
 
 # Runtime image
 FROM alpine:3.19
@@ -19,7 +19,7 @@ RUN apk --no-cache add ca-certificates tzdata
 
 WORKDIR /app
 
-COPY --from=builder /rotorlife .
+COPY --from=builder /flyingforge .
 
 # HTTP mode by default
 ENV HTTP_ADDR=:8080
@@ -29,4 +29,4 @@ ENV RATE_LIMIT=1s
 
 EXPOSE 8080
 
-CMD ["./rotorlife"]
+CMD ["./flyingforge"]

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/johnrirwin/rotorlife/internal/ratelimit"
+	"github.com/johnrirwin/flyingforge/internal/ratelimit"
 )
 
 func TestDefaultConfig(t *testing.T) {

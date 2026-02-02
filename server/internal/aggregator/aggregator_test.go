@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/johnrirwin/rotorlife/internal/models"
-	"github.com/johnrirwin/rotorlife/internal/sources"
+	"github.com/johnrirwin/flyingforge/internal/models"
+	"github.com/johnrirwin/flyingforge/internal/sources"
 )
 
 func TestSortByDate(t *testing.T) {

@@ -24,7 +24,7 @@ func getTestDSN() string {
 	port := getEnvOrDefault("DB_PORT", "5432")
 	user := getEnvOrDefault("DB_USER", "test")
 	password := getEnvOrDefault("DB_PASSWORD", "test")
-	dbname := getEnvOrDefault("DB_NAME", "rotorlife_test")
+	dbname := getEnvOrDefault("DB_NAME", "flyingforge_test")
 	sslmode := getEnvOrDefault("DB_SSLMODE", "disable")
 
 	return fmt.Sprintf(

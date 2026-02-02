@@ -34,7 +34,7 @@ export function Sidebar({
             <path d="M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83"/>
             <path d="M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
           </svg>
-          RotorLife
+          FlyingForge
         </h2>
       </div>
 
@@ -108,7 +108,7 @@ export function Sidebar({
       {/* Footer */}
       <div className="p-4 border-t border-slate-700 text-xs text-slate-500">
         <div className="flex items-center justify-between">
-          <span>RotorLife</span>
+          <span>FlyingForge</span>
           <span className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-green-500" />
             Connected

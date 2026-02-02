@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/johnrirwin/rotorlife/internal/auth"
-	"github.com/johnrirwin/rotorlife/internal/logging"
-	"github.com/johnrirwin/rotorlife/internal/models"
-	radiosvc "github.com/johnrirwin/rotorlife/internal/radio"
+	"github.com/johnrirwin/flyingforge/internal/auth"
+	"github.com/johnrirwin/flyingforge/internal/logging"
+	"github.com/johnrirwin/flyingforge/internal/models"
+	radiosvc "github.com/johnrirwin/flyingforge/internal/radio"
 )
 
 // RadioAPI handles HTTP API requests for radios and backups

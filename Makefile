@@ -1,4 +1,4 @@
-# Rotorlife Makefile
+# FlyingForge Makefile
 # Run `make help` to see available commands
 
 .PHONY: help test test-go test-web lint lint-go lint-web build build-go build-web run clean install
@@ -14,7 +14,7 @@ RESET := \033[0m
 
 ## Help
 help: ## Show this help message
-	@echo "$(CYAN)Rotorlife Development Commands$(RESET)"
+	@echo "$(CYAN)FlyingForge Development Commands$(RESET)"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-15s$(RESET) %s\n", $$1, $$2}'
 

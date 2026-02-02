@@ -31,9 +31,9 @@ describe('Sidebar', () => {
     isLoading: false,
   }
 
-  it('renders the RotorLife heading', () => {
+  it('renders the FlyingForge heading', () => {
     render(<Sidebar {...defaultProps} />)
-    expect(screen.getByRole('heading', { name: /RotorLife/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /FlyingForge/i })).toBeInTheDocument()
   })
 
   it('renders source type toggle buttons', () => {

@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/johnrirwin/rotorlife/internal/config"
-	"github.com/johnrirwin/rotorlife/internal/database"
-	"github.com/johnrirwin/rotorlife/internal/models"
-	"github.com/johnrirwin/rotorlife/internal/testutil"
+	"github.com/johnrirwin/flyingforge/internal/config"
+	"github.com/johnrirwin/flyingforge/internal/database"
+	"github.com/johnrirwin/flyingforge/internal/models"
+	"github.com/johnrirwin/flyingforge/internal/testutil"
 )
 
 // setupTestAuthService creates a test auth service with a test database
@@ -24,8 +24,8 @@ func setupTestAuthService(t *testing.T) *Service {
 	logger := testutil.NullLogger()
 	cfg := config.AuthConfig{
 		JWTSecret:         "test-secret-key-minimum-32-chars-long",
-		JWTIssuer:         "rotorlife-test",
-		JWTAudience:       "rotorlife-users",
+		JWTIssuer:         "flyingforge-test",
+		JWTAudience:       "flyingforge-users",
 		AccessTokenTTL:    15 * time.Minute,
 		RefreshTokenTTL:   7 * 24 * time.Hour,
 		GoogleClientID:    "test-client-id",

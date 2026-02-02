@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/johnrirwin/rotorlife/internal/models"
+	"github.com/johnrirwin/flyingforge/internal/models"
 )
 
 // RadioStore handles radio database operations

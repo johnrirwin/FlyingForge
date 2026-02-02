@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/johnrirwin/rotorlife/internal/auth"
-	"github.com/johnrirwin/rotorlife/internal/battery"
-	"github.com/johnrirwin/rotorlife/internal/logging"
-	"github.com/johnrirwin/rotorlife/internal/models"
+	"github.com/johnrirwin/flyingforge/internal/auth"
+	"github.com/johnrirwin/flyingforge/internal/battery"
+	"github.com/johnrirwin/flyingforge/internal/logging"
+	"github.com/johnrirwin/flyingforge/internal/models"
 )
 
 // BatteryAPI handles HTTP API requests for battery management

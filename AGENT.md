@@ -7,7 +7,7 @@ This is a **Drone News Aggregator** - an MCP (Model Context Protocol) server wri
 ## Architecture
 
 ```
-rotorlife/
+flyingforge/
 ├── server/           # Go MCP server
 │   ├── cmd/server/   # Entry point
 │   └── internal/     # Internal packages

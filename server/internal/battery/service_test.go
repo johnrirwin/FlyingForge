@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/johnrirwin/rotorlife/internal/models"
-	"github.com/johnrirwin/rotorlife/internal/testutil"
+	"github.com/johnrirwin/flyingforge/internal/models"
+	"github.com/johnrirwin/flyingforge/internal/testutil"
 )
 
 // mockStore implements the Store interface for testing

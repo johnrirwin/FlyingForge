@@ -7,11 +7,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/johnrirwin/rotorlife/internal/cache"
-	"github.com/johnrirwin/rotorlife/internal/logging"
-	"github.com/johnrirwin/rotorlife/internal/models"
-	"github.com/johnrirwin/rotorlife/internal/sources"
-	"github.com/johnrirwin/rotorlife/internal/tagging"
+	"github.com/johnrirwin/flyingforge/internal/cache"
+	"github.com/johnrirwin/flyingforge/internal/logging"
+	"github.com/johnrirwin/flyingforge/internal/models"
+	"github.com/johnrirwin/flyingforge/internal/sources"
+	"github.com/johnrirwin/flyingforge/internal/tagging"
 )
 
 type Aggregator struct {

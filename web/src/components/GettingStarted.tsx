@@ -749,7 +749,7 @@ export function GettingStarted({ onSignIn }: GettingStartedProps) {
             Ready to start tracking your gear?
           </h2>
           <p className="text-slate-400 mb-8">
-            Create your RotorLife account and set up your first aircraft, radio, and batteries—all in one place.
+            Create your FlyingForge account and set up your first aircraft, radio, and batteries—all in one place.
           </p>
           <button
             onClick={onSignIn}
@@ -758,7 +758,7 @@ export function GettingStarted({ onSignIn }: GettingStartedProps) {
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Create your first setup in RotorLife
+            Create your first setup in FlyingForge
           </button>
         </div>
       </section>
@@ -766,7 +766,7 @@ export function GettingStarted({ onSignIn }: GettingStartedProps) {
       {/* Footer */}
       <footer className="px-6 py-8 border-t border-slate-800 bg-slate-900">
         <div className="max-w-6xl mx-auto text-center text-sm text-slate-500">
-          <p>RotorLife — Your flying life, organized.</p>
+          <p>FlyingForge — Build it. Fly it. Refine it.</p>
         </div>
       </footer>
     </div>

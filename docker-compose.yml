@@ -53,8 +53,8 @@ services:
       - DB_NAME=mcp_drone
       - DB_SSLMODE=disable
       - AUTH_JWT_SECRET=dev-secret-change-in-production
-      - AUTH_JWT_ISSUER=rotorlife
-      - AUTH_JWT_AUDIENCE=rotorlife-users
+      - AUTH_JWT_ISSUER=flyingforge
+      - AUTH_JWT_AUDIENCE=flyingforge-users
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - GOOGLE_REDIRECT_URI=http://localhost:8080/api/auth/google/callback

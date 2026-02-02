@@ -1,6 +1,6 @@
 # Web Frontend Architecture
 
-This document provides a comprehensive overview of the RotorLife React frontend architecture, including component structure, state management, and data flow.
+This document provides a comprehensive overview of the FlyingForge React frontend architecture, including component structure, state management, and data flow.
 
 ## Table of Contents
 
@@ -19,7 +19,7 @@ This document provides a comprehensive overview of the RotorLife React frontend 
 
 ## Overview
 
-The RotorLife frontend is a React single-page application built with:
+The FlyingForge frontend is a React single-page application built with:
 
 - **React 18** - UI library with functional components and hooks
 - **TypeScript** - Strict type checking
@@ -42,7 +42,7 @@ The RotorLife frontend is a React single-page application built with:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           RotorLife Web Frontend                            │
+│                           FlyingForge Web Frontend                          │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │

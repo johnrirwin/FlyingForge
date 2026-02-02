@@ -65,13 +65,13 @@ export function Homepage({ onSignIn, onExploreNews }: HomepageProps) {
                 <path d="M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
               </svg>
             </div>
-            <span className="text-3xl font-bold text-white">RotorLife</span>
+            <span className="text-3xl font-bold text-white">FlyingForge</span>
           </div>
 
           {/* Headline */}
           <h1 className="text-4xl md:text-6xl font-bold text-white mb-6 leading-tight">
-            Your flying life,<br />
-            <span className="text-primary-400">organized.</span>
+            Build it. Fly it.<br />
+            <span className="text-primary-400">Refine it.</span>
           </h1>
 
           {/* Subheadline */}
@@ -103,13 +103,13 @@ export function Homepage({ onSignIn, onExploreNews }: HomepageProps) {
         </div>
       </section>
 
-      {/* What RotorLife Does - Feature Cards */}
+      {/* What FlyingForge Does - Feature Cards */}
       <section className="px-6 py-20 border-t border-slate-800">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-white mb-4">Everything you need for the hobby</h2>
             <p className="text-slate-400 max-w-2xl mx-auto">
-              From tracking your builds to staying up-to-date with the community—RotorLife has you covered.
+              From tracking your builds to staying up-to-date with the community—FlyingForge has you covered.
             </p>
           </div>
 
@@ -239,7 +239,7 @@ export function Homepage({ onSignIn, onExploreNews }: HomepageProps) {
             Built for all RC pilots
           </h2>
           <p className="text-slate-400 max-w-2xl mx-auto leading-relaxed mb-8">
-            Whether you're flying FPV quads, cinewhoops, long-range wings, or classic fixed-wing aircraft—RotorLife adapts to how you fly. Track multirotors, planes, and everything in between.
+            Whether you're flying FPV quads, cinewhoops, long-range wings, or classic fixed-wing aircraft—FlyingForge adapts to how you fly. Track multirotors, planes, and everything in between.
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3">
@@ -262,7 +262,7 @@ export function Homepage({ onSignIn, onExploreNews }: HomepageProps) {
             Ready to organize your flying life?
           </h2>
           <p className="text-slate-400 mb-8">
-            Join RotorLife today and get your aircraft, gear, and batteries under control.
+            Join FlyingForge today and get your aircraft, gear, and batteries under control.
           </p>
           <button
             onClick={onSignIn}
@@ -288,14 +288,14 @@ export function Homepage({ onSignIn, onExploreNews }: HomepageProps) {
                 </svg>
               </div>
               <div>
-                <div className="text-lg font-semibold text-white">RotorLife</div>
-                <div className="text-xs text-slate-500">Your flying life, organized.</div>
+                <div className="text-lg font-semibold text-white">FlyingForge</div>
+                <div className="text-xs text-slate-500">Build it. Fly it. Refine it.</div>
               </div>
             </div>
 
             {/* Copyright */}
             <div className="text-sm text-slate-500">
-              © {new Date().getFullYear()} RotorLife
+              © {new Date().getFullYear()} FlyingForge
             </div>
           </div>
         </div>

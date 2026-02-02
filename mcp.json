@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "rotorlife": {
+    "flyingforge": {
       "command": "go",
       "args": ["run", "./cmd/server", "-mcp"],
       "cwd": "${workspaceFolder}/server",

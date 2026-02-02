@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/johnrirwin/rotorlife/internal/database"
-	"github.com/johnrirwin/rotorlife/internal/logging"
-	"github.com/johnrirwin/rotorlife/internal/models"
+	"github.com/johnrirwin/flyingforge/internal/database"
+	"github.com/johnrirwin/flyingforge/internal/logging"
+	"github.com/johnrirwin/flyingforge/internal/models"
 )
 
 // InventoryManager defines the interface for inventory operations

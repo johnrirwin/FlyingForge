@@ -1,4 +1,4 @@
-module github.com/johnrirwin/rotorlife
+module github.com/johnrirwin/flyingforge
 
 go 1.24.0
 

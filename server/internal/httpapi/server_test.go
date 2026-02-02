@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/johnrirwin/rotorlife/internal/logging"
-	"github.com/johnrirwin/rotorlife/internal/models"
+	"github.com/johnrirwin/flyingforge/internal/logging"
+	"github.com/johnrirwin/flyingforge/internal/models"
 )
 
 func TestWriteJSON(t *testing.T) {

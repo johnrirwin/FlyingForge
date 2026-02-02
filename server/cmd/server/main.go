@@ -6,8 +6,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/johnrirwin/rotorlife/internal/app"
-	"github.com/johnrirwin/rotorlife/internal/config"
+	"github.com/johnrirwin/flyingforge/internal/app"
+	"github.com/johnrirwin/flyingforge/internal/config"
 )
 
 func main() {

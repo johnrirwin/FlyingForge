@@ -8,7 +8,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/johnrirwin/rotorlife/internal/logging"
+	"github.com/johnrirwin/flyingforge/internal/logging"
 )
 
 type Server struct {

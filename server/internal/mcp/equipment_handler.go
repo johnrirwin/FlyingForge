@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/johnrirwin/rotorlife/internal/equipment"
-	"github.com/johnrirwin/rotorlife/internal/inventory"
-	"github.com/johnrirwin/rotorlife/internal/logging"
-	"github.com/johnrirwin/rotorlife/internal/models"
+	"github.com/johnrirwin/flyingforge/internal/equipment"
+	"github.com/johnrirwin/flyingforge/internal/inventory"
+	"github.com/johnrirwin/flyingforge/internal/logging"
+	"github.com/johnrirwin/flyingforge/internal/models"
 )
 
 // EquipmentHandler handles MCP tool calls for equipment and inventory

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/johnrirwin/rotorlife/internal/models"
+	"github.com/johnrirwin/flyingforge/internal/models"
 )
 
 // BatteryStore handles battery database operations

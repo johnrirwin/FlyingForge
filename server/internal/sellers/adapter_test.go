@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/johnrirwin/rotorlife/internal/models"
+	"github.com/johnrirwin/flyingforge/internal/models"
 )
 
 func TestNewRegistry(t *testing.T) {

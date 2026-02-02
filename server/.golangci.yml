@@ -36,7 +36,7 @@ linters-settings:
       - shadow          # Too strict for existing codebase
   
   goimports:
-    local-prefixes: github.com/johnrirwin/rotorlife
+    local-prefixes: github.com/johnrirwin/flyingforge
   
   misspell:
     locale: US
