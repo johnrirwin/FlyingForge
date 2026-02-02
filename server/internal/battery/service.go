@@ -68,7 +68,7 @@ func (s *Service) generateBatteryCode(ctx context.Context, userID string) (strin
 // randomCode generates a random alphanumeric code like "BAT-A1B2"
 func (s *Service) randomCode() string {
 	b := make([]byte, 3)
-	rand.Read(b)
+	_, _ = rand.Read(b)
 	// Use base32 encoding (A-Z, 2-7) and take first 4 characters
 	code := base32.StdEncoding.EncodeToString(b)[:4]
 	return "BAT-" + strings.ToUpper(code)

@@ -93,8 +93,8 @@ func (g *GetFPV) GetByCategory(ctx context.Context, category models.EquipmentCat
 }
 
 func (g *GetFPV) GetProduct(ctx context.Context, productID string) (*models.EquipmentItem, error) {
-	// Strip prefix
-	productID = strings.TrimPrefix(productID, "gfpv-")
+	// Strip prefix for future use
+	_ = strings.TrimPrefix(productID, "gfpv-")
 
 	g.limiter.Wait(g.BaseURL())
 

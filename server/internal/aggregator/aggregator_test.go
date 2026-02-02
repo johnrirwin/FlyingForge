@@ -1,7 +1,6 @@
 package aggregator
 
 import (
-	"context"
 	"sort"
 	"testing"
 	"time"
@@ -365,21 +364,4 @@ func TestAggregator_GetItems_Pagination(t *testing.T) {
 			}
 		})
 	}
-}
-
-type mockFetcher struct {
-	name       string
-	sourceInfo models.SourceInfo
-}
-
-func (m mockFetcher) Name() string {
-	return m.name
-}
-
-func (m mockFetcher) SourceInfo() models.SourceInfo {
-	return m.sourceInfo
-}
-
-func (m mockFetcher) Fetch(ctx context.Context) ([]models.FeedItem, error) {
-	return nil, nil
 }

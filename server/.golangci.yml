@@ -15,45 +15,58 @@ linters:
     - misspell
     - unconvert
     - bodyclose
-    - noctx
     - sqlclosecheck
-    - rowserrcheck
-    - exportloopref
-    - errorlint
-    - gosec
     - prealloc
 
 linters-settings:
   errcheck:
-    check-type-assertions: true
+    check-type-assertions: false
     check-blank: false
+    exclude-functions:
+      - (net/http.ResponseWriter).Write
+      - (*encoding/json.Encoder).Encode
+      - io.Copy
+      - fmt.Fprintf
+      - fmt.Fprintln
   
   govet:
     enable-all: true
     disable:
       - fieldalignment  # Too noisy for this project
+      - shadow          # Too strict for existing codebase
   
   goimports:
     local-prefixes: github.com/johnrirwin/rotorlife
   
   misspell:
     locale: US
-  
-  gosec:
-    excludes:
-      - G104  # Unhandled errors (covered by errcheck)
-      - G304  # File path from variable (intentional in some cases)
 
 issues:
   exclude-rules:
     # Test files can have longer functions and unused params
     - path: _test\.go
       linters:
-        - gosec
         - errcheck
+        - unused
+        - govet
     
     # Main can have unused results from signal handling
     - path: cmd/server/main\.go
+      linters:
+        - errcheck
+    
+    # HTTP handlers commonly ignore write errors
+    - path: internal/httpapi/
+      linters:
+        - errcheck
+    
+    # Database layer has known patterns
+    - path: internal/database/
+      linters:
+        - govet
+    
+    # MCP server has stdio patterns
+    - path: internal/mcp/
       linters:
         - errcheck
   

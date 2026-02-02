@@ -15,7 +15,7 @@ import (
 // setupTestAuthService creates a test auth service with a test database
 func setupTestAuthService(t *testing.T) *Service {
 	t.Helper()
-	
+
 	testDB := testutil.NewTestDB(t)
 	t.Cleanup(func() { testDB.Close() })
 
@@ -109,7 +109,7 @@ func TestPasswordValidation(t *testing.T) {
 			// Test password validation through the actual SignupWithEmail method
 			ctx := context.Background()
 			email := fmt.Sprintf("test-%s@example.com", tt.name)
-			
+
 			_, err := service.SignupWithEmail(ctx, models.SignupParams{
 				Email:       email,
 				Password:    tt.password,
@@ -164,7 +164,7 @@ func TestDefaultDisplayName(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			
+
 			// Test through actual SignupWithEmail method
 			authResp, err := service.SignupWithEmail(ctx, models.SignupParams{
 				Email:       tt.email,

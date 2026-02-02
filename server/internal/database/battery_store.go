@@ -536,10 +536,10 @@ func (s *BatteryStore) CreateLog(ctx context.Context, userID string, params mode
 
 	log := &models.BatteryLog{}
 	var (
-		scanNotes              sql.NullString
-		scanMinV, scanMaxV     sql.NullFloat64
-		scanStorageOk          sql.NullBool
-		scanIR                 []byte
+		scanNotes          sql.NullString
+		scanMinV, scanMaxV sql.NullFloat64
+		scanStorageOk      sql.NullBool
+		scanIR             []byte
 	)
 
 	err = s.db.QueryRowContext(ctx, query,
