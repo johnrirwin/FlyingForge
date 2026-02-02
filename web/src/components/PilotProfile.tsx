@@ -3,6 +3,7 @@ import { getPilotProfile } from '../pilotApi';
 import { followPilot, unfollowPilot, getPublicAircraftImageUrl } from '../socialApi';
 import type { PilotProfile as PilotProfileType, AircraftPublic } from '../socialTypes';
 import { useAuth } from '../hooks/useAuth';
+import { PublicAircraftModal } from './PublicAircraftModal';
 
 interface PilotProfileProps {
   pilotId: string;
@@ -16,6 +17,7 @@ export function PilotProfile({ pilotId, onBack }: PilotProfileProps) {
   const [error, setError] = useState<string | null>(null);
   const [isFollowing, setIsFollowing] = useState(false);
   const [isFollowLoading, setIsFollowLoading] = useState(false);
+  const [selectedAircraft, setSelectedAircraft] = useState<AircraftPublic | null>(null);
 
   const isOwnProfile = user?.id === pilotId;
 
@@ -203,17 +205,28 @@ export function PilotProfile({ pilotId, onBack }: PilotProfileProps) {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {profile.aircraft.map((aircraft) => (
-              <AircraftCard key={aircraft.id} aircraft={aircraft} />
+              <AircraftCard 
+                key={aircraft.id} 
+                aircraft={aircraft} 
+                onClick={() => setSelectedAircraft(aircraft)}
+              />
             ))}
           </div>
         )}
       </div>
+
+      {/* Aircraft Detail Modal */}
+      {selectedAircraft && (
+        <PublicAircraftModal 
+          aircraft={selectedAircraft} 
+          onClose={() => setSelectedAircraft(null)} 
+        />
+      )}
     </div>
   );
 }
 
-function AircraftCard({ aircraft }: { aircraft: AircraftPublic }) {
-  const [isExpanded, setIsExpanded] = useState(false);
+function AircraftCard({ aircraft, onClick }: { aircraft: AircraftPublic; onClick: () => void }) {
   const [imageError, setImageError] = useState(false);
   
   const formatType = (type?: string) => {
@@ -221,29 +234,13 @@ function AircraftCard({ aircraft }: { aircraft: AircraftPublic }) {
     return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
 
-  const formatCategory = (category: string) => {
-    const categoryLabels: Record<string, string> = {
-      fc: 'Flight Controller',
-      esc: 'ESC',
-      elrs_module: 'ELRS RX',
-      vtx: 'VTX',
-      motors: 'Motors',
-      camera: 'Camera',
-      frame: 'Frame',
-      propellers: 'Props',
-      antenna: 'Antenna',
-    };
-    return categoryLabels[category] || category;
-  };
-
   const hasElrsSettings = aircraft.elrsSettings && Object.values(aircraft.elrsSettings).some(v => v);
-  const hasComponents = aircraft.components && aircraft.components.length > 0;
-  const hasDetails = hasComponents || hasElrsSettings;
+  const componentCount = aircraft.components?.length || 0;
 
   return (
     <div 
-      className={`bg-slate-900 rounded-lg overflow-hidden border border-slate-700 transition-all ${hasDetails ? 'cursor-pointer hover:border-slate-600' : ''}`}
-      onClick={() => hasDetails && setIsExpanded(!isExpanded)}
+      className="bg-slate-900 rounded-lg overflow-hidden border border-slate-700 transition-all cursor-pointer hover:border-slate-500 hover:shadow-lg"
+      onClick={onClick}
     >
       {/* Image */}
       <div className="aspect-video bg-slate-800 flex items-center justify-center relative">
@@ -259,11 +256,12 @@ function AircraftCard({ aircraft }: { aircraft: AircraftPublic }) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
           </svg>
         )}
-        {hasDetails && (
-          <div className="absolute bottom-2 right-2 bg-slate-900/80 px-2 py-1 rounded text-[10px] text-slate-400">
-            {isExpanded ? 'Click to collapse' : 'Click for details'}
-          </div>
-        )}
+        {/* Click hint overlay */}
+        <div className="absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 hover:opacity-100">
+          <span className="bg-slate-900/90 px-3 py-1.5 rounded-lg text-sm text-white">
+            View Details
+          </span>
+        </div>
       </div>
 
       {/* Info */}
@@ -272,84 +270,25 @@ function AircraftCard({ aircraft }: { aircraft: AircraftPublic }) {
         {aircraft.nickname && (
           <p className="text-sm text-slate-400 truncate mt-0.5">"{aircraft.nickname}"</p>
         )}
-        {aircraft.type && (
-          <div className="mt-2">
+        <div className="flex items-center gap-2 mt-2 flex-wrap">
+          {aircraft.type && (
             <span className="px-2 py-0.5 bg-slate-700 rounded text-xs text-slate-300">
               {formatType(aircraft.type)}
             </span>
-          </div>
-        )}
+          )}
+          {componentCount > 0 && (
+            <span className="px-2 py-0.5 bg-slate-700 rounded text-xs text-slate-400">
+              {componentCount} component{componentCount !== 1 ? 's' : ''}
+            </span>
+          )}
+          {hasElrsSettings && (
+            <span className="px-2 py-0.5 bg-green-500/20 text-green-400 rounded text-xs">
+              ELRS
+            </span>
+          )}
+        </div>
         {aircraft.description && (
           <p className="text-sm text-slate-500 mt-2 line-clamp-2">{aircraft.description}</p>
-        )}
-
-        {/* Expandable Details */}
-        {isExpanded && (
-          <>
-            {/* Components */}
-            {hasComponents && (
-              <div className="mt-3 pt-3 border-t border-slate-700">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <span className="text-xs font-medium text-slate-400">Components</span>
-                </div>
-                <div className="space-y-1.5">
-                  {aircraft.components?.map((component, idx) => (
-                    <div key={idx} className="flex items-start gap-2 text-xs">
-                      <span className="text-slate-500 w-20 shrink-0">{formatCategory(component.category)}</span>
-                      <span className="text-slate-300">
-                        {component.manufacturer && <span className="text-slate-500">{component.manufacturer} </span>}
-                        {component.name || 'Unspecified'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* ELRS Settings (Sanitized/Safe View) */}
-            {hasElrsSettings && (
-              <div className="mt-3 pt-3 border-t border-slate-700">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <span className="text-xs font-medium text-slate-400">ELRS Config</span>
-                  <span className="px-1.5 py-0.5 bg-green-500/20 text-green-400 text-[10px] rounded">
-                    Safe View
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                  {aircraft.elrsSettings?.receiverModel && (
-                    <div className="text-slate-500">
-                      <span className="text-slate-400">RX:</span> {aircraft.elrsSettings.receiverModel}
-                    </div>
-                  )}
-                  {aircraft.elrsSettings?.packetRate && (
-                    <div className="text-slate-500">
-                      <span className="text-slate-400">Rate:</span> {aircraft.elrsSettings.packetRate}
-                    </div>
-                  )}
-                  {aircraft.elrsSettings?.outputPower && (
-                    <div className="text-slate-500">
-                      <span className="text-slate-400">Power:</span> {aircraft.elrsSettings.outputPower}
-                    </div>
-                  )}
-                  {aircraft.elrsSettings?.switchMode && (
-                    <div className="text-slate-500">
-                      <span className="text-slate-400">Switch:</span> {aircraft.elrsSettings.switchMode}
-                    </div>
-                  )}
-                  {aircraft.elrsSettings?.telemetryRatio && (
-                    <div className="text-slate-500">
-                      <span className="text-slate-400">Telem:</span> {aircraft.elrsSettings.telemetryRatio}
-                    </div>
-                  )}
-                  {aircraft.elrsSettings?.firmwareVersion && (
-                    <div className="text-slate-500">
-                      <span className="text-slate-400">FW:</span> {aircraft.elrsSettings.firmwareVersion}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </>
         )}
       </div>
     </div>
