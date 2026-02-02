@@ -530,9 +530,13 @@ function App() {
               setEditingInventoryItem(null);
               setShowAddInventoryModal(true);
             }}
-            onAddRadio={() => navigate('/radio')}
             onSelectAircraft={handleSelectAircraft}
             onSelectNewsItem={setSelectedItem}
+            onSelectPilot={(pilotId) => {
+              setSelectedPilotId(pilotId);
+              navigate('/social');
+            }}
+            onGoToSocial={() => navigate('/social')}
           />
         )}
 
@@ -556,9 +560,13 @@ function App() {
               setEditingInventoryItem(null);
               setShowAddInventoryModal(true);
             }}
-            onAddRadio={() => navigate('/radio')}
             onSelectAircraft={handleSelectAircraft}
             onSelectNewsItem={setSelectedItem}
+            onSelectPilot={(pilotId) => {
+              setSelectedPilotId(pilotId);
+              navigate('/social');
+            }}
+            onGoToSocial={() => navigate('/social')}
           />
         )}
 

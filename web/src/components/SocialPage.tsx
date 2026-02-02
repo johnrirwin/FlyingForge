@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
-import { searchPilots } from '../pilotApi';
+import { searchPilots, getPilotProfile } from '../pilotApi';
 import { getFollowing, getFollowers } from '../socialApi';
-import type { PilotSearchResult, PilotSummary } from '../socialTypes';
+import type { PilotSearchResult, PilotSummary, PilotProfile } from '../socialTypes';
 import { useDebounce } from '../hooks';
 import { useAuth } from '../hooks/useAuth';
 
@@ -14,6 +14,10 @@ interface SocialPageProps {
 export function SocialPage({ onSelectPilot }: SocialPageProps) {
   const { user, isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState<SocialTab>('search');
+  
+  // My profile state
+  const [myProfile, setMyProfile] = useState<PilotProfile | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   
   // Search state
   const [query, setQuery] = useState('');
@@ -101,6 +105,23 @@ export function SocialPage({ onSelectPilot }: SocialPageProps) {
       setIsLoadingFollowers(false);
     }
   }, [user?.id]);
+
+  // Load my profile on mount
+  useEffect(() => {
+    if (user?.id && isAuthenticated) {
+      setIsLoadingProfile(true);
+      getPilotProfile(user.id)
+        .then(profile => {
+          setMyProfile(profile);
+          setFollowersCount(profile.followerCount);
+          setFollowingCount(profile.followingCount);
+        })
+        .catch(() => {
+          // Silently fail - user can still use other features
+        })
+        .finally(() => setIsLoadingProfile(false));
+    }
+  }, [user?.id, isAuthenticated]);
 
   // Load data when tab changes
   useEffect(() => {
@@ -197,13 +218,98 @@ export function SocialPage({ onSelectPilot }: SocialPageProps) {
     </div>
   );
 
+  const getMyDisplayName = () => {
+    if (myProfile?.callSign) return myProfile.callSign;
+    if (myProfile?.displayName) return myProfile.displayName;
+    if (myProfile?.googleName) return myProfile.googleName;
+    return user?.displayName || 'Pilot';
+  };
+
+  const getMySecondaryName = () => {
+    if (myProfile?.callSign && myProfile?.displayName) return myProfile.displayName;
+    if (myProfile?.callSign && myProfile?.googleName) return myProfile.googleName;
+    return null;
+  };
+
   return (
     <div className="max-w-4xl mx-auto p-6">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white mb-2">Pilot Directory</h1>
-        <p className="text-slate-400">
-          Search for pilots, or view your followers and who you're following.
-        </p>
+      {/* My Profile Header */}
+      {isAuthenticated && (
+        <div className="bg-slate-800 rounded-lg p-6 mb-6">
+          {isLoadingProfile ? (
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-full bg-slate-700 animate-pulse" />
+              <div className="flex-1">
+                <div className="h-6 w-32 bg-slate-700 rounded animate-pulse mb-2" />
+                <div className="h-4 w-24 bg-slate-700 rounded animate-pulse" />
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-4">
+              {/* Avatar */}
+              <button
+                onClick={() => user?.id && onSelectPilot(user.id)}
+                className="focus:outline-none focus:ring-2 focus:ring-primary-500 rounded-full"
+              >
+                {myProfile?.effectiveAvatarUrl ? (
+                  <img
+                    src={myProfile.effectiveAvatarUrl}
+                    alt=""
+                    className="w-16 h-16 rounded-full object-cover border-2 border-slate-600 hover:border-primary-500 transition-colors"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-slate-700 flex items-center justify-center border-2 border-slate-600 hover:border-primary-500 transition-colors">
+                    <svg className="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  </div>
+                )}
+              </button>
+
+              {/* Info */}
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => user?.id && onSelectPilot(user.id)}
+                    className="text-xl font-bold text-white hover:text-primary-400 transition-colors"
+                  >
+                    {getMyDisplayName()}
+                  </button>
+                </div>
+                {getMySecondaryName() && (
+                  <p className="text-slate-400 text-sm">{getMySecondaryName()}</p>
+                )}
+                <div className="flex items-center gap-4 mt-2 text-sm">
+                  <button
+                    onClick={() => setActiveTab('followers')}
+                    className="text-slate-400 hover:text-white transition-colors"
+                  >
+                    <span className="font-medium text-white">{followersCount}</span> followers
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('following')}
+                    className="text-slate-400 hover:text-white transition-colors"
+                  >
+                    <span className="font-medium text-white">{followingCount}</span> following
+                  </button>
+                </div>
+              </div>
+
+              {/* View Profile Button */}
+              <button
+                onClick={() => user?.id && onSelectPilot(user.id)}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors"
+              >
+                View Profile
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Section Title */}
+      <div className="mb-6">
+        <h2 className="text-lg font-semibold text-white">Find Pilots</h2>
       </div>
 
       {/* Tabs */}

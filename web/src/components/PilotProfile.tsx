@@ -161,7 +161,14 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
 
           {/* Info */}
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-white">{getDisplayName()}</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold text-white">{getDisplayName()}</h1>
+              {isOwnProfile && (
+                <span className="px-2 py-0.5 text-xs font-medium bg-slate-700 text-slate-300 rounded">
+                  You
+                </span>
+              )}
+            </div>
             {getSecondaryName() && (
               <p className="text-slate-400">{getSecondaryName()}</p>
             )}
