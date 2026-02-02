@@ -189,7 +189,7 @@ export interface InventorySummary {
 }
 
 // App section navigation
-export type AppSection = 'home' | 'getting-started' | 'dashboard' | 'news' | 'equipment' | 'inventory' | 'aircraft' | 'radio' | 'batteries';
+export type AppSection = 'home' | 'getting-started' | 'dashboard' | 'news' | 'equipment' | 'inventory' | 'aircraft' | 'radio' | 'batteries' | 'social' | 'profile' | 'pilot-profile';
 
 export const APP_SECTIONS: { value: AppSection; label: string; icon: string; requiresAuth?: boolean }[] = [
   { value: 'home', label: 'Home', icon: '🏠' },

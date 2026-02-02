@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, Sidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, Homepage, GettingStarted, RadioSection, BatterySection } from './components';
+import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, Sidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, Homepage, GettingStarted, RadioSection, BatterySection, MyProfile, PilotSearch, PilotProfile } from './components';
 import { LoginPage } from './components/LoginPage';
 import { SignupPage } from './components/SignupPage';
 import { getItems, getSources, refreshFeeds } from './api';
@@ -26,6 +26,8 @@ const pathToSection: Record<string, AppSection> = {
   '/aircraft': 'aircraft',
   '/radio': 'radio',
   '/batteries': 'batteries',
+  '/social': 'social',
+  '/profile': 'profile',
 };
 
 const sectionToPath: Record<AppSection, string> = {
@@ -38,6 +40,9 @@ const sectionToPath: Record<AppSection, string> = {
   'aircraft': '/aircraft',
   'radio': '/radio',
   'batteries': '/batteries',
+  'social': '/social',
+  'profile': '/profile',
+  'pilot-profile': '/social/pilots', // Dynamic - handled separately
 };
 
 function App() {
@@ -91,6 +96,9 @@ function App() {
   const [showAircraftForm, setShowAircraftForm] = useState(false);
   const [editingAircraft, setEditingAircraft] = useState<Aircraft | null>(null);
   const [selectedAircraftDetails, setSelectedAircraftDetails] = useState<AircraftDetailsResponse | null>(null);
+
+  // Social/Pilot state
+  const [selectedPilotId, setSelectedPilotId] = useState<string | null>(null);
 
   // Filters
   const { filters, updateFilter } = useFilters();
@@ -669,6 +677,26 @@ function App() {
         {activeSection === 'batteries' && (
           <BatterySection
             onError={(message) => setError(message)}
+          />
+        )}
+
+        {/* Profile Section */}
+        {activeSection === 'profile' && (
+          <MyProfile />
+        )}
+
+        {/* Social/Pilot Directory Section */}
+        {activeSection === 'social' && !selectedPilotId && (
+          <PilotSearch
+            onSelectPilot={(pilotId) => setSelectedPilotId(pilotId)}
+          />
+        )}
+
+        {/* Pilot Profile View */}
+        {activeSection === 'social' && selectedPilotId && (
+          <PilotProfile
+            pilotId={selectedPilotId}
+            onBack={() => setSelectedPilotId(null)}
           />
         )}
       </div>

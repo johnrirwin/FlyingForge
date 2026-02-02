@@ -250,6 +250,46 @@ func (s *AircraftStore) List(ctx context.Context, userID string, params models.A
 	}, nil
 }
 
+// ListByUserID returns all aircraft for a user (simplified version for public profiles)
+func (s *AircraftStore) ListByUserID(ctx context.Context, userID string) ([]*models.Aircraft, error) {
+	query := `
+		SELECT id, user_id, name, nickname, type, image_data IS NOT NULL as has_image, image_type, description, created_at, updated_at
+		FROM aircraft
+		WHERE user_id = $1
+		ORDER BY created_at DESC
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list aircraft by user: %w", err)
+	}
+	defer rows.Close()
+
+	var aircraft []*models.Aircraft
+	for rows.Next() {
+		a := &models.Aircraft{}
+		var scanUserID, scanNickname, scanType, scanImageType, scanDescription sql.NullString
+
+		if err := rows.Scan(
+			&a.ID, &scanUserID, &a.Name, &scanNickname,
+			&scanType, &a.HasImage, &scanImageType, &scanDescription,
+			&a.CreatedAt, &a.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan aircraft: %w", err)
+		}
+
+		a.UserID = scanUserID.String
+		a.Nickname = scanNickname.String
+		a.Type = models.AircraftType(scanType.String)
+		a.ImageType = scanImageType.String
+		a.Description = scanDescription.String
+
+		aircraft = append(aircraft, a)
+	}
+
+	return aircraft, nil
+}
+
 // SetComponent sets or updates a component on an aircraft
 func (s *AircraftStore) SetComponent(ctx context.Context, aircraftID string, category models.ComponentCategory, inventoryItemID string, notes string) (*models.AircraftComponent, error) {
 	query := `

@@ -1,5 +1,7 @@
 // Auth types for the frontend
 
+export type AvatarType = 'google' | 'custom';
+
 export interface User {
   id: string;
   email: string;
@@ -9,6 +11,25 @@ export interface User {
   emailVerified: boolean;
   createdAt: string;
   lastLoginAt?: string;
+  // Profile fields
+  callSign?: string;
+  googleName?: string;
+  googleAvatarUrl?: string;
+  avatarType?: AvatarType;
+  customAvatarUrl?: string;
+}
+
+// Extended user profile response from /api/me/profile
+export interface UserProfile extends User {
+  effectiveAvatarUrl: string;
+  updatedAt: string;
+}
+
+// Parameters for updating profile
+export interface UpdateProfileParams {
+  callSign?: string;
+  displayName?: string;
+  avatarType?: AvatarType;
 }
 
 export interface AuthTokens {
@@ -66,4 +87,5 @@ export type AuthAction =
   | { type: 'AUTH_ERROR'; payload: AuthError }
   | { type: 'AUTH_LOGOUT' }
   | { type: 'REFRESH_TOKENS'; payload: AuthTokens }
+  | { type: 'UPDATE_USER'; payload: Partial<User> }
   | { type: 'CLEAR_ERROR' };

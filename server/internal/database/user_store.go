@@ -29,9 +29,10 @@ func (s *UserStore) Create(ctx context.Context, params models.CreateUserParams) 
 	}
 
 	query := `
-		INSERT INTO users (email, password_hash, display_name, avatar_url, status)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, email, display_name, avatar_url, status, created_at, updated_at, last_login_at
+		INSERT INTO users (email, password_hash, display_name, avatar_url, status, google_name, google_avatar_url, avatar_type)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		RETURNING id, email, display_name, avatar_url, status, created_at, updated_at, last_login_at,
+		          call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url
 	`
 
 	var passwordHash sql.NullString
@@ -39,15 +40,20 @@ func (s *UserStore) Create(ctx context.Context, params models.CreateUserParams) 
 		passwordHash = sql.NullString{String: params.Password, Valid: true}
 	}
 
+	// Default avatar type to google
+	avatarType := models.AvatarTypeGoogle
+
 	user := &models.User{}
-	var avatarURL sql.NullString
+	var avatarURL, callSign, googleName, googleAvatarURL, customAvatarURL, avatarTypeStr sql.NullString
 	var lastLoginAt sql.NullTime
 
 	err := s.db.QueryRowContext(ctx, query,
 		email, passwordHash, params.DisplayName, nullString(params.AvatarURL), status,
+		nullString(params.GoogleName), nullString(params.GoogleAvatarURL), string(avatarType),
 	).Scan(
 		&user.ID, &user.Email, &user.DisplayName, &avatarURL,
 		&user.Status, &user.CreatedAt, &user.UpdatedAt, &lastLoginAt,
+		&callSign, &googleName, &googleAvatarURL, &avatarTypeStr, &customAvatarURL,
 	)
 
 	if err != nil {
@@ -63,6 +69,21 @@ func (s *UserStore) Create(ctx context.Context, params models.CreateUserParams) 
 	if lastLoginAt.Valid {
 		user.LastLoginAt = &lastLoginAt.Time
 	}
+	if callSign.Valid {
+		user.CallSign = callSign.String
+	}
+	if googleName.Valid {
+		user.GoogleName = googleName.String
+	}
+	if googleAvatarURL.Valid {
+		user.GoogleAvatarURL = googleAvatarURL.String
+	}
+	if avatarTypeStr.Valid {
+		user.AvatarType = models.AvatarType(avatarTypeStr.String)
+	}
+	if customAvatarURL.Valid {
+		user.CustomAvatarURL = customAvatarURL.String
+	}
 
 	return user, nil
 }
@@ -70,7 +91,8 @@ func (s *UserStore) Create(ctx context.Context, params models.CreateUserParams) 
 // GetByID retrieves a user by ID
 func (s *UserStore) GetByID(ctx context.Context, id string) (*models.User, error) {
 	query := `
-		SELECT id, email, password_hash, display_name, avatar_url, status, created_at, updated_at, last_login_at
+		SELECT id, email, password_hash, display_name, avatar_url, status, created_at, updated_at, last_login_at,
+		       call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url
 		FROM users
 		WHERE id = $1
 	`
@@ -82,12 +104,26 @@ func (s *UserStore) GetByID(ctx context.Context, id string) (*models.User, error
 func (s *UserStore) GetByEmail(ctx context.Context, email string) (*models.User, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	query := `
-		SELECT id, email, password_hash, display_name, avatar_url, status, created_at, updated_at, last_login_at
+		SELECT id, email, password_hash, display_name, avatar_url, status, created_at, updated_at, last_login_at,
+		       call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url
 		FROM users
 		WHERE LOWER(email) = $1
 	`
 
 	return s.scanUser(s.db.QueryRowContext(ctx, query, email))
+}
+
+// GetByCallSign retrieves a user by callsign (case-insensitive)
+func (s *UserStore) GetByCallSign(ctx context.Context, callSign string) (*models.User, error) {
+	callSign = strings.ToLower(strings.TrimSpace(callSign))
+	query := `
+		SELECT id, email, password_hash, display_name, avatar_url, status, created_at, updated_at, last_login_at,
+		       call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url
+		FROM users
+		WHERE LOWER(call_sign) = $1
+	`
+
+	return s.scanUser(s.db.QueryRowContext(ctx, query, callSign))
 }
 
 // Update updates a user
@@ -116,6 +152,31 @@ func (s *UserStore) Update(ctx context.Context, id string, params models.UpdateU
 		args = append(args, *params.Password)
 		argIdx++
 	}
+	if params.CallSign != nil {
+		sets = append(sets, fmt.Sprintf("call_sign = $%d", argIdx))
+		args = append(args, *params.CallSign)
+		argIdx++
+	}
+	if params.GoogleName != nil {
+		sets = append(sets, fmt.Sprintf("google_name = $%d", argIdx))
+		args = append(args, *params.GoogleName)
+		argIdx++
+	}
+	if params.GoogleAvatarURL != nil {
+		sets = append(sets, fmt.Sprintf("google_avatar_url = $%d", argIdx))
+		args = append(args, *params.GoogleAvatarURL)
+		argIdx++
+	}
+	if params.AvatarType != nil {
+		sets = append(sets, fmt.Sprintf("avatar_type = $%d", argIdx))
+		args = append(args, string(*params.AvatarType))
+		argIdx++
+	}
+	if params.CustomAvatarURL != nil {
+		sets = append(sets, fmt.Sprintf("custom_avatar_url = $%d", argIdx))
+		args = append(args, *params.CustomAvatarURL)
+		argIdx++
+	}
 
 	if len(sets) == 0 {
 		return s.GetByID(ctx, id)
@@ -127,7 +188,8 @@ func (s *UserStore) Update(ctx context.Context, id string, params models.UpdateU
 	query := fmt.Sprintf(`
 		UPDATE users SET %s
 		WHERE id = $%d
-		RETURNING id, email, password_hash, display_name, avatar_url, status, created_at, updated_at, last_login_at
+		RETURNING id, email, password_hash, display_name, avatar_url, status, created_at, updated_at, last_login_at,
+		          call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url
 	`, strings.Join(sets, ", "), argIdx)
 
 	return s.scanUser(s.db.QueryRowContext(ctx, query, args...))
@@ -157,6 +219,75 @@ func (s *UserStore) Delete(ctx context.Context, id string) error {
 	}
 
 	return nil
+}
+
+// SearchPilots searches for pilots by callsign or name
+func (s *UserStore) SearchPilots(ctx context.Context, params models.PilotSearchParams) ([]models.PilotSearchResult, error) {
+	query := params.Query
+	if query == "" {
+		return []models.PilotSearchResult{}, nil
+	}
+
+	limit := params.Limit
+	if limit <= 0 || limit > 20 {
+		limit = 20
+	}
+
+	searchTerm := "%" + strings.ToLower(strings.TrimSpace(query)) + "%"
+
+	sqlQuery := `
+		SELECT id, call_sign, display_name, google_name, avatar_url, google_avatar_url, avatar_type, custom_avatar_url
+		FROM users
+		WHERE status = 'active' AND (
+			LOWER(call_sign) LIKE $1 OR
+			LOWER(display_name) LIKE $1 OR
+			LOWER(google_name) LIKE $1
+		)
+		ORDER BY 
+			CASE WHEN LOWER(call_sign) LIKE $1 THEN 0 ELSE 1 END,
+			call_sign, display_name
+		LIMIT $2
+	`
+
+	rows, err := s.db.QueryContext(ctx, sqlQuery, searchTerm, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []models.PilotSearchResult
+	for rows.Next() {
+		var callSign, displayName, googleName, avatarURL, googleAvatarURL, avatarType, customAvatarURL sql.NullString
+		var id string
+
+		if err := rows.Scan(&id, &callSign, &displayName, &googleName, &avatarURL, &googleAvatarURL, &avatarType, &customAvatarURL); err != nil {
+			return nil, err
+		}
+
+		// Compute effective avatar URL
+		effectiveAvatarURL := ""
+		if avatarType.Valid && avatarType.String == string(models.AvatarTypeCustom) && customAvatarURL.Valid {
+			effectiveAvatarURL = customAvatarURL.String
+		} else if googleAvatarURL.Valid {
+			effectiveAvatarURL = googleAvatarURL.String
+		} else if avatarURL.Valid {
+			effectiveAvatarURL = avatarURL.String
+		}
+
+		results = append(results, models.PilotSearchResult{
+			ID:                 id,
+			CallSign:           callSign.String,
+			DisplayName:        displayName.String,
+			GoogleName:         googleName.String,
+			EffectiveAvatarURL: effectiveAvatarURL,
+		})
+	}
+
+	if results == nil {
+		results = []models.PilotSearchResult{}
+	}
+
+	return results, nil
 }
 
 // List retrieves users with optional filtering
@@ -201,7 +332,8 @@ func (s *UserStore) List(ctx context.Context, params models.UserFilterParams) (*
 
 	args = append(args, limit, offset)
 	query := fmt.Sprintf(`
-		SELECT id, email, password_hash, display_name, avatar_url, status, created_at, updated_at, last_login_at
+		SELECT id, email, password_hash, display_name, avatar_url, status, created_at, updated_at, last_login_at,
+		       call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url
 		FROM users %s
 		ORDER BY created_at DESC
 		LIMIT $%d OFFSET $%d
@@ -234,12 +366,13 @@ func (s *UserStore) List(ctx context.Context, params models.UserFilterParams) (*
 
 func (s *UserStore) scanUser(row *sql.Row) (*models.User, error) {
 	user := &models.User{}
-	var passwordHash, avatarURL sql.NullString
+	var passwordHash, avatarURL, callSign, googleName, googleAvatarURL, avatarType, customAvatarURL sql.NullString
 	var lastLoginAt sql.NullTime
 
 	err := row.Scan(
 		&user.ID, &user.Email, &passwordHash, &user.DisplayName, &avatarURL,
 		&user.Status, &user.CreatedAt, &user.UpdatedAt, &lastLoginAt,
+		&callSign, &googleName, &googleAvatarURL, &avatarType, &customAvatarURL,
 	)
 
 	if err == sql.ErrNoRows {
@@ -256,18 +389,34 @@ func (s *UserStore) scanUser(row *sql.Row) (*models.User, error) {
 	if lastLoginAt.Valid {
 		user.LastLoginAt = &lastLoginAt.Time
 	}
+	if callSign.Valid {
+		user.CallSign = callSign.String
+	}
+	if googleName.Valid {
+		user.GoogleName = googleName.String
+	}
+	if googleAvatarURL.Valid {
+		user.GoogleAvatarURL = googleAvatarURL.String
+	}
+	if avatarType.Valid {
+		user.AvatarType = models.AvatarType(avatarType.String)
+	}
+	if customAvatarURL.Valid {
+		user.CustomAvatarURL = customAvatarURL.String
+	}
 
 	return user, nil
 }
 
 func (s *UserStore) scanUserFromRows(rows *sql.Rows) (*models.User, error) {
 	user := &models.User{}
-	var passwordHash, avatarURL sql.NullString
+	var passwordHash, avatarURL, callSign, googleName, googleAvatarURL, avatarType, customAvatarURL sql.NullString
 	var lastLoginAt sql.NullTime
 
 	err := rows.Scan(
 		&user.ID, &user.Email, &passwordHash, &user.DisplayName, &avatarURL,
 		&user.Status, &user.CreatedAt, &user.UpdatedAt, &lastLoginAt,
+		&callSign, &googleName, &googleAvatarURL, &avatarType, &customAvatarURL,
 	)
 
 	if err != nil {
@@ -280,6 +429,21 @@ func (s *UserStore) scanUserFromRows(rows *sql.Rows) (*models.User, error) {
 	}
 	if lastLoginAt.Valid {
 		user.LastLoginAt = &lastLoginAt.Time
+	}
+	if callSign.Valid {
+		user.CallSign = callSign.String
+	}
+	if googleName.Valid {
+		user.GoogleName = googleName.String
+	}
+	if googleAvatarURL.Valid {
+		user.GoogleAvatarURL = googleAvatarURL.String
+	}
+	if avatarType.Valid {
+		user.AvatarType = models.AvatarType(avatarType.String)
+	}
+	if customAvatarURL.Valid {
+		user.CustomAvatarURL = customAvatarURL.String
 	}
 
 	return user, nil

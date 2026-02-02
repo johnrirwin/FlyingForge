@@ -96,6 +96,7 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationBatteries,
 		migrationBatteryLogs,
 		migrationBatteryIndexes,
+		migrationUserProfiles,
 	}
 
 	for i, migration := range migrations {
@@ -364,4 +365,20 @@ CREATE INDEX IF NOT EXISTS idx_batteries_code ON batteries(battery_code);
 CREATE INDEX IF NOT EXISTS idx_battery_logs_battery ON battery_logs(battery_id);
 CREATE INDEX IF NOT EXISTS idx_battery_logs_user ON battery_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_battery_logs_logged_at ON battery_logs(logged_at DESC);
+`
+
+const migrationUserProfiles = `
+-- Add profile fields to users table
+ALTER TABLE users ADD COLUMN IF NOT EXISTS call_sign VARCHAR(20) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS google_name VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS google_avatar_url VARCHAR(1024);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_type VARCHAR(20) DEFAULT 'google';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_avatar_url VARCHAR(1024);
+
+-- Create index for callsign search (case-insensitive)
+CREATE INDEX IF NOT EXISTS idx_users_call_sign ON users(LOWER(call_sign));
+
+-- Create index for pilot search (name search)
+CREATE INDEX IF NOT EXISTS idx_users_display_name ON users(LOWER(display_name));
+CREATE INDEX IF NOT EXISTS idx_users_google_name ON users(LOWER(google_name));
 `

@@ -12,6 +12,7 @@ import (
 	"github.com/johnrirwin/flyingforge/internal/aircraft"
 	"github.com/johnrirwin/flyingforge/internal/auth"
 	"github.com/johnrirwin/flyingforge/internal/battery"
+	"github.com/johnrirwin/flyingforge/internal/database"
 	"github.com/johnrirwin/flyingforge/internal/equipment"
 	"github.com/johnrirwin/flyingforge/internal/inventory"
 	"github.com/johnrirwin/flyingforge/internal/logging"
@@ -28,11 +29,13 @@ type Server struct {
 	batterySvc     *battery.Service
 	authSvc        *auth.Service
 	authMiddleware *auth.Middleware
+	userStore      *database.UserStore
+	aircraftStore  *database.AircraftStore
 	logger         *logging.Logger
 	server         *http.Server
 }
 
-func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, radioSvc *radio.Service, batterySvc *battery.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, logger *logging.Logger) *Server {
+func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, radioSvc *radio.Service, batterySvc *battery.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, userStore *database.UserStore, aircraftStore *database.AircraftStore, logger *logging.Logger) *Server {
 	return &Server{
 		agg:            agg,
 		equipmentSvc:   equipmentSvc,
@@ -42,6 +45,8 @@ func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventoryS
 		batterySvc:     batterySvc,
 		authSvc:        authSvc,
 		authMiddleware: authMiddleware,
+		userStore:      userStore,
+		aircraftStore:  aircraftStore,
 		logger:         logger,
 	}
 }
@@ -80,6 +85,18 @@ func (s *Server) Start(addr string) error {
 	if s.batterySvc != nil && s.authMiddleware != nil {
 		batteryAPI := NewBatteryAPI(s.batterySvc, s.authMiddleware, s.logger)
 		batteryAPI.RegisterRoutes(mux, s.corsMiddleware)
+	}
+
+	// Profile routes (user profile management)
+	if s.userStore != nil && s.authMiddleware != nil {
+		profileAPI := NewProfileAPI(s.userStore, s.authMiddleware, s.logger)
+		profileAPI.RegisterRoutes(mux, s.corsMiddleware)
+	}
+
+	// Pilot routes (social/pilot directory)
+	if s.userStore != nil && s.aircraftStore != nil && s.authMiddleware != nil {
+		pilotAPI := NewPilotAPI(s.userStore, s.aircraftStore, s.authMiddleware, s.logger)
+		pilotAPI.RegisterRoutes(mux, s.corsMiddleware)
 	}
 
 	// Health check
