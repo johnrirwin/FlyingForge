@@ -338,6 +338,6 @@ func parsePrice(priceStr string) float64 {
 	priceStr = strings.ReplaceAll(priceStr, ",", "")
 
 	var price float64
-	fmt.Sscanf(priceStr, "%f", &price)
+	_, _ = fmt.Sscanf(priceStr, "%f", &price)
 	return price
 }

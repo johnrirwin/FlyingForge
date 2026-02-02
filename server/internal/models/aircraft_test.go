@@ -1,0 +1,72 @@
+package models
+
+import (
+	"testing"
+)
+
+func TestAircraftType_Values(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    AircraftType
+		expected string
+	}{
+		{"quad", AircraftTypeQuad, "quad"},
+		{"fixed_wing", AircraftTypeFixedWing, "fixed_wing"},
+		{"whoop", AircraftTypeWhoop, "whoop"},
+		{"cine_lift", AircraftTypeCineLift, "cine_lift"},
+		{"long_range", AircraftTypeLongRange, "long_range"},
+		{"other", AircraftTypeOther, "other"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if string(tt.value) != tt.expected {
+				t.Errorf("AircraftType %s = %s, want %s", tt.name, tt.value, tt.expected)
+			}
+		})
+	}
+}
+
+func TestComponentCategory_Values(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    ComponentCategory
+		expected string
+	}{
+		{"fc", ComponentCategoryFC, "fc"},
+		{"esc", ComponentCategoryESC, "esc"},
+		{"elrs_module", ComponentCategoryELRSModule, "elrs_module"},
+		{"vtx", ComponentCategoryVTX, "vtx"},
+		{"motors", ComponentCategoryMotors, "motors"},
+		{"camera", ComponentCategoryCamera, "camera"},
+		{"frame", ComponentCategoryFrame, "frame"},
+		{"propellers", ComponentCategoryProps, "propellers"},
+		{"battery", ComponentCategoryBattery, "battery"},
+		{"antenna", ComponentCategoryAntenna, "antenna"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if string(tt.value) != tt.expected {
+				t.Errorf("ComponentCategory %s = %s, want %s", tt.name, tt.value, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsValidAircraftType(t *testing.T) {
+	validTypes := []AircraftType{
+		AircraftTypeQuad,
+		AircraftTypeFixedWing,
+		AircraftTypeWhoop,
+		AircraftTypeCineLift,
+		AircraftTypeLongRange,
+		AircraftTypeOther,
+	}
+
+	for _, typ := range validTypes {
+		if typ == "" {
+			t.Errorf("Valid AircraftType should not be empty")
+		}
+	}
+}

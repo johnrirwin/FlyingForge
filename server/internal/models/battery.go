@@ -33,13 +33,13 @@ func IsValidChemistry(c BatteryChemistry) bool {
 type Battery struct {
 	ID           string           `json:"id"`
 	UserID       string           `json:"user_id,omitempty"`
-	BatteryCode  string           `json:"battery_code"`          // Human-friendly ID like "BAT-A1B2"
-	Name         string           `json:"name,omitempty"`        // Optional friendly name
+	BatteryCode  string           `json:"battery_code"`   // Human-friendly ID like "BAT-A1B2"
+	Name         string           `json:"name,omitempty"` // Optional friendly name
 	Chemistry    BatteryChemistry `json:"chemistry"`
-	Cells        int              `json:"cells"`                 // 1S through 8S
+	Cells        int              `json:"cells"` // 1S through 8S
 	CapacityMah  int              `json:"capacity_mah"`
 	CRating      *int             `json:"c_rating,omitempty"`
-	Connector    string           `json:"connector,omitempty"`   // e.g., XT30, XT60
+	Connector    string           `json:"connector,omitempty"` // e.g., XT30, XT60
 	WeightGrams  *int             `json:"weight_grams,omitempty"`
 	Brand        string           `json:"brand,omitempty"`
 	Model        string           `json:"model,omitempty"`
@@ -106,7 +106,7 @@ type BatteryListParams struct {
 	MinCapacity int              `json:"min_capacity,omitempty"`
 	MaxCapacity int              `json:"max_capacity,omitempty"`
 	Query       string           `json:"query,omitempty"`
-	Sort        string           `json:"sort_by,omitempty"` // name, updated, logged, cycles
+	Sort        string           `json:"sort_by,omitempty"`    // name, updated, logged, cycles
 	SortOrder   string           `json:"sort_order,omitempty"` // ASC, DESC
 	Limit       int              `json:"limit,omitempty"`
 	Offset      int              `json:"offset,omitempty"`

@@ -17,7 +17,6 @@ type Service struct {
 	registry *sellers.Registry
 	cache    cache.Cache
 	logger   *logging.Logger
-	mu       sync.RWMutex
 	products map[string][]models.EquipmentItem // Cached products by category
 }
 

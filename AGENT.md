@@ -131,14 +131,94 @@ Components are in `web/src/components/` - follows standard React patterns
 
 ## Testing
 
-```bash
-# Build verification
-cd server && go build ./cmd/server
-cd web && npm run build
+### Running Tests
 
-# Type checking
-cd web && npx tsc --noEmit
+```bash
+# Run all tests
+make test
+
+# Go tests only
+make test-go
+cd server && go test -v ./...
+
+# Frontend tests only
+make test-web
+cd web && npm run test
 ```
+
+### Test Requirements
+
+**All new code must include tests.** This is a strict requirement for maintaining code quality.
+
+#### Go Backend Tests
+- Place test files alongside source files (e.g., `service.go` → `service_test.go`)
+- Use table-driven tests for multiple scenarios
+- Test exported functions and error conditions
+- Required for:
+  - New services or packages
+  - New API endpoints
+  - Business logic changes
+  - Model validation functions
+
+Example test structure:
+```go
+func TestFunctionName(t *testing.T) {
+    tests := []struct {
+        name     string
+        input    string
+        expected string
+    }{
+        {"valid input", "foo", "bar"},
+        {"empty input", "", ""},
+    }
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            // test logic
+        })
+    }
+}
+```
+
+#### React Frontend Tests
+- Place test files alongside components (e.g., `Component.tsx` → `Component.test.tsx`)
+- Use Vitest + React Testing Library
+- Test user interactions and rendered output
+- Required for:
+  - New components
+  - Custom hooks
+  - Complex UI logic
+  - Form validation
+
+Example test structure:
+```tsx
+import { render, screen } from '@testing-library/react';
+import { ComponentName } from './ComponentName';
+
+describe('ComponentName', () => {
+  it('renders correctly', () => {
+    render(<ComponentName />);
+    expect(screen.getByText('Expected Text')).toBeInTheDocument();
+  });
+});
+```
+
+### Current Test Coverage
+
+| Package | Tests |
+|---------|-------|
+| `aggregator` | Sorting, deduplication, filtering, pagination |
+| `aircraft` | Service validation, CRUD operations |
+| `auth` | Error types, password validation |
+| `battery` | Chemistry validation, cell count validation |
+| `cache` | Set/Get, TTL expiration, concurrent access |
+| `equipment` | Service errors, search params |
+| `httpapi` | JSON responses, CORS, pagination parsing |
+| `models` | Type constants, validation functions |
+| `ratelimit` | Allow/Wait, host isolation, concurrency |
+| `sellers` | Registry operations, seller info |
+| `sources` | RSS/Forum fetchers, config defaults |
+| `tagging` | Tag inference, rule management |
+| **Frontend** | FeedCard, Sidebar, TopBar, useAuth |
 
 ## Conventions
 
