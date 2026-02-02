@@ -54,7 +54,7 @@ export function PilotProfile({ pilotId, onBack }: PilotProfileProps) {
 
   if (error) {
     return (
-      <div className="max-w-4xl mx-auto p-6">
+      <div className="p-6">
         <button
           onClick={onBack}
           className="flex items-center gap-2 text-slate-400 hover:text-white mb-6 transition-colors"
@@ -64,7 +64,7 @@ export function PilotProfile({ pilotId, onBack }: PilotProfileProps) {
           </svg>
           Back to Search
         </button>
-        <div className="p-4 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400">
+        <div className="p-4 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 max-w-2xl">
           {error}
         </div>
       </div>
@@ -73,7 +73,7 @@ export function PilotProfile({ pilotId, onBack }: PilotProfileProps) {
 
   if (!profile) {
     return (
-      <div className="max-w-4xl mx-auto p-6">
+      <div className="p-6">
         <button
           onClick={onBack}
           className="flex items-center gap-2 text-slate-400 hover:text-white mb-6 transition-colors"
@@ -83,13 +83,13 @@ export function PilotProfile({ pilotId, onBack }: PilotProfileProps) {
           </svg>
           Back to Search
         </button>
-        <div className="text-center text-slate-500">Pilot not found</div>
+        <div className="text-slate-500">Pilot not found</div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
+    <div className="p-6">
       {/* Back Button */}
       <button
         onClick={onBack}
@@ -102,7 +102,7 @@ export function PilotProfile({ pilotId, onBack }: PilotProfileProps) {
       </button>
 
       {/* Profile Header */}
-      <div className="bg-slate-800 rounded-lg p-6 mb-6">
+      <div className="bg-slate-800 rounded-lg p-6 mb-6 max-w-2xl">
         <div className="flex items-center gap-6">
           {/* Avatar */}
           {profile.effectiveAvatarUrl ? (
@@ -133,7 +133,7 @@ export function PilotProfile({ pilotId, onBack }: PilotProfileProps) {
       </div>
 
       {/* Aircraft Section */}
-      <div className="bg-slate-800 rounded-lg p-6">
+      <div className="bg-slate-800 rounded-lg p-6 max-w-2xl">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-white">Aircraft</h2>
           <span className="text-sm text-slate-400">
