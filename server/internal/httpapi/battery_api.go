@@ -571,7 +571,7 @@ func (api *BatteryAPI) generateLabelHTML(b *models.Battery, size string) string 
 		            white-space: nowrap;
 		        }
 		        .specs {
-		            font-size: 9pt;
+		            font-size: %s;
 		            text-align: left;
 		            margin-bottom: 0;
 		            white-space: nowrap;
@@ -638,18 +638,15 @@ func (api *BatteryAPI) generateLabelHTML(b *models.Battery, size string) string 
 		    </script>
 		</body>
 		</html>`,
-		batteryCodeEscaped,
-		width, height,
-		fontSize,
-		qrSize, qrSize,
-		batteryCodeEscaped,
-		chemistryEscaped, b.Cells, capacityStr,
-		qrContentEscaped,
+			batteryCodeEscaped,
+			width, height, fontSize,
+			qrSize, qrSize,
+			batteryCodeEscaped,
+			chemistryEscaped, b.Cells, capacityStr,
+			qrContentEscaped,
 		)
 		return htmlContent
 	}
-	return htmlContent
-
 	return htmlContent
 }
 
