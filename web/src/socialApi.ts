@@ -18,6 +18,17 @@ function getAuthHeaders(): HeadersInit {
   };
 }
 
+// Get public aircraft image URL (for pilot profiles)
+export function getPublicAircraftImageUrl(aircraftId: string): string {
+  const tokens = getStoredTokens();
+  const timestamp = Date.now();
+  const baseUrl = `${API_BASE}/pilots/aircraft/${aircraftId}/image`;
+  if (tokens?.accessToken) {
+    return `${baseUrl}?token=${encodeURIComponent(tokens.accessToken)}&t=${timestamp}`;
+  }
+  return `${baseUrl}?t=${timestamp}`;
+}
+
 // Follow a pilot
 export async function followPilot(userId: string): Promise<FollowResponse> {
   const response = await fetch(`${API_BASE}/social/follow/${userId}`, {

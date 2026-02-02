@@ -33,6 +33,8 @@ func NewPilotAPI(userStore *database.UserStore, aircraftStore *database.Aircraft
 func (api *PilotAPI) RegisterRoutes(mux *http.ServeMux, corsMiddleware func(http.HandlerFunc) http.HandlerFunc) {
 	// Search pilots - requires auth
 	mux.HandleFunc("/api/pilots/search", corsMiddleware(api.authMiddleware.RequireAuth(api.handleSearch)))
+	// Public aircraft image - requires auth but checks owner's visibility settings
+	mux.HandleFunc("/api/pilots/aircraft/", corsMiddleware(api.authMiddleware.RequireAuth(api.handleAircraftImage)))
 	// Get pilot profile - requires auth
 	mux.HandleFunc("/api/pilots/", corsMiddleware(api.authMiddleware.RequireAuth(api.handlePilotProfile)))
 }
@@ -205,6 +207,50 @@ func (api *PilotAPI) handlePilotProfile(w http.ResponseWriter, r *http.Request) 
 	}
 
 	api.writeJSON(w, http.StatusOK, profile)
+}
+
+// handleAircraftImage handles GET /api/pilots/aircraft/:id/image
+// Serves aircraft images for public profiles (respects visibility settings)
+func (api *PilotAPI) handleAircraftImage(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract aircraft ID from path: /api/pilots/aircraft/{id}/image
+	path := strings.TrimPrefix(r.URL.Path, "/api/pilots/aircraft/")
+	aircraftID := strings.TrimSuffix(path, "/image")
+	aircraftID = strings.TrimSuffix(aircraftID, "/")
+
+	if aircraftID == "" {
+		http.Error(w, "Aircraft ID required", http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+
+	// Get public image (checks owner's visibility settings)
+	imageData, imageType, err := api.aircraftStore.GetPublicImage(ctx, aircraftID)
+	if err != nil {
+		api.logger.Error("Failed to get aircraft image", logging.WithField("error", err.Error()))
+		http.Error(w, "Failed to get image", http.StatusInternalServerError)
+		return
+	}
+
+	if imageData == nil {
+		http.Error(w, "Image not found or not public", http.StatusNotFound)
+		return
+	}
+
+	// Set cache headers
+	w.Header().Set("Content-Type", imageType)
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.WriteHeader(http.StatusOK)
+	w.Write(imageData)
 }
 
 func (api *PilotAPI) writeJSON(w http.ResponseWriter, status int, data interface{}) {

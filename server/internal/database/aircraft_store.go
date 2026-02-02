@@ -506,6 +506,32 @@ func (s *AircraftStore) GetImage(ctx context.Context, id string, userID string) 
 	return imageData, imageType.String, nil
 }
 
+// GetPublicImage retrieves image data for an aircraft if the owner allows it
+// This is used for public pilot profiles - checks owner's social settings
+func (s *AircraftStore) GetPublicImage(ctx context.Context, aircraftID string) ([]byte, string, error) {
+	query := `
+		SELECT a.image_data, a.image_type 
+		FROM aircraft a
+		JOIN users u ON a.user_id = u.id
+		WHERE a.id = $1 
+		  AND a.image_data IS NOT NULL
+		  AND u.show_aircraft = true
+		  AND u.profile_visibility = 'public'
+	`
+	var imageData []byte
+	var imageType sql.NullString
+
+	err := s.db.QueryRowContext(ctx, query, aircraftID).Scan(&imageData, &imageType)
+	if err == sql.ErrNoRows {
+		return nil, "", nil
+	}
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to get public aircraft image: %w", err)
+	}
+
+	return imageData, imageType.String, nil
+}
+
 // DeleteImage removes the image from an aircraft
 func (s *AircraftStore) DeleteImage(ctx context.Context, id string, userID string) error {
 	query := `
