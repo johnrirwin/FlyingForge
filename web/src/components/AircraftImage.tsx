@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { fetchPublicAircraftImage } from '../socialApi';
 
 interface AircraftImageProps {
@@ -23,10 +23,10 @@ export function AircraftImage({
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const blobUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
-    let blobUrl: string | null = null;
 
     const loadImage = async () => {
       if (!hasImage) {
@@ -38,15 +38,19 @@ export function AircraftImage({
       setError(false);
 
       try {
-        blobUrl = await fetchPublicAircraftImage(aircraftId);
+        const blobUrl = await fetchPublicAircraftImage(aircraftId);
         
         if (isMounted) {
           if (blobUrl) {
+            blobUrlRef.current = blobUrl;
             setImageSrc(blobUrl);
           } else {
             setError(true);
           }
           setLoading(false);
+        } else if (blobUrl) {
+          // If component unmounted while loading, revoke the blob URL immediately
+          URL.revokeObjectURL(blobUrl);
         }
       } catch {
         if (isMounted) {
@@ -61,8 +65,9 @@ export function AircraftImage({
     // Cleanup: revoke blob URL when component unmounts or aircraftId changes
     return () => {
       isMounted = false;
-      if (blobUrl) {
-        URL.revokeObjectURL(blobUrl);
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
       }
     };
   }, [aircraftId, hasImage]);

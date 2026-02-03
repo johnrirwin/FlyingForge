@@ -285,7 +285,7 @@ function AircraftCard({ aircraft, onClick }: { aircraft: AircraftPublic; onClick
           aircraftId={aircraft.id}
           aircraftName={aircraft.name}
           hasImage={aircraft.hasImage}
-          className="w-full h-full object-cover absolute inset-0"
+          className="w-full h-full object-cover"
           fallbackIcon={
             <svg className="w-12 h-12 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
