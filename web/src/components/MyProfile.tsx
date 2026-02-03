@@ -8,12 +8,16 @@ interface ProfileFormData {
   displayName: string;
 }
 
+interface PendingAvatar {
+  file: File;
+  previewUrl: string;
+}
+
 export function MyProfile() {
   const { updateUser } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [formData, setFormData] = useState<ProfileFormData>({
@@ -21,6 +25,7 @@ export function MyProfile() {
     displayName: '',
   });
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [pendingAvatar, setPendingAvatar] = useState<PendingAvatar | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -50,6 +55,16 @@ export function MyProfile() {
     setValidationError(error);
   };
 
+  // Check if there are unsaved changes
+  const hasChanges = () => {
+    if (pendingAvatar) return true;
+    if (!profile) return false;
+    return (
+      formData.callSign !== (profile.callSign || '') ||
+      formData.displayName !== (profile.displayName || '')
+    );
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -68,9 +83,31 @@ export function MyProfile() {
       setError(null);
       setSuccess(null);
       
+      // Upload avatar first if there's a pending one
+      if (pendingAvatar) {
+        const avatarResult = await uploadAvatar(pendingAvatar.file);
+        
+        // Update local state
+        setProfile(prev => prev ? {
+          ...prev,
+          avatarUrl: avatarResult.avatarUrl,
+          effectiveAvatarUrl: avatarResult.avatarUrl,
+        } : null);
+        
+        // Update auth context so sidebar updates
+        if (updateUser) {
+          updateUser({
+            avatarUrl: avatarResult.avatarUrl,
+          });
+        }
+        
+        // Revoke the preview URL to free memory
+        URL.revokeObjectURL(pendingAvatar.previewUrl);
+        setPendingAvatar(null);
+      }
+      
       // Omit fields when blank to avoid empty string UNIQUE constraint violations
       const params: UpdateProfileParams = {};
-      const trimmedCallSign = formData.callSign.trim();
       const trimmedDisplayName = formData.displayName.trim();
       
       if (trimmedCallSign) {
@@ -100,7 +137,7 @@ export function MyProfile() {
     }
   };
 
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -117,36 +154,26 @@ export function MyProfile() {
       return;
     }
 
-    try {
-      setIsUploading(true);
-      setError(null);
-      
-      const result = await uploadAvatar(file);
-      
-      // Update local state
-      setProfile(prev => prev ? {
-        ...prev,
-        avatarUrl: result.avatarUrl,
-        effectiveAvatarUrl: result.avatarUrl,
-      } : null);
-      
-      // Update auth context so sidebar updates
-      if (updateUser) {
-        updateUser({
-          avatarUrl: result.avatarUrl,
-        });
-      }
-      
-      setSuccess('Avatar uploaded successfully!');
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to upload avatar');
-    } finally {
-      setIsUploading(false);
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+    // Revoke old preview URL if exists
+    if (pendingAvatar) {
+      URL.revokeObjectURL(pendingAvatar.previewUrl);
+    }
+
+    // Create preview URL for local display
+    const previewUrl = URL.createObjectURL(file);
+    setPendingAvatar({ file, previewUrl });
+    setError(null);
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleCancelAvatar = () => {
+    if (pendingAvatar) {
+      URL.revokeObjectURL(pendingAvatar.previewUrl);
+      setPendingAvatar(null);
     }
   };
 
@@ -158,7 +185,7 @@ export function MyProfile() {
     );
   }
 
-  const effectiveAvatarUrl = profile?.effectiveAvatarUrl || profile?.avatarUrl;
+  const effectiveAvatarUrl = pendingAvatar?.previewUrl || profile?.effectiveAvatarUrl || profile?.avatarUrl;
 
   return (
     <div className="max-w-2xl mx-auto p-6">
@@ -183,12 +210,12 @@ export function MyProfile() {
           
           <div className="flex items-start gap-6">
             {/* Current Avatar */}
-            <div className="flex-shrink-0">
+            <div className="flex-shrink-0 relative">
               {effectiveAvatarUrl ? (
                 <img
                   src={effectiveAvatarUrl}
                   alt="Profile"
-                  className="w-24 h-24 rounded-full object-cover border-2 border-slate-600"
+                  className={`w-24 h-24 rounded-full object-cover border-2 ${pendingAvatar ? 'border-primary-500' : 'border-slate-600'}`}
                 />
               ) : (
                 <div className="w-24 h-24 rounded-full bg-slate-700 flex items-center justify-center border-2 border-slate-600">
@@ -196,6 +223,11 @@ export function MyProfile() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
                 </div>
+              )}
+              {pendingAvatar && (
+                <span className="absolute -top-1 -right-1 px-1.5 py-0.5 bg-primary-500 text-white text-xs rounded-full">
+                  New
+                </span>
               )}
             </div>
 
@@ -205,19 +237,30 @@ export function MyProfile() {
                 ref={fileInputRef}
                 type="file"
                 accept="image/jpeg,image/jpg,image/png,image/webp"
-                onChange={handleAvatarUpload}
+                onChange={handleAvatarSelect}
                 className="hidden"
               />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isUploading ? 'Uploading...' : 'Change Avatar'}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors"
+                >
+                  {pendingAvatar ? 'Choose Different' : 'Change Avatar'}
+                </button>
+                {pendingAvatar && (
+                  <button
+                    type="button"
+                    onClick={handleCancelAvatar}
+                    className="px-3 py-2 text-slate-400 hover:text-white text-sm transition-colors"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
               <p className="text-xs text-slate-500">
                 JPEG, PNG, or WebP. Max 2MB.
+                {pendingAvatar && <span className="text-primary-400 ml-1">Click "Save Changes" to apply.</span>}
               </p>
             </div>
           </div>
@@ -283,10 +326,15 @@ export function MyProfile() {
         </div>
 
         {/* Submit Button */}
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-3">
+          {hasChanges() && (
+            <span className="self-center text-sm text-slate-400">
+              You have unsaved changes
+            </span>
+          )}
           <button
             type="submit"
-            disabled={isSaving || !!validationError}
+            disabled={isSaving || !!validationError || !hasChanges()}
             className="px-6 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSaving ? 'Saving...' : 'Save Changes'}

@@ -32,11 +32,12 @@ type Server struct {
 	userStore      *database.UserStore
 	aircraftStore  *database.AircraftStore
 	orderStore     *database.OrderStore
+	fcConfigStore  *database.FCConfigStore
 	logger         *logging.Logger
 	server         *http.Server
 }
 
-func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, radioSvc *radio.Service, batterySvc *battery.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, userStore *database.UserStore, aircraftStore *database.AircraftStore, orderStore *database.OrderStore, logger *logging.Logger) *Server {
+func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, radioSvc *radio.Service, batterySvc *battery.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, userStore *database.UserStore, aircraftStore *database.AircraftStore, orderStore *database.OrderStore, fcConfigStore *database.FCConfigStore, logger *logging.Logger) *Server {
 	return &Server{
 		agg:            agg,
 		equipmentSvc:   equipmentSvc,
@@ -49,6 +50,7 @@ func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventoryS
 		userStore:      userStore,
 		aircraftStore:  aircraftStore,
 		orderStore:     orderStore,
+		fcConfigStore:  fcConfigStore,
 		logger:         logger,
 	}
 }
@@ -111,6 +113,12 @@ func (s *Server) Start(addr string) error {
 	if s.orderStore != nil && s.authMiddleware != nil {
 		orderAPI := NewOrderAPI(s.orderStore, s.authMiddleware, s.logger)
 		orderAPI.RegisterRoutes(mux, s.corsMiddleware)
+	}
+
+	// FC Config routes (flight controller tuning)
+	if s.fcConfigStore != nil && s.authMiddleware != nil {
+		fcConfigAPI := NewFCConfigAPI(s.fcConfigStore, s.authMiddleware, s.logger)
+		fcConfigAPI.RegisterRoutes(mux, s.corsMiddleware)
 	}
 
 	// Health check

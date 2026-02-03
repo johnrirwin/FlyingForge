@@ -41,6 +41,7 @@ type App struct {
 	userStore      *database.UserStore
 	aircraftStore  *database.AircraftStore
 	orderStore     *database.OrderStore
+	fcConfigStore  *database.FCConfigStore
 }
 
 // New creates and initializes a new App instance
@@ -204,12 +205,15 @@ func (a *App) initDatabaseServices() {
 	// Initialize order store
 	a.orderStore = database.NewOrderStore(db)
 
+	// Initialize FC config store
+	a.fcConfigStore = database.NewFCConfigStore(db)
+
 	a.Logger.Info("Authentication service initialized")
 }
 
 func (a *App) initServers() {
-	// Initialize HTTP server with auth, aircraft, radio, battery, orders, and profile/pilot support
-	a.HTTPServer = httpapi.New(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.AircraftSvc, a.RadioSvc, a.BatterySvc, a.AuthService, a.AuthMiddleware, a.userStore, a.aircraftStore, a.orderStore, a.Logger)
+	// Initialize HTTP server with auth, aircraft, radio, battery, orders, fc-config, and profile/pilot support
+	a.HTTPServer = httpapi.New(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.AircraftSvc, a.RadioSvc, a.BatterySvc, a.AuthService, a.AuthMiddleware, a.userStore, a.aircraftStore, a.orderStore, a.fcConfigStore, a.Logger)
 
 	// Initialize MCP server
 	mcpHandler := mcp.NewHandler(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.Logger)
