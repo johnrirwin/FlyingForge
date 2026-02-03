@@ -296,8 +296,8 @@ func (s *FCConfigStore) SaveTuningSnapshot(ctx context.Context, snapshot *models
 		INSERT INTO aircraft_tuning_snapshots (
 			aircraft_id, flight_controller_id, flight_controller_config_id,
 			firmware_name, firmware_version, board_target, board_name,
-			tuning_data, parse_status, parse_warnings, notes
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			tuning_data, parse_status, parse_warnings, notes, diff_backup
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		RETURNING id, created_at, updated_at
 	`
 
@@ -313,6 +313,7 @@ func (s *FCConfigStore) SaveTuningSnapshot(ctx context.Context, snapshot *models
 		snapshot.ParseStatus,
 		parseWarnings,
 		nullString(snapshot.Notes),
+		nullString(snapshot.DiffBackup),
 	).Scan(&snapshot.ID, &snapshot.CreatedAt, &snapshot.UpdatedAt)
 
 	if err != nil {
@@ -328,7 +329,7 @@ func (s *FCConfigStore) GetLatestTuningSnapshot(ctx context.Context, aircraftID 
 	query := `
 		SELECT ts.id, ts.aircraft_id, ts.flight_controller_id, ts.flight_controller_config_id,
 			   ts.firmware_name, ts.firmware_version, ts.board_target, ts.board_name,
-			   ts.tuning_data, ts.parse_status, ts.parse_warnings, ts.notes,
+			   ts.tuning_data, ts.parse_status, ts.parse_warnings, ts.notes, ts.diff_backup,
 			   ts.created_at, ts.updated_at
 		FROM aircraft_tuning_snapshots ts
 		INNER JOIN aircraft a ON a.id = ts.aircraft_id
@@ -338,7 +339,7 @@ func (s *FCConfigStore) GetLatestTuningSnapshot(ctx context.Context, aircraftID 
 	`
 
 	snapshot := &models.AircraftTuningSnapshot{}
-	var fcID, configID, firmwareVersion, boardTarget, boardName, notes sql.NullString
+	var fcID, configID, firmwareVersion, boardTarget, boardName, notes, diffBackup sql.NullString
 	var tuningData, parseWarnings []byte
 
 	err := s.db.QueryRowContext(ctx, query, aircraftID, userID).Scan(
@@ -354,6 +355,7 @@ func (s *FCConfigStore) GetLatestTuningSnapshot(ctx context.Context, aircraftID 
 		&snapshot.ParseStatus,
 		&parseWarnings,
 		&notes,
+		&diffBackup,
 		&snapshot.CreatedAt,
 		&snapshot.UpdatedAt,
 	)
@@ -371,6 +373,7 @@ func (s *FCConfigStore) GetLatestTuningSnapshot(ctx context.Context, aircraftID 
 	snapshot.BoardTarget = boardTarget.String
 	snapshot.BoardName = boardName.String
 	snapshot.Notes = notes.String
+	snapshot.DiffBackup = diffBackup.String
 
 	snapshot.TuningData = tuningData
 

@@ -317,6 +317,8 @@ func (api *FCConfigAPI) getAircraftTuning(w http.ResponseWriter, r *http.Request
 		SnapshotDate:    snapshot.CreatedAt,
 		ParseStatus:     snapshot.ParseStatus,
 		ParseWarnings:   snapshot.ParseWarnings,
+		HasDiffBackup:   snapshot.DiffBackup != "",
+		DiffBackup:      snapshot.DiffBackup,
 	})
 }
 
@@ -346,6 +348,7 @@ func (api *FCConfigAPI) createTuningSnapshot(w http.ResponseWriter, r *http.Requ
 
 	var req struct {
 		RawCLIDump string `json:"rawCliDump"`
+		DiffBackup string `json:"diffBackup"`
 		Notes      string `json:"notes"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -375,6 +378,7 @@ func (api *FCConfigAPI) createTuningSnapshot(w http.ResponseWriter, r *http.Requ
 		TuningData:      tuningData,
 		ParseStatus:     result.ParseStatus,
 		ParseWarnings:   result.ParseWarnings,
+		DiffBackup:      req.DiffBackup,
 		Notes:           req.Notes,
 	}
 

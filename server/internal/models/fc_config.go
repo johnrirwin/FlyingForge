@@ -263,6 +263,9 @@ type AircraftTuningSnapshot struct {
 	// Parsed tuning data (denormalized from config for quick access)
 	TuningData json.RawMessage `json:"tuningData"` // Serialized ParsedTuning
 
+	// Diff backup for restore purposes (output of 'diff all' command)
+	DiffBackup string `json:"diffBackup,omitempty"`
+
 	// Parse status
 	ParseStatus   ParseStatus `json:"parseStatus"`
 	ParseWarnings []string    `json:"parseWarnings,omitempty"`
@@ -318,4 +321,6 @@ type AircraftTuningResponse struct {
 	SnapshotDate    time.Time        `json:"snapshotDate,omitempty"`
 	ParseStatus     ParseStatus      `json:"parseStatus,omitempty"`
 	ParseWarnings   []string         `json:"parseWarnings,omitempty"`
+	HasDiffBackup   bool             `json:"hasDiffBackup"`
+	DiffBackup      string           `json:"diffBackup,omitempty"`
 }

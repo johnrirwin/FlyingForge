@@ -260,10 +260,13 @@ export interface AircraftTuningResponse {
   snapshotDate?: string;
   parseStatus?: ParseStatus;
   parseWarnings?: string[];
+  hasDiffBackup?: boolean;
+  diffBackup?: string;
 }
 
 export interface CreateTuningSnapshotParams {
   rawCliDump: string;
+  diffBackup?: string;
   notes?: string;
 }
 

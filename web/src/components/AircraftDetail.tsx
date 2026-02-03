@@ -48,6 +48,7 @@ export function AircraftDetail({
   const [isLoadingTuning, setIsLoadingTuning] = useState(false);
   const [showCliUpload, setShowCliUpload] = useState(false);
   const [cliDump, setCliDump] = useState('');
+  const [diffBackup, setDiffBackup] = useState('');
   const [isUploadingTuning, setIsUploadingTuning] = useState(false);
 
   const { aircraft, components } = details;
@@ -92,8 +93,12 @@ export function AircraftDetail({
     if (!cliDump.trim()) return;
     setIsUploadingTuning(true);
     try {
-      await createTuningSnapshot(aircraft.id, { rawCliDump: cliDump });
+      await createTuningSnapshot(aircraft.id, { 
+        rawCliDump: cliDump,
+        diffBackup: diffBackup.trim() || undefined,
+      });
       setCliDump('');
+      setDiffBackup('');
       setShowCliUpload(false);
       // Reload tuning data
       const data = await getAircraftTuning(aircraft.id);
@@ -516,12 +521,15 @@ export function AircraftDetail({
 
           {viewMode === 'tuning' && (
             <TuningTabContent
+              aircraftName={aircraft.name}
               tuningData={tuningData}
               isLoading={isLoadingTuning}
               showCliUpload={showCliUpload}
               setShowCliUpload={setShowCliUpload}
               cliDump={cliDump}
               setCliDump={setCliDump}
+              diffBackup={diffBackup}
+              setDiffBackup={setDiffBackup}
               isUploading={isUploadingTuning}
               onUpload={handleUploadTuning}
             />
@@ -585,26 +593,49 @@ function QuickAddForm({ category, onSubmit, isSubmitting }: QuickAddFormProps) {
 
 // Tuning Tab Content
 interface TuningTabContentProps {
+  aircraftName: string;
   tuningData: AircraftTuningResponse | null;
   isLoading: boolean;
   showCliUpload: boolean;
   setShowCliUpload: (show: boolean) => void;
   cliDump: string;
   setCliDump: (dump: string) => void;
+  diffBackup: string;
+  setDiffBackup: (backup: string) => void;
   isUploading: boolean;
   onUpload: () => void;
 }
 
 function TuningTabContent({
+  aircraftName,
   tuningData,
   isLoading,
   showCliUpload,
   setShowCliUpload,
   cliDump,
   setCliDump,
+  diffBackup,
+  setDiffBackup,
   isUploading,
   onUpload,
 }: TuningTabContentProps) {
+  const handleDownloadBackup = () => {
+    if (!tuningData?.diffBackup) return;
+    const blob = new Blob([tuningData.diffBackup], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    // Build filename: aircraft-name_board-name_YYYY-MM-DD.txt
+    const safeName = aircraftName.replace(/[^a-zA-Z0-9-_]/g, '-').toLowerCase();
+    const board = tuningData.boardName?.replace(/[^a-zA-Z0-9-_]/g, '-').toLowerCase() || 'unknown';
+    const date = new Date().toISOString().split('T')[0];
+    a.download = `${safeName}_${board}_${date}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -625,19 +656,32 @@ function TuningTabContent({
             Cancel
           </button>
         </div>
-        <div className="bg-slate-700/50 border border-slate-700 rounded-lg p-4">
-          <p className="text-sm text-slate-300 mb-3">
-            Paste your Betaflight CLI dump below. You can get this by connecting to your FC in Betaflight Configurator
-            and running <code className="bg-slate-600 px-1 rounded">diff all</code> in the CLI tab.
-          </p>
-          <textarea
-            value={cliDump}
-            onChange={(e) => setCliDump(e.target.value)}
-            placeholder="Paste your CLI dump here..."
-            rows={12}
-            className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white text-sm font-mono placeholder-slate-400 focus:outline-none focus:border-primary-500"
-          />
-          <div className="mt-4 flex justify-end gap-3">
+        <div className="bg-slate-700/50 border border-slate-700 rounded-lg p-4 space-y-4">
+          <div>
+            <p className="text-sm text-slate-300 mb-2">
+              <strong>Step 1:</strong> Paste your full CLI dump below. Run <code className="bg-slate-600 px-1 rounded">dump</code> in the CLI tab to get this.
+            </p>
+            <textarea
+              value={cliDump}
+              onChange={(e) => setCliDump(e.target.value)}
+              placeholder="Paste your CLI dump here..."
+              rows={8}
+              className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white text-sm font-mono placeholder-slate-400 focus:outline-none focus:border-primary-500"
+            />
+          </div>
+          <div>
+            <p className="text-sm text-slate-300 mb-2">
+              <strong>Step 2 (Optional):</strong> Paste your diff backup below for easy restore. Run <code className="bg-slate-600 px-1 rounded">diff all</code> in the CLI tab.
+            </p>
+            <textarea
+              value={diffBackup}
+              onChange={(e) => setDiffBackup(e.target.value)}
+              placeholder="Paste your diff all output here (optional)..."
+              rows={6}
+              className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white text-sm font-mono placeholder-slate-400 focus:outline-none focus:border-primary-500"
+            />
+          </div>
+          <div className="flex justify-end gap-3">
             <button
               onClick={() => setShowCliUpload(false)}
               className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
@@ -702,12 +746,25 @@ function TuningTabContent({
             </div>
           )}
         </div>
-        <button
-          onClick={() => setShowCliUpload(true)}
-          className="text-sm text-primary-400 hover:text-primary-300 transition-colors"
-        >
-          Update Tuning
-        </button>
+        <div className="flex items-center gap-3">
+          {tuningData.hasDiffBackup && (
+            <button
+              onClick={handleDownloadBackup}
+              className="text-sm text-green-400 hover:text-green-300 transition-colors flex items-center gap-1"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Download Backup
+            </button>
+          )}
+          <button
+            onClick={() => setShowCliUpload(true)}
+            className="text-sm text-primary-400 hover:text-primary-300 transition-colors"
+          >
+            Update Tuning
+          </button>
+        </div>
       </div>
 
       {parseStatus === 'partial' && (

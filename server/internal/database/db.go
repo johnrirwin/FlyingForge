@@ -103,6 +103,7 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationCustomAvatarText,
 		migrationFCConfigs,
 		migrationAircraftTuningSnapshots,
+		migrationTuningSnapshotDiffBackup,
 	}
 
 	for i, migration := range migrations {
@@ -509,4 +510,9 @@ CREATE INDEX IF NOT EXISTS idx_tuning_snapshots_created ON aircraft_tuning_snaps
 
 -- Add unique constraint to ensure one active snapshot per aircraft (most recent)
 -- Note: This is soft enforcement - application logic handles "active" concept
+`
+
+const migrationTuningSnapshotDiffBackup = `
+-- Add diff_backup column to store 'diff all' output for restore purposes
+ALTER TABLE aircraft_tuning_snapshots ADD COLUMN IF NOT EXISTS diff_backup TEXT;
 `
