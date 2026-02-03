@@ -82,7 +82,9 @@ export function AircraftImage({
   if (loading) {
     return (
       <div className={`flex items-center justify-center bg-slate-700 ${className}`}>
-        <div className="animate-pulse text-slate-500">Loading...</div>
+        <div className="animate-pulse text-slate-500" role="status" aria-live="polite">
+          Loading...
+        </div>
       </div>
     );
   }
