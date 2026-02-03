@@ -62,16 +62,7 @@ export function PilotSearch({ onSelectPilot }: PilotSearchProps) {
   };
 
   const getDisplayName = (pilot: PilotSearchResult) => {
-    if (pilot.callSign) return pilot.callSign;
-    if (pilot.displayName) return pilot.displayName;
-    if (pilot.googleName) return pilot.googleName;
-    return 'Unknown Pilot';
-  };
-
-  const getSecondaryInfo = (pilot: PilotSearchResult) => {
-    if (pilot.callSign && pilot.displayName) return pilot.displayName;
-    if (pilot.callSign && pilot.googleName) return pilot.googleName;
-    return null;
+    return pilot.callSign || 'Unknown Pilot';
   };
 
   return (
@@ -79,7 +70,7 @@ export function PilotSearch({ onSelectPilot }: PilotSearchProps) {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-white mb-2">Pilot Directory</h1>
         <p className="text-slate-400">
-          Search for other pilots by their callsign or name to view their profiles and aircraft.
+          Search for other pilots by their callsign to view their profiles and aircraft.
         </p>
       </div>
 
@@ -91,7 +82,7 @@ export function PilotSearch({ onSelectPilot }: PilotSearchProps) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search by callsign or name..."
+            placeholder="Search by callsign..."
             className="w-full px-4 py-3 pl-12 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-primary-500"
           />
           <svg
@@ -187,9 +178,9 @@ export function PilotSearch({ onSelectPilot }: PilotSearchProps) {
                 <div className="font-medium text-white truncate">
                   {getDisplayName(pilot)}
                 </div>
-                {getSecondaryInfo(pilot) && (
+                {pilot.displayName && (
                   <div className="text-sm text-slate-400 truncate">
-                    {getSecondaryInfo(pilot)}
+                    {pilot.displayName}
                   </div>
                 )}
               </div>

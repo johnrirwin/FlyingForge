@@ -1,12 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { getProfile, updateProfile, uploadAvatar, validateCallSign } from '../profileApi';
-import type { UserProfile, UpdateProfileParams, AvatarType } from '../authTypes';
+import type { UserProfile, UpdateProfileParams } from '../authTypes';
 
 interface ProfileFormData {
   callSign: string;
   displayName: string;
-  avatarType: AvatarType;
 }
 
 export function MyProfile() {
@@ -20,7 +19,6 @@ export function MyProfile() {
   const [formData, setFormData] = useState<ProfileFormData>({
     callSign: '',
     displayName: '',
-    avatarType: 'google',
   });
   const [validationError, setValidationError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -38,7 +36,6 @@ export function MyProfile() {
       setFormData({
         callSign: data.callSign || '',
         displayName: data.displayName || '',
-        avatarType: data.avatarType || 'google',
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load profile');
@@ -56,11 +53,14 @@ export function MyProfile() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate before submit
-    const callSignError = validateCallSign(formData.callSign);
-    if (callSignError) {
-      setValidationError(callSignError);
-      return;
+    // Validate before submit - only validate if callsign is not empty
+    const trimmedCallSign = formData.callSign.trim();
+    if (trimmedCallSign) {
+      const callSignError = validateCallSign(trimmedCallSign);
+      if (callSignError) {
+        setValidationError(callSignError);
+        return;
+      }
     }
 
     try {
@@ -68,10 +68,10 @@ export function MyProfile() {
       setError(null);
       setSuccess(null);
       
+      // Send empty strings to clear values (not undefined which skips the field)
       const params: UpdateProfileParams = {
-        callSign: formData.callSign.trim() || undefined,
-        displayName: formData.displayName.trim() || undefined,
-        avatarType: formData.avatarType,
+        callSign: formData.callSign.trim(),
+        displayName: formData.displayName.trim(),
       };
       
       const updatedProfile = await updateProfile(params);
@@ -82,7 +82,6 @@ export function MyProfile() {
         updateUser({
           displayName: updatedProfile.displayName,
           callSign: updatedProfile.callSign,
-          avatarType: updatedProfile.avatarType,
         });
       }
       
@@ -121,12 +120,16 @@ export function MyProfile() {
       // Update local state
       setProfile(prev => prev ? {
         ...prev,
-        customAvatarUrl: result.customAvatarUrl,
-        avatarType: result.avatarType,
-        effectiveAvatarUrl: result.effectiveAvatarUrl,
+        avatarUrl: result.avatarUrl,
+        effectiveAvatarUrl: result.avatarUrl,
       } : null);
       
-      setFormData(prev => ({ ...prev, avatarType: 'custom' }));
+      // Update auth context so sidebar updates
+      if (updateUser) {
+        updateUser({
+          avatarUrl: result.avatarUrl,
+        });
+      }
       
       setSuccess('Avatar uploaded successfully!');
       setTimeout(() => setSuccess(null), 3000);
@@ -149,9 +152,7 @@ export function MyProfile() {
     );
   }
 
-  const effectiveAvatarUrl = profile?.effectiveAvatarUrl;
-  const googleAvatarUrl = profile?.googleAvatarUrl;
-  const customAvatarUrl = profile?.customAvatarUrl;
+  const effectiveAvatarUrl = profile?.effectiveAvatarUrl || profile?.avatarUrl;
 
   return (
     <div className="max-w-2xl mx-auto p-6">
@@ -192,64 +193,26 @@ export function MyProfile() {
               )}
             </div>
 
-            {/* Avatar Options */}
-            <div className="flex-1 space-y-4">
-              {/* Avatar Type Toggle */}
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-slate-400">Avatar Source</label>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="avatarType"
-                      value="google"
-                      checked={formData.avatarType === 'google'}
-                      onChange={() => setFormData(prev => ({ ...prev, avatarType: 'google' }))}
-                      className="text-primary-500 focus:ring-primary-500"
-                      disabled={!googleAvatarUrl}
-                    />
-                    <span className={`text-sm ${!googleAvatarUrl ? 'text-slate-600' : 'text-slate-300'}`}>
-                      Google Avatar
-                    </span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="avatarType"
-                      value="custom"
-                      checked={formData.avatarType === 'custom'}
-                      onChange={() => setFormData(prev => ({ ...prev, avatarType: 'custom' }))}
-                      className="text-primary-500 focus:ring-primary-500"
-                      disabled={!customAvatarUrl}
-                    />
-                    <span className={`text-sm ${!customAvatarUrl ? 'text-slate-600' : 'text-slate-300'}`}>
-                      Custom Avatar
-                    </span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Upload Button */}
-              <div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/jpg,image/png,image/webp"
-                  onChange={handleAvatarUpload}
-                  className="hidden"
-                />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isUploading}
-                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isUploading ? 'Uploading...' : 'Upload Custom Avatar'}
-                </button>
-                <p className="mt-1 text-xs text-slate-500">
-                  JPEG, PNG, or WebP. Max 2MB.
-                </p>
-              </div>
+            {/* Upload Button */}
+            <div className="flex-1 space-y-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,image/webp"
+                onChange={handleAvatarUpload}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isUploading ? 'Uploading...' : 'Change Avatar'}
+              </button>
+              <p className="text-xs text-slate-500">
+                JPEG, PNG, or WebP. Max 2MB.
+              </p>
             </div>
           </div>
         </div>
@@ -295,7 +258,7 @@ export function MyProfile() {
               className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
             />
             <p className="mt-1 text-xs text-slate-500">
-              Optional. Shown alongside your callsign.
+              Optional. If set, will be visible and searchable on the social section.
             </p>
           </div>
 

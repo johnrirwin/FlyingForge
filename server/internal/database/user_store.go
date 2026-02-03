@@ -29,8 +29,8 @@ func (s *UserStore) Create(ctx context.Context, params models.CreateUserParams) 
 	}
 
 	query := `
-		INSERT INTO users (email, password_hash, display_name, avatar_url, status, google_name, google_avatar_url, avatar_type)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO users (email, password_hash, display_name, call_sign, avatar_url, status, google_name, google_avatar_url, avatar_type)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id, email, display_name, avatar_url, status, created_at, updated_at, last_login_at,
 		          call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url
 	`
@@ -48,7 +48,7 @@ func (s *UserStore) Create(ctx context.Context, params models.CreateUserParams) 
 	var lastLoginAt sql.NullTime
 
 	err := s.db.QueryRowContext(ctx, query,
-		email, passwordHash, params.DisplayName, nullString(params.AvatarURL), status,
+		email, passwordHash, params.DisplayName, nullString(params.CallSign), nullString(params.AvatarURL), status,
 		nullString(params.GoogleName), nullString(params.GoogleAvatarURL), string(avatarType),
 	).Scan(
 		&user.ID, &user.Email, &user.DisplayName, &avatarURL,
@@ -192,7 +192,8 @@ func (s *UserStore) Update(ctx context.Context, id string, params models.UpdateU
 		UPDATE users SET %s
 		WHERE id = $%d
 		RETURNING id, email, password_hash, display_name, avatar_url, status, created_at, updated_at, last_login_at,
-		          call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url
+		          call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url,
+		          profile_visibility, show_aircraft, allow_search
 	`, strings.Join(sets, ", "), argIdx)
 
 	return s.scanUser(s.db.QueryRowContext(ctx, query, args...))
@@ -224,8 +225,8 @@ func (s *UserStore) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// SearchPilots searches for pilots by callsign or name
-// Only returns users who have allow_search = true
+// SearchPilots searches for pilots by callsign or display name
+// Only returns users who have a callsign set and allow_search = true
 func (s *UserStore) SearchPilots(ctx context.Context, params models.PilotSearchParams) ([]models.PilotSearchResult, error) {
 	query := params.Query
 	if query == "" {
@@ -239,19 +240,17 @@ func (s *UserStore) SearchPilots(ctx context.Context, params models.PilotSearchP
 
 	searchTerm := "%" + strings.ToLower(strings.TrimSpace(query)) + "%"
 
+	// Search by callsign or display name (if set)
+	// Require callsign to be set for social visibility
 	sqlQuery := `
 		SELECT id, call_sign, display_name, google_name, avatar_url, google_avatar_url, avatar_type, custom_avatar_url
 		FROM users
 		WHERE status = 'active' 
+		  AND call_sign IS NOT NULL 
+		  AND call_sign != ''
 		  AND (allow_search IS NULL OR allow_search = true)
-		  AND (
-			LOWER(call_sign) LIKE $1 OR
-			LOWER(display_name) LIKE $1 OR
-			LOWER(google_name) LIKE $1
-		)
-		ORDER BY 
-			CASE WHEN LOWER(call_sign) LIKE $1 THEN 0 ELSE 1 END,
-			call_sign, display_name
+		  AND (LOWER(call_sign) LIKE $1 OR LOWER(display_name) LIKE $1)
+		ORDER BY call_sign
 		LIMIT $2
 	`
 
@@ -790,19 +789,20 @@ func (s *UserStore) GetFollowers(ctx context.Context, userID string, limit, offs
 		offset = 0
 	}
 
-	// Get total count
-	countQuery := `SELECT COUNT(*) FROM follows WHERE followed_user_id = $1`
+	// Get total count - only count users with callsigns
+	countQuery := `SELECT COUNT(*) FROM follows f JOIN users u ON u.id = f.follower_user_id WHERE f.followed_user_id = $1 AND u.call_sign IS NOT NULL AND u.call_sign != ''`
 	var totalCount int
 	if err := s.db.QueryRowContext(ctx, countQuery, userID).Scan(&totalCount); err != nil {
 		return nil, err
 	}
 
-	// Get follower user details
+	// Get follower user details - only users with callsigns for privacy
 	query := `
 		SELECT u.id, u.call_sign, u.display_name, u.avatar_url, u.google_avatar_url, u.avatar_type, u.custom_avatar_url
 		FROM follows f
 		JOIN users u ON u.id = f.follower_user_id
 		WHERE f.followed_user_id = $1
+		  AND u.call_sign IS NOT NULL AND u.call_sign != ''
 		ORDER BY f.created_at DESC
 		LIMIT $2 OFFSET $3
 	`
@@ -859,19 +859,20 @@ func (s *UserStore) GetFollowing(ctx context.Context, userID string, limit, offs
 		offset = 0
 	}
 
-	// Get total count
-	countQuery := `SELECT COUNT(*) FROM follows WHERE follower_user_id = $1`
+	// Get total count - only count users with callsigns
+	countQuery := `SELECT COUNT(*) FROM follows f JOIN users u ON u.id = f.followed_user_id WHERE f.follower_user_id = $1 AND u.call_sign IS NOT NULL AND u.call_sign != ''`
 	var totalCount int
 	if err := s.db.QueryRowContext(ctx, countQuery, userID).Scan(&totalCount); err != nil {
 		return nil, err
 	}
 
-	// Get following user details
+	// Get following user details - only users with callsigns for privacy
 	query := `
 		SELECT u.id, u.call_sign, u.display_name, u.avatar_url, u.google_avatar_url, u.avatar_type, u.custom_avatar_url
 		FROM follows f
 		JOIN users u ON u.id = f.followed_user_id
 		WHERE f.follower_user_id = $1
+		  AND u.call_sign IS NOT NULL AND u.call_sign != ''
 		ORDER BY f.created_at DESC
 		LIMIT $2 OFFSET $3
 	`

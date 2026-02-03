@@ -72,17 +72,7 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
 
   const getDisplayName = () => {
     if (!profile) return 'Unknown Pilot';
-    if (profile.callSign) return profile.callSign;
-    if (profile.displayName) return profile.displayName;
-    if (profile.googleName) return profile.googleName;
-    return 'Unknown Pilot';
-  };
-
-  const getSecondaryName = () => {
-    if (!profile) return null;
-    if (profile.callSign && profile.displayName) return profile.displayName;
-    if (profile.callSign && profile.googleName) return profile.googleName;
-    return null;
+    return profile.callSign || 'Unknown Pilot';
   };
 
   if (isLoading) {
@@ -170,8 +160,8 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
                 </span>
               )}
             </div>
-            {getSecondaryName() && (
-              <p className="text-slate-400">{getSecondaryName()}</p>
+            {profile.displayName && (
+              <p className="text-slate-400 mt-1">{profile.displayName}</p>
             )}
             <div className="flex items-center gap-4 mt-2 text-sm">
               <button 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, Sidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, Homepage, GettingStarted, RadioSection, BatterySection, MyProfile, SocialPage, PilotProfile } from './components';
+import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, Sidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, Homepage, GettingStarted, RadioSection, BatterySection, MyProfile, SocialPage, PilotProfile, OrdersPage } from './components';
 import { LoginPage } from './components/LoginPage';
 import { SignupPage } from './components/SignupPage';
 import { getItems, getSources, refreshFeeds } from './api';
@@ -24,6 +24,7 @@ const pathToSection: Record<string, AppSection> = {
   '/shop': 'equipment',
   '/inventory': 'inventory',
   '/aircraft': 'aircraft',
+  '/orders': 'orders',
   '/radio': 'radio',
   '/batteries': 'batteries',
   '/social': 'social',
@@ -38,6 +39,7 @@ const sectionToPath: Record<AppSection, string> = {
   'equipment': '/shop',
   'inventory': '/inventory',
   'aircraft': '/aircraft',
+  'orders': '/orders',
   'radio': '/radio',
   'batteries': '/batteries',
   'social': '/social',
@@ -514,22 +516,13 @@ function App() {
         {activeSection === 'home' && isAuthenticated && (
           <Dashboard
             recentAircraft={aircraftItems}
-            recentGear={inventoryItems}
             recentNews={items}
             sources={sources}
             isAircraftLoading={isAircraftLoading}
-            isGearLoading={isInventoryLoading}
             isNewsLoading={isLoading}
             onViewAllNews={() => navigate('/news')}
-            onAddAircraft={() => {
-              setEditingAircraft(null);
-              setShowAircraftForm(true);
-            }}
-            onAddGear={() => {
-              setSelectedEquipmentForInventory(null);
-              setEditingInventoryItem(null);
-              setShowAddInventoryModal(true);
-            }}
+            onViewAllAircraft={() => navigate('/aircraft')}
+            onViewAllOrders={() => navigate('/orders')}
             onSelectAircraft={handleSelectAircraft}
             onSelectNewsItem={setSelectedItem}
             onSelectPilot={(pilotId) => {
@@ -544,22 +537,13 @@ function App() {
         {activeSection === 'dashboard' && isAuthenticated && (
           <Dashboard
             recentAircraft={aircraftItems}
-            recentGear={inventoryItems}
             recentNews={items}
             sources={sources}
             isAircraftLoading={isAircraftLoading}
-            isGearLoading={isInventoryLoading}
             isNewsLoading={isLoading}
             onViewAllNews={() => navigate('/news')}
-            onAddAircraft={() => {
-              setEditingAircraft(null);
-              setShowAircraftForm(true);
-            }}
-            onAddGear={() => {
-              setSelectedEquipmentForInventory(null);
-              setEditingInventoryItem(null);
-              setShowAddInventoryModal(true);
-            }}
+            onViewAllAircraft={() => navigate('/aircraft')}
+            onViewAllOrders={() => navigate('/orders')}
             onSelectAircraft={handleSelectAircraft}
             onSelectNewsItem={setSelectedItem}
             onSelectPilot={(pilotId) => {
@@ -672,6 +656,11 @@ function App() {
               onDelete={handleDeleteAircraft}
             />
           </>
+        )}
+
+        {/* Orders Section */}
+        {activeSection === 'orders' && (
+          <OrdersPage />
         )}
 
         {/* Radio Section */}

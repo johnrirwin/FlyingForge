@@ -1,5 +1,6 @@
 import { useState, FormEvent } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { validateCallSign } from '../profileApi';
 
 interface SignupPageProps {
   onSwitchToLogin: () => void;
@@ -11,13 +12,15 @@ export function SignupPage({ onSwitchToLogin, onClose }: SignupPageProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [displayName, setDisplayName] = useState('');
+  const [callSign, setCallSign] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
+  const [callSignError, setCallSignError] = useState<string | null>(null);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     clearError();
     setLocalError(null);
+    setCallSignError(null);
 
     if (password !== confirmPassword) {
       setLocalError('Passwords do not match');
@@ -29,8 +32,21 @@ export function SignupPage({ onSwitchToLogin, onClose }: SignupPageProps) {
       return;
     }
 
+    // Validate callsign if provided
+    if (callSign.trim()) {
+      const validationError = validateCallSign(callSign);
+      if (validationError) {
+        setCallSignError(validationError);
+        return;
+      }
+    }
+
     try {
-      await signup({ email, password, displayName: displayName || undefined });
+      await signup({ 
+        email, 
+        password, 
+        callSign: callSign.trim() || undefined 
+      });
       onClose();
     } catch {
       // Error is handled by context
@@ -80,21 +96,6 @@ export function SignupPage({ onSwitchToLogin, onClose }: SignupPageProps) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="displayName" className="block text-sm font-medium text-gray-300 mb-1">
-              Display Name (optional)
-            </label>
-            <input
-              type="text"
-              id="displayName"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Your name"
-              disabled={isLoading}
-            />
-          </div>
-
-          <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">
               Email
             </label>
@@ -142,6 +143,31 @@ export function SignupPage({ onSwitchToLogin, onClose }: SignupPageProps) {
               required
               disabled={isLoading}
             />
+          </div>
+
+          <div>
+            <label htmlFor="callSign" className="block text-sm font-medium text-gray-300 mb-1">
+              Call Sign (optional)
+            </label>
+            <input
+              type="text"
+              id="callSign"
+              value={callSign}
+              onChange={(e) => {
+                setCallSign(e.target.value);
+                setCallSignError(null);
+              }}
+              className={`w-full px-3 py-2 bg-gray-700 border rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                callSignError ? 'border-red-500' : 'border-gray-600'
+              }`}
+              placeholder="Your pilot call sign"
+              disabled={isLoading}
+            />
+            {callSignError ? (
+              <p className="mt-1 text-xs text-red-400">{callSignError}</p>
+            ) : (
+              <p className="mt-1 text-xs text-gray-400">Required to appear in social features</p>
+            )}
           </div>
 
           <button

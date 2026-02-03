@@ -53,9 +53,6 @@ func (s *Service) SignupWithEmail(ctx context.Context, params models.SignupParam
 	if len(params.Password) < 8 {
 		return nil, &AuthError{Code: "invalid_input", Message: "password must be at least 8 characters"}
 	}
-	if params.DisplayName == "" {
-		params.DisplayName = strings.Split(email, "@")[0]
-	}
 
 	// Check if user exists
 	existing, err := s.userStore.GetByEmail(ctx, email)
@@ -76,7 +73,8 @@ func (s *Service) SignupWithEmail(ctx context.Context, params models.SignupParam
 	user, err := s.userStore.Create(ctx, models.CreateUserParams{
 		Email:       email,
 		Password:    string(passwordHash),
-		DisplayName: params.DisplayName,
+		DisplayName: strings.TrimSpace(params.DisplayName),
+		CallSign:    strings.TrimSpace(params.CallSign),
 		Status:      models.UserStatusActive,
 	})
 	if err != nil {
@@ -210,17 +208,14 @@ func (s *Service) LoginWithGoogle(ctx context.Context, params models.GoogleLogin
 				"googleSub": claims.Subject,
 			}))
 		} else {
-			// Create new user
-			displayName := claims.Name
-			if displayName == "" {
-				displayName = strings.Split(email, "@")[0]
-			}
-
+			// Create new user - don't auto-populate displayName for privacy
+			// Store Google info separately, user can choose to set displayName later
 			user, err = s.userStore.Create(ctx, models.CreateUserParams{
 				Email:       email,
-				DisplayName: displayName,
+				DisplayName: "", // Don't auto-populate from Google for privacy
 				AvatarURL:   claims.Picture,
 				Status:      models.UserStatusActive,
+				GoogleName:  claims.Name, // Store Google name separately
 			})
 			if err != nil {
 				return nil, fmt.Errorf("failed to create user: %w", err)

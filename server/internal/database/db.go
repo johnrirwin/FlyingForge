@@ -99,7 +99,8 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationUserProfiles,
 		migrationSocialSettings,
 		migrationFollows,
-		migrationRenameElrsToReceiver,
+		migrationOrders,
+		migrationCustomAvatarText,
 	}
 
 	for i, migration := range migrations {
@@ -417,16 +418,35 @@ CREATE INDEX IF NOT EXISTS idx_follows_followed ON follows(followed_user_id);
 CREATE INDEX IF NOT EXISTS idx_follows_created ON follows(created_at DESC);
 `
 
-// Migration to rename elrs table to receiver (for existing databases)
-const migrationRenameElrsToReceiver = `
--- Rename table if old name exists
-DO $$ 
-BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'aircraft_elrs_settings') 
-    AND NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'aircraft_receiver_settings') 
-    THEN
-        ALTER TABLE aircraft_elrs_settings RENAME TO aircraft_receiver_settings;
-        ALTER INDEX IF EXISTS idx_aircraft_elrs_aircraft RENAME TO idx_aircraft_receiver_aircraft;
-    END IF;
-END $$;
+// Migration for orders table
+const migrationOrders = `
+-- Create orders table for shipment tracking
+CREATE TABLE IF NOT EXISTS orders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    carrier VARCHAR(50) NOT NULL DEFAULT 'other',
+    tracking_number VARCHAR(100) NOT NULL,
+    label VARCHAR(255),
+    status VARCHAR(50) NOT NULL DEFAULT 'unknown',
+    status_details TEXT,
+    estimated_date TIMESTAMPTZ,
+    delivered_at TIMESTAMPTZ,
+    last_checked_at TIMESTAMPTZ,
+    archived BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for orders
+CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_archived ON orders(archived);
+`
+
+// Migration to change avatar_url columns from VARCHAR to TEXT for base64 images
+const migrationCustomAvatarText = `
+-- Change avatar_url and custom_avatar_url from VARCHAR(1024) to TEXT to allow base64-encoded images
+ALTER TABLE users ALTER COLUMN avatar_url TYPE TEXT;
+ALTER TABLE users ALTER COLUMN custom_avatar_url TYPE TEXT;
 `

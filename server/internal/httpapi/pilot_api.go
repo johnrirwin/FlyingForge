@@ -120,6 +120,14 @@ func (api *PilotAPI) handlePilotProfile(w http.ResponseWriter, r *http.Request) 
 
 	// Check profile visibility (owner always sees own profile)
 	isOwner := currentUserID == pilotID
+	
+	// Require callsign to be set for social visibility (privacy protection)
+	// Users without callsigns are not discoverable in social features
+	if !isOwner && (user.CallSign == "") {
+		api.writeError(w, http.StatusNotFound, "not_found", "pilot not found")
+		return
+	}
+	
 	if !isOwner && user.SocialSettings.ProfileVisibility == models.ProfileVisibilityPrivate {
 		api.writeError(w, http.StatusNotFound, "private_profile", "this profile is private")
 		return

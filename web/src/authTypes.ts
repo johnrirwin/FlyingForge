@@ -50,6 +50,7 @@ export interface SignupParams {
   email: string;
   password: string;
   displayName?: string;
+  callSign?: string;
 }
 
 export interface LoginParams {

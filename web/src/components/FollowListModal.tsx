@@ -39,9 +39,7 @@ export function FollowListModal({ userId, userName, type, onClose, onSelectPilot
   }, [loadList]);
 
   const getDisplayName = (pilot: PilotSummary) => {
-    if (pilot.callSign) return pilot.callSign;
-    if (pilot.displayName) return pilot.displayName;
-    return 'Unknown Pilot';
+    return pilot.callSign || 'Unknown Pilot';
   };
 
   const handlePilotClick = (pilotId: string) => {
@@ -141,7 +139,7 @@ export function FollowListModal({ userId, userName, type, onClose, onSelectPilot
                     <div className="font-medium text-white truncate">
                       {getDisplayName(pilot)}
                     </div>
-                    {pilot.callSign && pilot.displayName && (
+                    {pilot.displayName && (
                       <div className="text-sm text-slate-400 truncate">
                         {pilot.displayName}
                       </div>

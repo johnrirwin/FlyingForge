@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { searchPilots, getPilotProfile } from '../pilotApi';
 import { getFollowing, getFollowers } from '../socialApi';
+import { updateProfile, validateCallSign } from '../profileApi';
 import type { PilotSearchResult, PilotSummary, PilotProfile } from '../socialTypes';
 import { useDebounce } from '../hooks';
 import { useAuth } from '../hooks/useAuth';
@@ -11,13 +12,125 @@ interface SocialPageProps {
   onSelectPilot: (pilotId: string) => void;
 }
 
+// Modal component for prompting callsign setup
+function CallSignPromptModal({ 
+  onClose, 
+  onSave 
+}: { 
+  onClose: () => void; 
+  onSave: (callSign: string) => Promise<void>; 
+}) {
+  const [callSign, setCallSign] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const trimmedCallSign = callSign.trim();
+    if (!trimmedCallSign) {
+      setError('Call sign is required');
+      return;
+    }
+
+    const validationError = validateCallSign(trimmedCallSign);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      setError(null);
+      await onSave(trimmedCallSign);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save call sign');
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md shadow-2xl">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-full bg-emerald-600/20 flex items-center justify-center">
+            <svg className="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-white">Set Your Call Sign</h2>
+            <p className="text-sm text-slate-400">Required to appear in search results</p>
+          </div>
+        </div>
+
+        <p className="text-slate-300 text-sm mb-4">
+          To protect your privacy, you need a call sign to be visible to other pilots in the community. 
+          Only your call sign will be shown publicly.
+        </p>
+
+        <form onSubmit={handleSubmit}>
+          <div className="mb-4">
+            <label htmlFor="callSign" className="block text-sm font-medium text-slate-300 mb-2">
+              Call Sign
+            </label>
+            <input
+              type="text"
+              id="callSign"
+              value={callSign}
+              onChange={(e) => {
+                setCallSign(e.target.value);
+                setError(null);
+              }}
+              className={`w-full px-4 py-3 bg-slate-700 border rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+                error ? 'border-red-500' : 'border-slate-600'
+              }`}
+              placeholder="Enter your call sign"
+              autoFocus
+              disabled={isSaving}
+            />
+            {error && (
+              <p className="mt-2 text-sm text-red-400">{error}</p>
+            )}
+            <p className="mt-2 text-xs text-slate-500">
+              3-20 characters, letters, numbers, underscores, and hyphens only
+            </p>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSaving}
+              className="flex-1 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-700 text-slate-300 rounded-lg font-medium transition-colors"
+            >
+              Skip for now
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving || !callSign.trim()}
+              className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-600/50 text-white rounded-lg font-medium transition-colors"
+            >
+              {isSaving ? 'Saving...' : 'Save Call Sign'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export function SocialPage({ onSelectPilot }: SocialPageProps) {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, updateUser } = useAuth();
   const [activeTab, setActiveTab] = useState<SocialTab>('search');
   
   // My profile state
   const [myProfile, setMyProfile] = useState<PilotProfile | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  
+  // Call sign prompt state
+  const [showCallSignPrompt, setShowCallSignPrompt] = useState(false);
+  const [hasShownPrompt, setHasShownPrompt] = useState(false);
   
   // Search state
   const [query, setQuery] = useState('');
@@ -151,6 +264,22 @@ export function SocialPage({ onSelectPilot }: SocialPageProps) {
     }
   }, [user?.id, isAuthenticated]);
 
+  // Show call sign prompt if user doesn't have one
+  useEffect(() => {
+    if (isAuthenticated && user && !user.callSign && !hasShownPrompt && !isLoadingProfile) {
+      setShowCallSignPrompt(true);
+      setHasShownPrompt(true);
+    }
+  }, [isAuthenticated, user, hasShownPrompt, isLoadingProfile]);
+
+  // Handler for saving call sign from prompt
+  const handleSaveCallSign = async (callSign: string) => {
+    await updateProfile({ callSign });
+    updateUser({ callSign });
+    setMyProfile(prev => prev ? { ...prev, callSign } : prev);
+    setShowCallSignPrompt(false);
+  };
+
   // Load data when tab changes
   useEffect(() => {
     if (activeTab === 'following' && isAuthenticated) {
@@ -167,16 +296,7 @@ export function SocialPage({ onSelectPilot }: SocialPageProps) {
   };
 
   const getDisplayName = (pilot: PilotSearchResult | PilotSummary) => {
-    if (pilot.callSign) return pilot.callSign;
-    if (pilot.displayName) return pilot.displayName;
-    if ('googleName' in pilot && pilot.googleName) return pilot.googleName;
-    return 'Unknown Pilot';
-  };
-
-  const getSecondaryInfo = (pilot: PilotSearchResult | PilotSummary) => {
-    if (pilot.callSign && pilot.displayName) return pilot.displayName;
-    if ('googleName' in pilot && pilot.callSign && pilot.googleName) return pilot.googleName;
-    return null;
+    return pilot.callSign || 'Unknown Pilot';
   };
 
   const PilotCard = ({ pilot }: { pilot: PilotSearchResult | PilotSummary }) => (
@@ -204,9 +324,9 @@ export function SocialPage({ onSelectPilot }: SocialPageProps) {
         <div className="font-medium text-white truncate">
           {getDisplayName(pilot)}
         </div>
-        {getSecondaryInfo(pilot) && (
+        {pilot.displayName && (
           <div className="text-sm text-slate-400 truncate">
-            {getSecondaryInfo(pilot)}
+            {pilot.displayName}
           </div>
         )}
       </div>
@@ -237,20 +357,19 @@ export function SocialPage({ onSelectPilot }: SocialPageProps) {
   );
 
   const getMyDisplayName = () => {
-    if (myProfile?.callSign) return myProfile.callSign;
-    if (myProfile?.displayName) return myProfile.displayName;
-    if (myProfile?.googleName) return myProfile.googleName;
-    return user?.displayName || 'Pilot';
-  };
-
-  const getMySecondaryName = () => {
-    if (myProfile?.callSign && myProfile?.displayName) return myProfile.displayName;
-    if (myProfile?.callSign && myProfile?.googleName) return myProfile.googleName;
-    return null;
+    return myProfile?.callSign || 'Set your callsign';
   };
 
   return (
     <div className="w-full p-6 flex flex-col items-center">
+      {/* Call Sign Prompt Modal */}
+      {showCallSignPrompt && (
+        <CallSignPromptModal
+          onClose={() => setShowCallSignPrompt(false)}
+          onSave={handleSaveCallSign}
+        />
+      )}
+
       {/* Centered header section - always centered */}
       <div className="w-full max-w-xl">
         {/* My Profile Header */}
@@ -296,8 +415,8 @@ export function SocialPage({ onSelectPilot }: SocialPageProps) {
                     {getMyDisplayName()}
                   </button>
                 </div>
-                {getMySecondaryName() && (
-                  <p className="text-slate-400 text-sm">{getMySecondaryName()}</p>
+                {myProfile?.displayName && (
+                  <p className="text-slate-400 mt-1">{myProfile.displayName}</p>
                 )}
                 <div className="flex items-center gap-4 mt-2 text-sm">
                   <button

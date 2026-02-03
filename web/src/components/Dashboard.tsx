@@ -1,26 +1,26 @@
 import { useState, useEffect } from 'react';
 import type { Aircraft } from '../aircraftTypes';
-import type { InventoryItem } from '../equipmentTypes';
 import type { FeedItem, SourceInfo } from '../types';
 import type { PilotSummary } from '../socialTypes';
+import type { Order } from '../orderTypes';
 import { getAircraftImageUrl } from '../aircraftApi';
 import { getFollowers } from '../socialApi';
+import { getOrders } from '../orderApi';
+import { carrierDisplayNames, statusDisplayNames, statusColors, getCarrierTrackingUrl, isActiveOrder } from '../orderTypes';
 import { useAuth } from '../hooks/useAuth';
 
 interface DashboardProps {
   // Data
   recentAircraft: Aircraft[];
-  recentGear: InventoryItem[];
   recentNews: FeedItem[];
   sources: SourceInfo[];
   // Loading states
   isAircraftLoading: boolean;
-  isGearLoading: boolean;
   isNewsLoading: boolean;
   // Actions
   onViewAllNews: () => void;
-  onAddAircraft: () => void;
-  onAddGear: () => void;
+  onViewAllAircraft: () => void;
+  onViewAllOrders: () => void;
   onSelectAircraft: (aircraft: Aircraft) => void;
   onSelectNewsItem: (item: FeedItem) => void;
   onSelectPilot: (pilotId: string) => void;
@@ -121,46 +121,57 @@ function DashboardAircraftCard({
   );
 }
 
-// Gear card for dashboard
-function DashboardGearCard({ item }: { item: InventoryItem }) {
-  const conditionColors: Record<string, string> = {
-    new: 'text-green-400',
-    used: 'text-yellow-400',
-    broken: 'text-red-400',
-    spare: 'text-blue-400',
-  };
+// Order card for dashboard
+function DashboardOrderCard({ 
+  order 
+}: { 
+  order: Order;
+}) {
+  const { bg, text } = statusColors[order.status];
+  const trackingUrl = getCarrierTrackingUrl(order.carrier, order.trackingNumber);
+  const isActive = isActiveOrder(order);
 
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
+    <div 
+      className={`bg-slate-800 border border-slate-700 rounded-xl p-4 ${isActive ? 'ring-1 ring-primary-500/20' : ''}`}
+    >
       <div className="flex gap-4">
-        {item.imageUrl ? (
-          <img
-            src={item.imageUrl}
-            alt={item.name}
-            className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
-          />
-        ) : (
-          <div className="w-12 h-12 bg-slate-700 rounded-lg flex items-center justify-center flex-shrink-0">
-            <svg className="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-            </svg>
-          </div>
-        )}
+        <div className="w-12 h-12 bg-slate-700 rounded-lg flex items-center justify-center flex-shrink-0">
+          <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+          </svg>
+        </div>
         <div className="flex-1 min-w-0">
-          <h4 className="text-sm font-medium text-white truncate">{item.name}</h4>
-          <p className="text-xs text-slate-400 truncate capitalize">
-            {item.category.replace('_', ' ')}
-            {item.manufacturer && ` • ${item.manufacturer}`}
+          <h4 className="text-sm font-medium text-white truncate">
+            {order.label || `${carrierDisplayNames[order.carrier]} Package`}
+          </h4>
+          <p className="text-xs text-slate-400 truncate">
+            {carrierDisplayNames[order.carrier]} • ****{order.trackingNumber.slice(-4)}
           </p>
-          <div className="flex items-center gap-2 mt-1">
-            <span className={`text-xs ${conditionColors[item.condition] || 'text-slate-400'}`}>
-              {item.condition}
+          <div className="flex items-center gap-2 mt-1.5">
+            <span className={`inline-block px-2 py-0.5 ${bg} ${text} rounded text-xs font-medium`}>
+              {statusDisplayNames[order.status]}
             </span>
-            {item.quantity > 1 && (
-              <span className="text-xs text-slate-500">×{item.quantity}</span>
+            {order.estimatedDate && order.status !== 'delivered' && (
+              <span className="text-xs text-slate-500">
+                Est. {new Date(order.estimatedDate).toLocaleDateString()}
+              </span>
             )}
           </div>
         </div>
+        {trackingUrl && (
+          <a
+            href={trackingUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="self-center p-2 text-slate-400 hover:text-primary-400 transition-colors"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </a>
+        )}
       </div>
     </div>
   );
@@ -302,15 +313,13 @@ function DashboardNewsCard({
 
 export function Dashboard({
   recentAircraft,
-  recentGear,
   recentNews,
   sources,
   isAircraftLoading,
-  isGearLoading,
   isNewsLoading,
   onViewAllNews,
-  onAddAircraft,
-  onAddGear,
+  onViewAllAircraft,
+  onViewAllOrders,
   onSelectAircraft,
   onSelectNewsItem,
   onSelectPilot,
@@ -319,6 +328,8 @@ export function Dashboard({
   const { user, isAuthenticated } = useAuth();
   const [recentFollowers, setRecentFollowers] = useState<PilotSummary[]>([]);
   const [isFollowersLoading, setIsFollowersLoading] = useState(false);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isOrdersLoading, setIsOrdersLoading] = useState(false);
   const sourceMap = new Map(sources.map(s => [s.id, s]));
 
   // Load recent followers
@@ -332,6 +343,17 @@ export function Dashboard({
     }
   }, [user?.id, isAuthenticated]);
 
+  // Load orders
+  useEffect(() => {
+    if (isAuthenticated) {
+      setIsOrdersLoading(true);
+      getOrders({ limit: 3 })
+        .then(response => setOrders(response.orders))
+        .catch(() => setOrders([]))
+        .finally(() => setIsOrdersLoading(false));
+    }
+  }, [isAuthenticated]);
+
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="p-6 max-w-6xl mx-auto">
@@ -341,31 +363,9 @@ export function Dashboard({
           <p className="text-slate-400">Welcome back! Here's your FlyingForge overview.</p>
         </div>
 
-        {/* Quick Actions */}
-        <div className="flex gap-3 mb-8">
-          <button
-            onClick={onAddAircraft}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Aircraft
-          </button>
-          <button
-            onClick={onAddGear}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Gear
-          </button>
-        </div>
-
         {/* Main Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Recently Added Aircraft */}
+          {/* My Aircraft */}
           <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-white flex items-center gap-2">
@@ -374,9 +374,12 @@ export function Dashboard({
                 </svg>
                 My Aircraft
               </h2>
-              {recentAircraft.length > 0 && (
-                <span className="text-xs text-slate-500">{recentAircraft.length} total</span>
-              )}
+              <button
+                onClick={onViewAllAircraft}
+                className="text-xs text-primary-400 hover:text-primary-300 transition-colors"
+              >
+                View All →
+              </button>
             </div>
             <div className="space-y-3">
               {isAircraftLoading ? (
@@ -393,8 +396,8 @@ export function Dashboard({
                   }
                   title="No Aircraft Yet"
                   description="Add your first drone to start tracking builds and settings"
-                  actionLabel="Add Aircraft"
-                  onAction={onAddAircraft}
+                  actionLabel="View Aircraft"
+                  onAction={onViewAllAircraft}
                 />
               ) : (
                 recentAircraft.slice(0, 3).map(aircraft => (
@@ -408,40 +411,46 @@ export function Dashboard({
             </div>
           </section>
 
-          {/* Recently Added Gear */}
+          {/* Orders */}
           <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-white flex items-center gap-2">
                 <svg className="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                 </svg>
-                My Gear
+                Orders
               </h2>
-              {recentGear.length > 0 && (
-                <span className="text-xs text-slate-500">{recentGear.length} items</span>
-              )}
+              <button
+                onClick={onViewAllOrders}
+                className="text-xs text-primary-400 hover:text-primary-300 transition-colors"
+              >
+                View All →
+              </button>
             </div>
             <div className="space-y-3">
-              {isGearLoading ? (
+              {isOrdersLoading ? (
                 <>
                   <SkeletonCard />
                   <SkeletonCard />
                 </>
-              ) : recentGear.length === 0 ? (
+              ) : orders.length === 0 ? (
                 <EmptyState
                   icon={
                     <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                     </svg>
                   }
-                  title="No Gear Yet"
-                  description="Track your FPV equipment inventory"
-                  actionLabel="Add Gear"
-                  onAction={onAddGear}
+                  title="No Orders Yet"
+                  description="Track your FPV shipments here"
+                  actionLabel="Add Order"
+                  onAction={onViewAllOrders}
                 />
               ) : (
-                recentGear.slice(0, 4).map(item => (
-                  <DashboardGearCard key={item.id} item={item} />
+                orders.map(order => (
+                  <DashboardOrderCard 
+                    key={order.id} 
+                    order={order}
+                  />
                 ))
               )}
             </div>

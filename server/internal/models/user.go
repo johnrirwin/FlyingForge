@@ -131,6 +131,7 @@ type SignupParams struct {
 	Email       string `json:"email"`
 	Password    string `json:"password"`
 	DisplayName string `json:"displayName"`
+	CallSign    string `json:"callSign"`
 }
 
 // LoginParams represents email/password login parameters
@@ -163,6 +164,7 @@ type CreateUserParams struct {
 	Email           string     `json:"email"`
 	Password        string     `json:"password,omitempty"`
 	DisplayName     string     `json:"displayName"`
+	CallSign        string     `json:"callSign,omitempty"`
 	AvatarURL       string     `json:"avatarUrl,omitempty"`
 	Status          UserStatus `json:"status,omitempty"`
 	GoogleName      string     `json:"googleName,omitempty"`

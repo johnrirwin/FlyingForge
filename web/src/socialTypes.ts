@@ -108,8 +108,6 @@ export interface FollowResponse {
 
 // Avatar upload response
 export interface AvatarUploadResponse {
-  effectiveAvatarUrl: string;
-  avatarType: 'google' | 'custom';
-  customAvatarUrl: string;
+  avatarUrl: string;
 }
 

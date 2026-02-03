@@ -31,11 +31,12 @@ type Server struct {
 	authMiddleware *auth.Middleware
 	userStore      *database.UserStore
 	aircraftStore  *database.AircraftStore
+	orderStore     *database.OrderStore
 	logger         *logging.Logger
 	server         *http.Server
 }
 
-func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, radioSvc *radio.Service, batterySvc *battery.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, userStore *database.UserStore, aircraftStore *database.AircraftStore, logger *logging.Logger) *Server {
+func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, radioSvc *radio.Service, batterySvc *battery.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, userStore *database.UserStore, aircraftStore *database.AircraftStore, orderStore *database.OrderStore, logger *logging.Logger) *Server {
 	return &Server{
 		agg:            agg,
 		equipmentSvc:   equipmentSvc,
@@ -47,6 +48,7 @@ func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventoryS
 		authMiddleware: authMiddleware,
 		userStore:      userStore,
 		aircraftStore:  aircraftStore,
+		orderStore:     orderStore,
 		logger:         logger,
 	}
 }
@@ -103,6 +105,12 @@ func (s *Server) Start(addr string) error {
 	if s.userStore != nil && s.authMiddleware != nil {
 		socialAPI := NewSocialAPI(s.userStore, s.authMiddleware, s.logger)
 		socialAPI.RegisterRoutes(mux, s.corsMiddleware)
+	}
+
+	// Order routes (shipment tracking)
+	if s.orderStore != nil && s.authMiddleware != nil {
+		orderAPI := NewOrderAPI(s.orderStore, s.authMiddleware, s.logger)
+		orderAPI.RegisterRoutes(mux, s.corsMiddleware)
 	}
 
 	// Health check
