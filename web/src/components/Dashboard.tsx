@@ -1,7 +1,11 @@
+import { useState, useEffect } from 'react';
 import type { Aircraft } from '../aircraftTypes';
 import type { InventoryItem } from '../equipmentTypes';
 import type { FeedItem, SourceInfo } from '../types';
+import type { PilotSummary } from '../socialTypes';
 import { getAircraftImageUrl } from '../aircraftApi';
+import { getFollowers } from '../socialApi';
+import { useAuth } from '../hooks/useAuth';
 
 interface DashboardProps {
   // Data
@@ -17,9 +21,10 @@ interface DashboardProps {
   onViewAllNews: () => void;
   onAddAircraft: () => void;
   onAddGear: () => void;
-  onAddRadio: () => void;
   onSelectAircraft: (aircraft: Aircraft) => void;
   onSelectNewsItem: (item: FeedItem) => void;
+  onSelectPilot: (pilotId: string) => void;
+  onGoToSocial: () => void;
 }
 
 // Skeleton loader component
@@ -161,21 +166,92 @@ function DashboardGearCard({ item }: { item: InventoryItem }) {
   );
 }
 
-// Radio snapshot component
-function RadioSnapshot({ onAddRadio }: { onAddRadio: () => void }) {
-  // For now, show CTA to add radio - this could be expanded with real radio data
+// Recent followers component
+function RecentFollowers({ 
+  followers, 
+  isLoading, 
+  onSelectPilot,
+  onViewAll 
+}: { 
+  followers: PilotSummary[]; 
+  isLoading: boolean;
+  onSelectPilot: (pilotId: string) => void;
+  onViewAll: () => void;
+}) {
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {[1, 2, 3].map(i => (
+          <div key={i} className="flex items-center gap-3 animate-pulse">
+            <div className="w-10 h-10 rounded-full bg-slate-700" />
+            <div className="flex-1">
+              <div className="h-4 bg-slate-700 rounded w-24" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (followers.length === 0) {
+    return (
+      <EmptyState
+        icon={
+          <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
+        }
+        title="No Followers Yet"
+        description="Share your profile to get followers"
+        actionLabel="Find Pilots"
+        onAction={onViewAll}
+      />
+    );
+  }
+
+  const getDisplayName = (pilot: PilotSummary) => {
+    if (pilot.callSign) return pilot.callSign;
+    if (pilot.displayName) return pilot.displayName;
+    return 'Pilot';
+  };
+
   return (
-    <EmptyState
-      icon={
-        <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.14 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
-        </svg>
-      }
-      title="No Radio Configured"
-      description="Add your transmitter to track firmware and ELRS settings"
-      actionLabel="Add Radio"
-      onAction={onAddRadio}
-    />
+    <div className="space-y-2">
+      {followers.slice(0, 4).map(follower => (
+        <button
+          key={follower.id}
+          onClick={() => onSelectPilot(follower.id)}
+          className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-slate-700/50 transition-colors text-left"
+        >
+          {follower.effectiveAvatarUrl ? (
+            <img
+              src={follower.effectiveAvatarUrl}
+              alt=""
+              className="w-10 h-10 rounded-full object-cover"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center">
+              <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-white truncate">
+              {getDisplayName(follower)}
+            </div>
+            {follower.callSign && follower.displayName && (
+              <div className="text-xs text-slate-400 truncate">
+                {follower.displayName}
+              </div>
+            )}
+          </div>
+          <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -235,11 +311,26 @@ export function Dashboard({
   onViewAllNews,
   onAddAircraft,
   onAddGear,
-  onAddRadio,
   onSelectAircraft,
   onSelectNewsItem,
+  onSelectPilot,
+  onGoToSocial,
 }: DashboardProps) {
+  const { user, isAuthenticated } = useAuth();
+  const [recentFollowers, setRecentFollowers] = useState<PilotSummary[]>([]);
+  const [isFollowersLoading, setIsFollowersLoading] = useState(false);
   const sourceMap = new Map(sources.map(s => [s.id, s]));
+
+  // Load recent followers
+  useEffect(() => {
+    if (user?.id && isAuthenticated) {
+      setIsFollowersLoading(true);
+      getFollowers(user.id, 4, 0)
+        .then(response => setRecentFollowers(response.pilots))
+        .catch(() => setRecentFollowers([]))
+        .finally(() => setIsFollowersLoading(false));
+    }
+  }, [user?.id, isAuthenticated]);
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -356,17 +447,30 @@ export function Dashboard({
             </div>
           </section>
 
-          {/* Radio Snapshot */}
+          {/* Recent Followers */}
           <section className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-white flex items-center gap-2">
                 <svg className="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.14 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
-                Radio
+                Recent Followers
               </h2>
+              {recentFollowers.length > 0 && (
+                <button
+                  onClick={onGoToSocial}
+                  className="text-xs text-primary-400 hover:text-primary-300 transition-colors"
+                >
+                  View All →
+                </button>
+              )}
             </div>
-            <RadioSnapshot onAddRadio={onAddRadio} />
+            <RecentFollowers 
+              followers={recentFollowers} 
+              isLoading={isFollowersLoading}
+              onSelectPilot={onSelectPilot}
+              onViewAll={onGoToSocial}
+            />
           </section>
 
           {/* Quick News Peek */}

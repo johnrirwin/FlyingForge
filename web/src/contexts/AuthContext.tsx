@@ -7,6 +7,7 @@ import type {
   LoginParams,
   GoogleLoginParams,
   AuthError,
+  User,
 } from '../authTypes';
 import * as authApi from '../authApi';
 
@@ -53,6 +54,11 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
         ...state,
         tokens: action.payload,
       };
+    case 'UPDATE_USER':
+      return {
+        ...state,
+        user: state.user ? { ...state.user, ...action.payload } : null,
+      };
     case 'CLEAR_ERROR':
       return { ...state, error: null };
     default:
@@ -66,6 +72,7 @@ export interface AuthContextType extends AuthState {
   login: (params: LoginParams) => Promise<void>;
   loginWithGoogle: (params: GoogleLoginParams) => Promise<void>;
   logout: () => Promise<void>;
+  updateUser: (updates: Partial<User>) => void;
   clearError: () => void;
 }
 
@@ -161,12 +168,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
     dispatch({ type: 'CLEAR_ERROR' });
   }, []);
 
+  const updateUser = useCallback((updates: Partial<User>) => {
+    dispatch({ type: 'UPDATE_USER', payload: updates });
+  }, []);
+
   const value: AuthContextType = {
     ...state,
     signup,
     login,
     loginWithGoogle,
     logout,
+    updateUser,
     clearError,
   };
 

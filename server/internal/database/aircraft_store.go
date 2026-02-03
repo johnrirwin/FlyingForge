@@ -250,6 +250,46 @@ func (s *AircraftStore) List(ctx context.Context, userID string, params models.A
 	}, nil
 }
 
+// ListByUserID returns all aircraft for a user (simplified version for public profiles)
+func (s *AircraftStore) ListByUserID(ctx context.Context, userID string) ([]*models.Aircraft, error) {
+	query := `
+		SELECT id, user_id, name, nickname, type, image_data IS NOT NULL as has_image, image_type, description, created_at, updated_at
+		FROM aircraft
+		WHERE user_id = $1
+		ORDER BY created_at DESC
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list aircraft by user: %w", err)
+	}
+	defer rows.Close()
+
+	var aircraft []*models.Aircraft
+	for rows.Next() {
+		a := &models.Aircraft{}
+		var scanUserID, scanNickname, scanType, scanImageType, scanDescription sql.NullString
+
+		if err := rows.Scan(
+			&a.ID, &scanUserID, &a.Name, &scanNickname,
+			&scanType, &a.HasImage, &scanImageType, &scanDescription,
+			&a.CreatedAt, &a.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan aircraft: %w", err)
+		}
+
+		a.UserID = scanUserID.String
+		a.Nickname = scanNickname.String
+		a.Type = models.AircraftType(scanType.String)
+		a.ImageType = scanImageType.String
+		a.Description = scanDescription.String
+
+		aircraft = append(aircraft, a)
+	}
+
+	return aircraft, nil
+}
+
 // SetComponent sets or updates a component on an aircraft
 func (s *AircraftStore) SetComponent(ctx context.Context, aircraftID string, category models.ComponentCategory, inventoryItemID string, notes string) (*models.AircraftComponent, error) {
 	query := `
@@ -358,10 +398,10 @@ func (s *AircraftStore) RemoveComponent(ctx context.Context, aircraftID string, 
 	return nil
 }
 
-// SetELRSSettings sets or updates ELRS settings for an aircraft
-func (s *AircraftStore) SetELRSSettings(ctx context.Context, aircraftID string, settings json.RawMessage) (*models.AircraftELRSSettings, error) {
+// SetReceiverSettings sets or updates receiver settings for an aircraft
+func (s *AircraftStore) SetReceiverSettings(ctx context.Context, aircraftID string, settings json.RawMessage) (*models.AircraftReceiverSettings, error) {
 	query := `
-		INSERT INTO aircraft_elrs_settings (aircraft_id, settings_json)
+		INSERT INTO aircraft_receiver_settings (aircraft_id, settings_json)
 		VALUES ($1, $2)
 		ON CONFLICT (aircraft_id) DO UPDATE SET
 			settings_json = EXCLUDED.settings_json,
@@ -369,40 +409,40 @@ func (s *AircraftStore) SetELRSSettings(ctx context.Context, aircraftID string, 
 		RETURNING id, aircraft_id, settings_json, created_at, updated_at
 	`
 
-	elrs := &models.AircraftELRSSettings{}
+	rx := &models.AircraftReceiverSettings{}
 	err := s.db.QueryRowContext(ctx, query, aircraftID, settings).Scan(
-		&elrs.ID, &elrs.AircraftID, &elrs.Settings, &elrs.CreatedAt, &elrs.UpdatedAt,
+		&rx.ID, &rx.AircraftID, &rx.Settings, &rx.CreatedAt, &rx.UpdatedAt,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to set ELRS settings: %w", err)
+		return nil, fmt.Errorf("failed to set receiver settings: %w", err)
 	}
 
-	return elrs, nil
+	return rx, nil
 }
 
-// GetELRSSettings retrieves ELRS settings for an aircraft
-func (s *AircraftStore) GetELRSSettings(ctx context.Context, aircraftID string) (*models.AircraftELRSSettings, error) {
+// GetReceiverSettings retrieves receiver settings for an aircraft
+func (s *AircraftStore) GetReceiverSettings(ctx context.Context, aircraftID string) (*models.AircraftReceiverSettings, error) {
 	query := `
 		SELECT id, aircraft_id, settings_json, created_at, updated_at
-		FROM aircraft_elrs_settings
+		FROM aircraft_receiver_settings
 		WHERE aircraft_id = $1
 	`
 
-	elrs := &models.AircraftELRSSettings{}
+	rx := &models.AircraftReceiverSettings{}
 	err := s.db.QueryRowContext(ctx, query, aircraftID).Scan(
-		&elrs.ID, &elrs.AircraftID, &elrs.Settings, &elrs.CreatedAt, &elrs.UpdatedAt,
+		&rx.ID, &rx.AircraftID, &rx.Settings, &rx.CreatedAt, &rx.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to get ELRS settings: %w", err)
+		return nil, fmt.Errorf("failed to get receiver settings: %w", err)
 	}
 
-	return elrs, nil
+	return rx, nil
 }
 
-// GetDetails retrieves full aircraft details including components and ELRS settings
+// GetDetails retrieves full aircraft details including components and receiver settings
 func (s *AircraftStore) GetDetails(ctx context.Context, id string, userID string) (*models.AircraftDetailsResponse, error) {
 	aircraft, err := s.Get(ctx, id, userID)
 	if err != nil {
@@ -417,15 +457,15 @@ func (s *AircraftStore) GetDetails(ctx context.Context, id string, userID string
 		return nil, err
 	}
 
-	elrsSettings, err := s.GetELRSSettings(ctx, id)
+	receiverSettings, err := s.GetReceiverSettings(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
 	return &models.AircraftDetailsResponse{
-		Aircraft:     *aircraft,
-		Components:   components,
-		ELRSSettings: elrsSettings,
+		Aircraft:         *aircraft,
+		Components:       components,
+		ReceiverSettings: receiverSettings,
 	}, nil
 }
 
@@ -461,6 +501,32 @@ func (s *AircraftStore) GetImage(ctx context.Context, id string, userID string) 
 	}
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get aircraft image: %w", err)
+	}
+
+	return imageData, imageType.String, nil
+}
+
+// GetPublicImage retrieves image data for an aircraft if the owner allows it
+// This is used for public pilot profiles - checks owner's social settings
+func (s *AircraftStore) GetPublicImage(ctx context.Context, aircraftID string) ([]byte, string, error) {
+	query := `
+		SELECT a.image_data, a.image_type 
+		FROM aircraft a
+		JOIN users u ON a.user_id = u.id
+		WHERE a.id = $1 
+		  AND a.image_data IS NOT NULL
+		  AND u.show_aircraft = true
+		  AND u.profile_visibility = 'public'
+	`
+	var imageData []byte
+	var imageType sql.NullString
+
+	err := s.db.QueryRowContext(ctx, query, aircraftID).Scan(&imageData, &imageType)
+	if err == sql.ErrNoRows {
+		return nil, "", nil
+	}
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to get public aircraft image: %w", err)
 	}
 
 	return imageData, imageType.String, nil

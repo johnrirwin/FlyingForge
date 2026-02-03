@@ -93,7 +93,7 @@ func (tdb *TestDB) Cleanup(ctx context.Context) {
 		"batteries",
 		"radio_backups",
 		"radios",
-		"aircraft_elrs_settings",
+		"aircraft_receiver_settings",
 		"aircraft_components",
 		"aircraft",
 		"inventory_items",

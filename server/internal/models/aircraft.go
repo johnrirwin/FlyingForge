@@ -21,15 +21,15 @@ const (
 type ComponentCategory string
 
 const (
-	ComponentCategoryFC         ComponentCategory = "fc"
-	ComponentCategoryESC        ComponentCategory = "esc"
-	ComponentCategoryELRSModule ComponentCategory = "elrs_module"
-	ComponentCategoryVTX        ComponentCategory = "vtx"
-	ComponentCategoryMotors     ComponentCategory = "motors"
-	ComponentCategoryCamera     ComponentCategory = "camera"
-	ComponentCategoryFrame      ComponentCategory = "frame"
-	ComponentCategoryProps      ComponentCategory = "propellers"
-	ComponentCategoryAntenna    ComponentCategory = "antenna"
+	ComponentCategoryFC       ComponentCategory = "fc"
+	ComponentCategoryESC      ComponentCategory = "esc"
+	ComponentCategoryReceiver ComponentCategory = "receiver"
+	ComponentCategoryVTX      ComponentCategory = "vtx"
+	ComponentCategoryMotors   ComponentCategory = "motors"
+	ComponentCategoryCamera   ComponentCategory = "camera"
+	ComponentCategoryFrame    ComponentCategory = "frame"
+	ComponentCategoryProps    ComponentCategory = "propellers"
+	ComponentCategoryAntenna  ComponentCategory = "antenna"
 )
 
 // Aircraft represents a user's aircraft/drone
@@ -47,8 +47,8 @@ type Aircraft struct {
 	UpdatedAt   time.Time    `json:"updatedAt"`
 
 	// Related data (populated on details fetch)
-	Components   []AircraftComponent   `json:"components,omitempty"`
-	ELRSSettings *AircraftELRSSettings `json:"elrsSettings,omitempty"`
+	Components       []AircraftComponent       `json:"components,omitempty"`
+	ReceiverSettings *AircraftReceiverSettings `json:"receiverSettings,omitempty"`
 }
 
 // AircraftComponent represents a component installed on an aircraft
@@ -65,26 +65,76 @@ type AircraftComponent struct {
 	InventoryItem *InventoryItem `json:"inventoryItem,omitempty"`
 }
 
-// AircraftELRSSettings holds ELRS configuration for an aircraft
-type AircraftELRSSettings struct {
+// AircraftReceiverSettings holds receiver configuration for an aircraft
+type AircraftReceiverSettings struct {
 	ID         string          `json:"id"`
 	AircraftID string          `json:"aircraftId"`
-	Settings   json.RawMessage `json:"settings"` // Flexible JSON for any ELRS settings
+	Settings   json.RawMessage `json:"settings"` // Flexible JSON for receiver settings
 	CreatedAt  time.Time       `json:"createdAt"`
 	UpdatedAt  time.Time       `json:"updatedAt"`
 }
 
-// ELRSSettingsData represents the structured ELRS settings
-type ELRSSettingsData struct {
-	ModelMatch     *bool                  `json:"modelMatch,omitempty"`
-	ModelID        *int                   `json:"modelId,omitempty"`
-	BindPhrase     string                 `json:"bindPhrase,omitempty"`
-	PacketRate     string                 `json:"packetRate,omitempty"`     // e.g., "250Hz", "500Hz"
-	TelemetryRatio string                 `json:"telemetryRatio,omitempty"` // e.g., "1:128", "1:64"
-	TXPower        string                 `json:"txPower,omitempty"`        // e.g., "250mW", "500mW"
-	SwitchMode     string                 `json:"switchMode,omitempty"`     // e.g., "Hybrid", "Wide"
-	RFProfile      string                 `json:"rfProfile,omitempty"`
-	Extra          map[string]interface{} `json:"extra,omitempty"` // Any additional fields
+// ReceiverSettingsData represents the structured receiver settings
+// WARNING: This struct contains SENSITIVE fields that must never be exposed publicly
+type ReceiverSettingsData struct {
+	// SENSITIVE - Never expose publicly
+	ModelMatch    *int   `json:"modelMatch,omitempty"`    // SENSITIVE: Model match number (0-63) - frontend uses this
+	ModelMatchNum *int   `json:"modelMatchNum,omitempty"` // SENSITIVE: Model match number (alternate name)
+	ModelID       *int   `json:"modelId,omitempty"`       // SENSITIVE: Model ID
+	BindPhrase    string `json:"bindPhrase,omitempty"`    // SENSITIVE: Bind phrase secret
+	BindingPhrase string `json:"bindingPhrase,omitempty"` // SENSITIVE: Bind phrase (frontend uses this name)
+	UID           string `json:"uid,omitempty"`           // SENSITIVE: Receiver UID
+	WifiPassword  string `json:"wifiPassword,omitempty"`  // SENSITIVE: WiFi password
+	WifiSSID      string `json:"wifiSSID,omitempty"`      // May contain personal info
+
+	// SAFE to expose publicly
+	ReceiverModel    string `json:"receiverModel,omitempty"`    // e.g., "EP1", "RP1", "RP3"
+	PacketRate       string `json:"packetRate,omitempty"`       // e.g., "250Hz", "500Hz"
+	Rate             *int   `json:"rate,omitempty"`             // Numeric rate (frontend uses this)
+	TelemetryRatio   string `json:"telemetryRatio,omitempty"`   // e.g., "1:128", "1:64"
+	Tlm              *int   `json:"tlm,omitempty"`              // Numeric telemetry ratio (frontend uses this)
+	TXPower          string `json:"txPower,omitempty"`          // e.g., "250mW", "500mW"
+	Power            *int   `json:"power,omitempty"`            // Numeric power in mW (frontend uses this)
+	SwitchMode       string `json:"switchMode,omitempty"`       // e.g., "Hybrid", "Wide"
+	OutputPower      string `json:"outputPower,omitempty"`      // Output power (static or dynamic)
+	RegulatoryDomain string `json:"regulatoryDomain,omitempty"` // e.g., "FCC", "LBT"
+	FirmwareVersion  string `json:"firmwareVersion,omitempty"`  // e.g., "3.4.0"
+	RXProtocol       string `json:"rxProtocol,omitempty"`       // Protocol type
+	RFProfile        string `json:"rfProfile,omitempty"`
+	DeviceName       string `json:"deviceName,omitempty"` // Device name (safe)
+
+	Extra map[string]interface{} `json:"extra,omitempty"` // Any additional fields (may contain sensitive data)
+}
+
+// Sanitize returns a sanitized copy of receiver settings safe for public exposure
+// This method strips all sensitive fields: BindPhrase, ModelMatch, UID, etc.
+func (e *ReceiverSettingsData) Sanitize() *ReceiverSanitizedSettings {
+	if e == nil {
+		return nil
+	}
+
+	// Simply pass through the safe fields using the same names
+	return &ReceiverSanitizedSettings{
+		Rate:       e.Rate,
+		Tlm:        e.Tlm,
+		Power:      e.Power,
+		DeviceName: e.DeviceName,
+	}
+}
+
+// SanitizeReceiverSettings parses raw JSON receiver settings and returns a sanitized version
+// This is the primary function to use when exposing receiver data publicly
+func SanitizeReceiverSettings(settings *AircraftReceiverSettings) *ReceiverSanitizedSettings {
+	if settings == nil || len(settings.Settings) == 0 {
+		return nil
+	}
+
+	var data ReceiverSettingsData
+	if err := json.Unmarshal(settings.Settings, &data); err != nil {
+		return nil
+	}
+
+	return data.Sanitize()
 }
 
 // CreateAircraftParams defines parameters for creating an aircraft
@@ -122,8 +172,8 @@ type SetComponentParams struct {
 	NewGear *AddInventoryParams `json:"newGear,omitempty"`
 }
 
-// SetELRSSettingsParams defines parameters for setting ELRS settings
-type SetELRSSettingsParams struct {
+// SetReceiverSettingsParams defines parameters for setting receiver settings
+type SetReceiverSettingsParams struct {
 	AircraftID string          `json:"aircraftId"`
 	Settings   json.RawMessage `json:"settings"`
 }
@@ -143,7 +193,7 @@ type AircraftListResponse struct {
 
 // AircraftDetailsResponse includes all related data for an aircraft
 type AircraftDetailsResponse struct {
-	Aircraft     Aircraft              `json:"aircraft"`
-	Components   []AircraftComponent   `json:"components"`
-	ELRSSettings *AircraftELRSSettings `json:"elrsSettings,omitempty"`
+	Aircraft         Aircraft                  `json:"aircraft"`
+	Components       []AircraftComponent       `json:"components"`
+	ReceiverSettings *AircraftReceiverSettings `json:"receiverSettings,omitempty"`
 }

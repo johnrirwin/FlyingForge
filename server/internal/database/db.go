@@ -87,7 +87,7 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationIndexes,
 		migrationAircraft,
 		migrationAircraftComponents,
-		migrationAircraftELRSSettings,
+		migrationAircraftReceiverSettings,
 		migrationAircraftIndexes,
 		migrationAircraftImageStorage,
 		migrationRadios,
@@ -96,6 +96,10 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationBatteries,
 		migrationBatteryLogs,
 		migrationBatteryIndexes,
+		migrationUserProfiles,
+		migrationSocialSettings,
+		migrationFollows,
+		migrationRenameElrsToReceiver,
 	}
 
 	for i, migration := range migrations {
@@ -259,8 +263,8 @@ CREATE TABLE IF NOT EXISTS aircraft_components (
 );
 `
 
-const migrationAircraftELRSSettings = `
-CREATE TABLE IF NOT EXISTS aircraft_elrs_settings (
+const migrationAircraftReceiverSettings = `
+CREATE TABLE IF NOT EXISTS aircraft_receiver_settings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     aircraft_id UUID NOT NULL REFERENCES aircraft(id) ON DELETE CASCADE UNIQUE,
     settings_json JSONB DEFAULT '{}',
@@ -275,7 +279,7 @@ CREATE INDEX IF NOT EXISTS idx_aircraft_type ON aircraft(type);
 CREATE INDEX IF NOT EXISTS idx_aircraft_name_search ON aircraft USING gin(to_tsvector('english', name));
 CREATE INDEX IF NOT EXISTS idx_aircraft_components_aircraft ON aircraft_components(aircraft_id);
 CREATE INDEX IF NOT EXISTS idx_aircraft_components_inventory ON aircraft_components(inventory_item_id);
-CREATE INDEX IF NOT EXISTS idx_aircraft_elrs_aircraft ON aircraft_elrs_settings(aircraft_id);
+CREATE INDEX IF NOT EXISTS idx_aircraft_receiver_aircraft ON aircraft_receiver_settings(aircraft_id);
 `
 
 const migrationAircraftImageStorage = `
@@ -364,4 +368,65 @@ CREATE INDEX IF NOT EXISTS idx_batteries_code ON batteries(battery_code);
 CREATE INDEX IF NOT EXISTS idx_battery_logs_battery ON battery_logs(battery_id);
 CREATE INDEX IF NOT EXISTS idx_battery_logs_user ON battery_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_battery_logs_logged_at ON battery_logs(logged_at DESC);
+`
+
+const migrationUserProfiles = `
+-- Add profile fields to users table
+ALTER TABLE users ADD COLUMN IF NOT EXISTS call_sign VARCHAR(20) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS google_name VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS google_avatar_url VARCHAR(1024);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_type VARCHAR(20) DEFAULT 'google';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_avatar_url VARCHAR(1024);
+
+-- Create index for callsign search (case-insensitive)
+CREATE INDEX IF NOT EXISTS idx_users_call_sign ON users(LOWER(call_sign));
+
+-- Create index for pilot search (name search)
+CREATE INDEX IF NOT EXISTS idx_users_display_name ON users(LOWER(display_name));
+CREATE INDEX IF NOT EXISTS idx_users_google_name ON users(LOWER(google_name));
+`
+
+const migrationSocialSettings = `
+-- Add social settings columns to users table
+ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_visibility VARCHAR(20) DEFAULT 'public';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS show_aircraft BOOLEAN DEFAULT true;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS allow_search BOOLEAN DEFAULT true;
+
+-- Create index for searchable users (respecting allow_search setting)
+CREATE INDEX IF NOT EXISTS idx_users_allow_search ON users(allow_search) WHERE allow_search = true;
+`
+
+const migrationFollows = `
+-- Create follows table for user relationships
+CREATE TABLE IF NOT EXISTS follows (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    follower_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    followed_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    
+    -- Prevent duplicate follow relationships
+    UNIQUE(follower_user_id, followed_user_id),
+    
+    -- Prevent self-following
+    CHECK (follower_user_id != followed_user_id)
+);
+
+-- Indexes for efficient lookups
+CREATE INDEX IF NOT EXISTS idx_follows_follower ON follows(follower_user_id);
+CREATE INDEX IF NOT EXISTS idx_follows_followed ON follows(followed_user_id);
+CREATE INDEX IF NOT EXISTS idx_follows_created ON follows(created_at DESC);
+`
+
+// Migration to rename elrs table to receiver (for existing databases)
+const migrationRenameElrsToReceiver = `
+-- Rename table if old name exists
+DO $$ 
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'aircraft_elrs_settings') 
+    AND NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'aircraft_receiver_settings') 
+    THEN
+        ALTER TABLE aircraft_elrs_settings RENAME TO aircraft_receiver_settings;
+        ALTER INDEX IF EXISTS idx_aircraft_elrs_aircraft RENAME TO idx_aircraft_receiver_aircraft;
+    END IF;
+END $$;
 `

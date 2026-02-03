@@ -15,12 +15,12 @@ export const AIRCRAFT_TYPES: { value: AircraftType; label: string; icon: string 
 ];
 
 // Component categories for aircraft
-export type ComponentCategory = 'fc' | 'esc' | 'elrs_module' | 'vtx' | 'motors' | 'camera' | 'frame' | 'props' | 'antenna';
+export type ComponentCategory = 'fc' | 'esc' | 'receiver' | 'vtx' | 'motors' | 'camera' | 'frame' | 'props' | 'antenna';
 
 export const COMPONENT_CATEGORIES: { value: ComponentCategory; label: string; equipmentCategory: EquipmentCategory }[] = [
   { value: 'fc', label: 'Flight Controller', equipmentCategory: 'flight_controllers' },
   { value: 'esc', label: 'ESC', equipmentCategory: 'esc' },
-  { value: 'elrs_module', label: 'ELRS Receiver', equipmentCategory: 'receivers' },
+  { value: 'receiver', label: 'Receiver', equipmentCategory: 'receivers' },
   { value: 'vtx', label: 'Video Transmitter', equipmentCategory: 'vtx' },
   { value: 'motors', label: 'Motors', equipmentCategory: 'motors' },
   { value: 'camera', label: 'Camera', equipmentCategory: 'cameras' },
@@ -55,15 +55,15 @@ export interface AircraftComponent {
   inventoryItem?: InventoryItem;
 }
 
-// ELRS settings for an aircraft
-export interface AircraftELRSSettings {
+// Receiver settings for an aircraft
+export interface AircraftReceiverSettings {
   aircraftId: string;
-  settings: ELRSConfig;
+  settings: ReceiverConfig;
   updatedAt: string;
 }
 
-// ELRS configuration structure
-export interface ELRSConfig {
+// Receiver configuration structure
+export interface ReceiverConfig {
   bindingPhrase?: string;
   modelMatch?: number; // Model match number (0-63)
   rate?: number;
@@ -103,9 +103,9 @@ export interface SetComponentParams {
   newGear?: AddInventoryParams;
 }
 
-// Set ELRS settings params
-export interface SetELRSSettingsParams {
-  settings: ELRSConfig;
+// Set receiver settings params
+export interface SetReceiverSettingsParams {
+  settings: ReceiverConfig;
 }
 
 // Aircraft list params
@@ -121,11 +121,11 @@ export interface AircraftListResponse {
   totalCount: number;
 }
 
-// Aircraft details response (full with components and ELRS)
+// Aircraft details response (full with components and receiver)
 export interface AircraftDetailsResponse {
   aircraft: Aircraft;
   components: AircraftComponent[];
-  elrsSettings?: AircraftELRSSettings;
+  receiverSettings?: AircraftReceiverSettings;
 }
 
 // Components response

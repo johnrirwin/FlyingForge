@@ -29,9 +29,10 @@ func (s *UserStore) Create(ctx context.Context, params models.CreateUserParams) 
 	}
 
 	query := `
-		INSERT INTO users (email, password_hash, display_name, avatar_url, status)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, email, display_name, avatar_url, status, created_at, updated_at, last_login_at
+		INSERT INTO users (email, password_hash, display_name, avatar_url, status, google_name, google_avatar_url, avatar_type)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		RETURNING id, email, display_name, avatar_url, status, created_at, updated_at, last_login_at,
+		          call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url
 	`
 
 	var passwordHash sql.NullString
@@ -39,15 +40,20 @@ func (s *UserStore) Create(ctx context.Context, params models.CreateUserParams) 
 		passwordHash = sql.NullString{String: params.Password, Valid: true}
 	}
 
+	// Default avatar type to google
+	avatarType := models.AvatarTypeGoogle
+
 	user := &models.User{}
-	var avatarURL sql.NullString
+	var avatarURL, callSign, googleName, googleAvatarURL, customAvatarURL, avatarTypeStr sql.NullString
 	var lastLoginAt sql.NullTime
 
 	err := s.db.QueryRowContext(ctx, query,
 		email, passwordHash, params.DisplayName, nullString(params.AvatarURL), status,
+		nullString(params.GoogleName), nullString(params.GoogleAvatarURL), string(avatarType),
 	).Scan(
 		&user.ID, &user.Email, &user.DisplayName, &avatarURL,
 		&user.Status, &user.CreatedAt, &user.UpdatedAt, &lastLoginAt,
+		&callSign, &googleName, &googleAvatarURL, &avatarTypeStr, &customAvatarURL,
 	)
 
 	if err != nil {
@@ -63,6 +69,21 @@ func (s *UserStore) Create(ctx context.Context, params models.CreateUserParams) 
 	if lastLoginAt.Valid {
 		user.LastLoginAt = &lastLoginAt.Time
 	}
+	if callSign.Valid {
+		user.CallSign = callSign.String
+	}
+	if googleName.Valid {
+		user.GoogleName = googleName.String
+	}
+	if googleAvatarURL.Valid {
+		user.GoogleAvatarURL = googleAvatarURL.String
+	}
+	if avatarTypeStr.Valid {
+		user.AvatarType = models.AvatarType(avatarTypeStr.String)
+	}
+	if customAvatarURL.Valid {
+		user.CustomAvatarURL = customAvatarURL.String
+	}
 
 	return user, nil
 }
@@ -70,7 +91,9 @@ func (s *UserStore) Create(ctx context.Context, params models.CreateUserParams) 
 // GetByID retrieves a user by ID
 func (s *UserStore) GetByID(ctx context.Context, id string) (*models.User, error) {
 	query := `
-		SELECT id, email, password_hash, display_name, avatar_url, status, created_at, updated_at, last_login_at
+		SELECT id, email, password_hash, display_name, avatar_url, status, created_at, updated_at, last_login_at,
+		       call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url,
+		       profile_visibility, show_aircraft, allow_search
 		FROM users
 		WHERE id = $1
 	`
@@ -82,12 +105,28 @@ func (s *UserStore) GetByID(ctx context.Context, id string) (*models.User, error
 func (s *UserStore) GetByEmail(ctx context.Context, email string) (*models.User, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	query := `
-		SELECT id, email, password_hash, display_name, avatar_url, status, created_at, updated_at, last_login_at
+		SELECT id, email, password_hash, display_name, avatar_url, status, created_at, updated_at, last_login_at,
+		       call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url,
+		       profile_visibility, show_aircraft, allow_search
 		FROM users
 		WHERE LOWER(email) = $1
 	`
 
 	return s.scanUser(s.db.QueryRowContext(ctx, query, email))
+}
+
+// GetByCallSign retrieves a user by callsign (case-insensitive)
+func (s *UserStore) GetByCallSign(ctx context.Context, callSign string) (*models.User, error) {
+	callSign = strings.ToLower(strings.TrimSpace(callSign))
+	query := `
+		SELECT id, email, password_hash, display_name, avatar_url, status, created_at, updated_at, last_login_at,
+		       call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url,
+		       profile_visibility, show_aircraft, allow_search
+		FROM users
+		WHERE LOWER(call_sign) = $1
+	`
+
+	return s.scanUser(s.db.QueryRowContext(ctx, query, callSign))
 }
 
 // Update updates a user
@@ -116,6 +155,31 @@ func (s *UserStore) Update(ctx context.Context, id string, params models.UpdateU
 		args = append(args, *params.Password)
 		argIdx++
 	}
+	if params.CallSign != nil {
+		sets = append(sets, fmt.Sprintf("call_sign = $%d", argIdx))
+		args = append(args, *params.CallSign)
+		argIdx++
+	}
+	if params.GoogleName != nil {
+		sets = append(sets, fmt.Sprintf("google_name = $%d", argIdx))
+		args = append(args, *params.GoogleName)
+		argIdx++
+	}
+	if params.GoogleAvatarURL != nil {
+		sets = append(sets, fmt.Sprintf("google_avatar_url = $%d", argIdx))
+		args = append(args, *params.GoogleAvatarURL)
+		argIdx++
+	}
+	if params.AvatarType != nil {
+		sets = append(sets, fmt.Sprintf("avatar_type = $%d", argIdx))
+		args = append(args, string(*params.AvatarType))
+		argIdx++
+	}
+	if params.CustomAvatarURL != nil {
+		sets = append(sets, fmt.Sprintf("custom_avatar_url = $%d", argIdx))
+		args = append(args, *params.CustomAvatarURL)
+		argIdx++
+	}
 
 	if len(sets) == 0 {
 		return s.GetByID(ctx, id)
@@ -127,7 +191,8 @@ func (s *UserStore) Update(ctx context.Context, id string, params models.UpdateU
 	query := fmt.Sprintf(`
 		UPDATE users SET %s
 		WHERE id = $%d
-		RETURNING id, email, password_hash, display_name, avatar_url, status, created_at, updated_at, last_login_at
+		RETURNING id, email, password_hash, display_name, avatar_url, status, created_at, updated_at, last_login_at,
+		          call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url
 	`, strings.Join(sets, ", "), argIdx)
 
 	return s.scanUser(s.db.QueryRowContext(ctx, query, args...))
@@ -157,6 +222,78 @@ func (s *UserStore) Delete(ctx context.Context, id string) error {
 	}
 
 	return nil
+}
+
+// SearchPilots searches for pilots by callsign or name
+// Only returns users who have allow_search = true
+func (s *UserStore) SearchPilots(ctx context.Context, params models.PilotSearchParams) ([]models.PilotSearchResult, error) {
+	query := params.Query
+	if query == "" {
+		return []models.PilotSearchResult{}, nil
+	}
+
+	limit := params.Limit
+	if limit <= 0 || limit > 50 {
+		limit = 50
+	}
+
+	searchTerm := "%" + strings.ToLower(strings.TrimSpace(query)) + "%"
+
+	sqlQuery := `
+		SELECT id, call_sign, display_name, google_name, avatar_url, google_avatar_url, avatar_type, custom_avatar_url
+		FROM users
+		WHERE status = 'active' 
+		  AND (allow_search IS NULL OR allow_search = true)
+		  AND (
+			LOWER(call_sign) LIKE $1 OR
+			LOWER(display_name) LIKE $1 OR
+			LOWER(google_name) LIKE $1
+		)
+		ORDER BY 
+			CASE WHEN LOWER(call_sign) LIKE $1 THEN 0 ELSE 1 END,
+			call_sign, display_name
+		LIMIT $2
+	`
+
+	rows, err := s.db.QueryContext(ctx, sqlQuery, searchTerm, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []models.PilotSearchResult
+	for rows.Next() {
+		var callSign, displayName, googleName, avatarURL, googleAvatarURL, avatarType, customAvatarURL sql.NullString
+		var id string
+
+		if err := rows.Scan(&id, &callSign, &displayName, &googleName, &avatarURL, &googleAvatarURL, &avatarType, &customAvatarURL); err != nil {
+			return nil, err
+		}
+
+		// Compute effective avatar URL
+		effectiveAvatarURL := ""
+		if avatarType.Valid && avatarType.String == string(models.AvatarTypeCustom) && customAvatarURL.Valid {
+			effectiveAvatarURL = customAvatarURL.String
+		} else if googleAvatarURL.Valid {
+			effectiveAvatarURL = googleAvatarURL.String
+		} else if avatarURL.Valid {
+			effectiveAvatarURL = avatarURL.String
+		}
+
+		results = append(results, models.PilotSearchResult{
+			ID:                 id,
+			CallSign:           callSign.String,
+			DisplayName:        displayName.String,
+			GoogleName:         googleName.String,
+			EffectiveAvatarURL: effectiveAvatarURL,
+		})
+	}
+
+	if results == nil {
+		results = []models.PilotSearchResult{}
+	}
+
+	return results, nil
 }
 
 // List retrieves users with optional filtering
@@ -201,7 +338,9 @@ func (s *UserStore) List(ctx context.Context, params models.UserFilterParams) (*
 
 	args = append(args, limit, offset)
 	query := fmt.Sprintf(`
-		SELECT id, email, password_hash, display_name, avatar_url, status, created_at, updated_at, last_login_at
+		SELECT id, email, password_hash, display_name, avatar_url, status, created_at, updated_at, last_login_at,
+		       call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url,
+		       profile_visibility, show_aircraft, allow_search
 		FROM users %s
 		ORDER BY created_at DESC
 		LIMIT $%d OFFSET $%d
@@ -234,12 +373,16 @@ func (s *UserStore) List(ctx context.Context, params models.UserFilterParams) (*
 
 func (s *UserStore) scanUser(row *sql.Row) (*models.User, error) {
 	user := &models.User{}
-	var passwordHash, avatarURL sql.NullString
+	var passwordHash, avatarURL, callSign, googleName, googleAvatarURL, avatarType, customAvatarURL sql.NullString
+	var profileVisibility sql.NullString
+	var showAircraft, allowSearch sql.NullBool
 	var lastLoginAt sql.NullTime
 
 	err := row.Scan(
 		&user.ID, &user.Email, &passwordHash, &user.DisplayName, &avatarURL,
 		&user.Status, &user.CreatedAt, &user.UpdatedAt, &lastLoginAt,
+		&callSign, &googleName, &googleAvatarURL, &avatarType, &customAvatarURL,
+		&profileVisibility, &showAircraft, &allowSearch,
 	)
 
 	if err == sql.ErrNoRows {
@@ -256,18 +399,49 @@ func (s *UserStore) scanUser(row *sql.Row) (*models.User, error) {
 	if lastLoginAt.Valid {
 		user.LastLoginAt = &lastLoginAt.Time
 	}
+	if callSign.Valid {
+		user.CallSign = callSign.String
+	}
+	if googleName.Valid {
+		user.GoogleName = googleName.String
+	}
+	if googleAvatarURL.Valid {
+		user.GoogleAvatarURL = googleAvatarURL.String
+	}
+	if avatarType.Valid {
+		user.AvatarType = models.AvatarType(avatarType.String)
+	}
+	if customAvatarURL.Valid {
+		user.CustomAvatarURL = customAvatarURL.String
+	}
+
+	// Set social settings with defaults
+	user.SocialSettings = models.DefaultSocialSettings()
+	if profileVisibility.Valid {
+		user.SocialSettings.ProfileVisibility = models.ProfileVisibility(profileVisibility.String)
+	}
+	if showAircraft.Valid {
+		user.SocialSettings.ShowAircraft = showAircraft.Bool
+	}
+	if allowSearch.Valid {
+		user.SocialSettings.AllowSearch = allowSearch.Bool
+	}
 
 	return user, nil
 }
 
 func (s *UserStore) scanUserFromRows(rows *sql.Rows) (*models.User, error) {
 	user := &models.User{}
-	var passwordHash, avatarURL sql.NullString
+	var passwordHash, avatarURL, callSign, googleName, googleAvatarURL, avatarType, customAvatarURL sql.NullString
+	var profileVisibility sql.NullString
+	var showAircraft, allowSearch sql.NullBool
 	var lastLoginAt sql.NullTime
 
 	err := rows.Scan(
 		&user.ID, &user.Email, &passwordHash, &user.DisplayName, &avatarURL,
 		&user.Status, &user.CreatedAt, &user.UpdatedAt, &lastLoginAt,
+		&callSign, &googleName, &googleAvatarURL, &avatarType, &customAvatarURL,
+		&profileVisibility, &showAircraft, &allowSearch,
 	)
 
 	if err != nil {
@@ -280,6 +454,33 @@ func (s *UserStore) scanUserFromRows(rows *sql.Rows) (*models.User, error) {
 	}
 	if lastLoginAt.Valid {
 		user.LastLoginAt = &lastLoginAt.Time
+	}
+	if callSign.Valid {
+		user.CallSign = callSign.String
+	}
+	if googleName.Valid {
+		user.GoogleName = googleName.String
+	}
+	if googleAvatarURL.Valid {
+		user.GoogleAvatarURL = googleAvatarURL.String
+	}
+	if avatarType.Valid {
+		user.AvatarType = models.AvatarType(avatarType.String)
+	}
+	if customAvatarURL.Valid {
+		user.CustomAvatarURL = customAvatarURL.String
+	}
+
+	// Set social settings with defaults
+	user.SocialSettings = models.DefaultSocialSettings()
+	if profileVisibility.Valid {
+		user.SocialSettings.ProfileVisibility = models.ProfileVisibility(profileVisibility.String)
+	}
+	if showAircraft.Valid {
+		user.SocialSettings.ShowAircraft = showAircraft.Bool
+	}
+	if allowSearch.Valid {
+		user.SocialSettings.AllowSearch = allowSearch.Bool
 	}
 
 	return user, nil
@@ -455,4 +656,265 @@ func (s *UserStore) RevokeAllUserRefreshTokens(ctx context.Context, userID strin
 	query := `UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`
 	_, err := s.db.ExecContext(ctx, query, userID)
 	return err
+}
+
+// UpdateSocialSettings updates a user's social settings
+func (s *UserStore) UpdateSocialSettings(ctx context.Context, userID string, params models.UpdateSocialSettingsParams) error {
+	var sets []string
+	var args []interface{}
+	argIdx := 1
+
+	if params.ProfileVisibility != nil {
+		sets = append(sets, fmt.Sprintf("profile_visibility = $%d", argIdx))
+		args = append(args, string(*params.ProfileVisibility))
+		argIdx++
+	}
+	if params.ShowAircraft != nil {
+		sets = append(sets, fmt.Sprintf("show_aircraft = $%d", argIdx))
+		args = append(args, *params.ShowAircraft)
+		argIdx++
+	}
+	if params.AllowSearch != nil {
+		sets = append(sets, fmt.Sprintf("allow_search = $%d", argIdx))
+		args = append(args, *params.AllowSearch)
+		argIdx++
+	}
+
+	if len(sets) == 0 {
+		return nil
+	}
+
+	sets = append(sets, "updated_at = NOW()")
+	args = append(args, userID)
+
+	query := fmt.Sprintf(`
+		UPDATE users SET %s
+		WHERE id = $%d
+	`, strings.Join(sets, ", "), argIdx)
+
+	_, err := s.db.ExecContext(ctx, query, args...)
+	return err
+}
+
+// Follow operations
+
+// CreateFollow creates a follow relationship between two users
+func (s *UserStore) CreateFollow(ctx context.Context, followerUserID, followedUserID string) (*models.Follow, error) {
+	if followerUserID == followedUserID {
+		return nil, fmt.Errorf("cannot follow yourself")
+	}
+
+	query := `
+		INSERT INTO follows (follower_user_id, followed_user_id)
+		VALUES ($1, $2)
+		ON CONFLICT (follower_user_id, followed_user_id) DO NOTHING
+		RETURNING id, follower_user_id, followed_user_id, created_at
+	`
+
+	follow := &models.Follow{}
+	err := s.db.QueryRowContext(ctx, query, followerUserID, followedUserID).Scan(
+		&follow.ID, &follow.FollowerUserID, &follow.FollowedUserID, &follow.CreatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		// Already following, return existing
+		return s.GetFollow(ctx, followerUserID, followedUserID)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return follow, nil
+}
+
+// DeleteFollow removes a follow relationship
+func (s *UserStore) DeleteFollow(ctx context.Context, followerUserID, followedUserID string) error {
+	query := `DELETE FROM follows WHERE follower_user_id = $1 AND followed_user_id = $2`
+	_, err := s.db.ExecContext(ctx, query, followerUserID, followedUserID)
+	return err
+}
+
+// GetFollow checks if a follow relationship exists
+func (s *UserStore) GetFollow(ctx context.Context, followerUserID, followedUserID string) (*models.Follow, error) {
+	query := `
+		SELECT id, follower_user_id, followed_user_id, created_at
+		FROM follows
+		WHERE follower_user_id = $1 AND followed_user_id = $2
+	`
+
+	follow := &models.Follow{}
+	err := s.db.QueryRowContext(ctx, query, followerUserID, followedUserID).Scan(
+		&follow.ID, &follow.FollowerUserID, &follow.FollowedUserID, &follow.CreatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return follow, nil
+}
+
+// IsFollowing checks if followerUserID follows followedUserID
+func (s *UserStore) IsFollowing(ctx context.Context, followerUserID, followedUserID string) (bool, error) {
+	query := `SELECT EXISTS(SELECT 1 FROM follows WHERE follower_user_id = $1 AND followed_user_id = $2)`
+	var exists bool
+	err := s.db.QueryRowContext(ctx, query, followerUserID, followedUserID).Scan(&exists)
+	return exists, err
+}
+
+// GetFollowerCount returns the number of followers for a user
+func (s *UserStore) GetFollowerCount(ctx context.Context, userID string) (int, error) {
+	query := `SELECT COUNT(*) FROM follows WHERE followed_user_id = $1`
+	var count int
+	err := s.db.QueryRowContext(ctx, query, userID).Scan(&count)
+	return count, err
+}
+
+// GetFollowingCount returns the number of users a user is following
+func (s *UserStore) GetFollowingCount(ctx context.Context, userID string) (int, error) {
+	query := `SELECT COUNT(*) FROM follows WHERE follower_user_id = $1`
+	var count int
+	err := s.db.QueryRowContext(ctx, query, userID).Scan(&count)
+	return count, err
+}
+
+// GetFollowers returns the list of users following the given user
+func (s *UserStore) GetFollowers(ctx context.Context, userID string, limit, offset int) (*models.FollowListResponse, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	// Get total count
+	countQuery := `SELECT COUNT(*) FROM follows WHERE followed_user_id = $1`
+	var totalCount int
+	if err := s.db.QueryRowContext(ctx, countQuery, userID).Scan(&totalCount); err != nil {
+		return nil, err
+	}
+
+	// Get follower user details
+	query := `
+		SELECT u.id, u.call_sign, u.display_name, u.avatar_url, u.google_avatar_url, u.avatar_type, u.custom_avatar_url
+		FROM follows f
+		JOIN users u ON u.id = f.follower_user_id
+		WHERE f.followed_user_id = $1
+		ORDER BY f.created_at DESC
+		LIMIT $2 OFFSET $3
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, userID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var pilots []models.PilotSummary
+	for rows.Next() {
+		var id string
+		var callSign, displayName, avatarURL, googleAvatarURL, avatarType, customAvatarURL sql.NullString
+
+		if err := rows.Scan(&id, &callSign, &displayName, &avatarURL, &googleAvatarURL, &avatarType, &customAvatarURL); err != nil {
+			return nil, err
+		}
+
+		// Compute effective avatar URL
+		effectiveAvatarURL := ""
+		if avatarType.Valid && avatarType.String == string(models.AvatarTypeCustom) && customAvatarURL.Valid {
+			effectiveAvatarURL = customAvatarURL.String
+		} else if googleAvatarURL.Valid {
+			effectiveAvatarURL = googleAvatarURL.String
+		} else if avatarURL.Valid {
+			effectiveAvatarURL = avatarURL.String
+		}
+
+		pilots = append(pilots, models.PilotSummary{
+			ID:                 id,
+			CallSign:           callSign.String,
+			DisplayName:        displayName.String,
+			EffectiveAvatarURL: effectiveAvatarURL,
+		})
+	}
+
+	if pilots == nil {
+		pilots = []models.PilotSummary{}
+	}
+
+	return &models.FollowListResponse{
+		Pilots:     pilots,
+		TotalCount: totalCount,
+	}, nil
+}
+
+// GetFollowing returns the list of users the given user is following
+func (s *UserStore) GetFollowing(ctx context.Context, userID string, limit, offset int) (*models.FollowListResponse, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	// Get total count
+	countQuery := `SELECT COUNT(*) FROM follows WHERE follower_user_id = $1`
+	var totalCount int
+	if err := s.db.QueryRowContext(ctx, countQuery, userID).Scan(&totalCount); err != nil {
+		return nil, err
+	}
+
+	// Get following user details
+	query := `
+		SELECT u.id, u.call_sign, u.display_name, u.avatar_url, u.google_avatar_url, u.avatar_type, u.custom_avatar_url
+		FROM follows f
+		JOIN users u ON u.id = f.followed_user_id
+		WHERE f.follower_user_id = $1
+		ORDER BY f.created_at DESC
+		LIMIT $2 OFFSET $3
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, userID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var pilots []models.PilotSummary
+	for rows.Next() {
+		var id string
+		var callSign, displayName, avatarURL, googleAvatarURL, avatarType, customAvatarURL sql.NullString
+
+		if err := rows.Scan(&id, &callSign, &displayName, &avatarURL, &googleAvatarURL, &avatarType, &customAvatarURL); err != nil {
+			return nil, err
+		}
+
+		// Compute effective avatar URL
+		effectiveAvatarURL := ""
+		if avatarType.Valid && avatarType.String == string(models.AvatarTypeCustom) && customAvatarURL.Valid {
+			effectiveAvatarURL = customAvatarURL.String
+		} else if googleAvatarURL.Valid {
+			effectiveAvatarURL = googleAvatarURL.String
+		} else if avatarURL.Valid {
+			effectiveAvatarURL = avatarURL.String
+		}
+
+		pilots = append(pilots, models.PilotSummary{
+			ID:                 id,
+			CallSign:           callSign.String,
+			DisplayName:        displayName.String,
+			EffectiveAvatarURL: effectiveAvatarURL,
+		})
+	}
+
+	if pilots == nil {
+		pilots = []models.PilotSummary{}
+	}
+
+	return &models.FollowListResponse{
+		Pilots:     pilots,
+		TotalCount: totalCount,
+	}, nil
 }

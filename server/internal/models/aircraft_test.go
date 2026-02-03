@@ -35,7 +35,7 @@ func TestComponentCategory_Values(t *testing.T) {
 	}{
 		{"fc", ComponentCategoryFC, "fc"},
 		{"esc", ComponentCategoryESC, "esc"},
-		{"elrs_module", ComponentCategoryELRSModule, "elrs_module"},
+		{"receiver", ComponentCategoryReceiver, "receiver"},
 		{"vtx", ComponentCategoryVTX, "vtx"},
 		{"motors", ComponentCategoryMotors, "motors"},
 		{"camera", ComponentCategoryCamera, "camera"},

@@ -178,8 +178,8 @@ func (s *Service) SetComponent(ctx context.Context, userID string, params models
 	return component, nil
 }
 
-// SetELRSSettings sets ELRS settings for an aircraft
-func (s *Service) SetELRSSettings(ctx context.Context, userID string, params models.SetELRSSettingsParams) (*models.AircraftELRSSettings, error) {
+// SetReceiverSettings sets receiver settings for an aircraft
+func (s *Service) SetReceiverSettings(ctx context.Context, userID string, params models.SetReceiverSettingsParams) (*models.AircraftReceiverSettings, error) {
 	if params.AircraftID == "" {
 		return nil, &ServiceError{Message: "aircraftId is required"}
 	}
@@ -203,18 +203,18 @@ func (s *Service) SetELRSSettings(ctx context.Context, userID string, params mod
 		}
 	}
 
-	settings, err := s.store.SetELRSSettings(ctx, params.AircraftID, params.Settings)
+	settings, err := s.store.SetReceiverSettings(ctx, params.AircraftID, params.Settings)
 	if err != nil {
-		s.logger.Error("Failed to set ELRS settings", logging.WithField("error", err.Error()))
+		s.logger.Error("Failed to set receiver settings", logging.WithField("error", err.Error()))
 		return nil, err
 	}
 
-	s.logger.Info("Set aircraft ELRS settings", logging.WithField("aircraft_id", params.AircraftID))
+	s.logger.Info("Set aircraft receiver settings", logging.WithField("aircraft_id", params.AircraftID))
 	return settings, nil
 }
 
-// GetELRSSettings retrieves ELRS settings for an aircraft
-func (s *Service) GetELRSSettings(ctx context.Context, aircraftID string, userID string) (*models.AircraftELRSSettings, error) {
+// GetReceiverSettings retrieves receiver settings for an aircraft
+func (s *Service) GetReceiverSettings(ctx context.Context, aircraftID string, userID string) (*models.AircraftReceiverSettings, error) {
 	// Verify the aircraft belongs to the user
 	aircraft, err := s.store.Get(ctx, aircraftID, userID)
 	if err != nil {
@@ -224,7 +224,7 @@ func (s *Service) GetELRSSettings(ctx context.Context, aircraftID string, userID
 		return nil, &ServiceError{Message: "aircraft not found"}
 	}
 
-	return s.store.GetELRSSettings(ctx, aircraftID)
+	return s.store.GetReceiverSettings(ctx, aircraftID)
 }
 
 // GetComponents retrieves all components for an aircraft
@@ -306,7 +306,7 @@ func mapComponentToEquipmentCategory(category models.ComponentCategory) models.E
 		return models.CategoryFC
 	case models.ComponentCategoryESC:
 		return models.CategoryESC
-	case models.ComponentCategoryELRSModule:
+	case models.ComponentCategoryReceiver:
 		return models.CategoryReceivers
 	case models.ComponentCategoryVTX:
 		return models.CategoryVTX

@@ -1,16 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, Sidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, Homepage, GettingStarted, RadioSection, BatterySection } from './components';
+import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, Sidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, Homepage, GettingStarted, RadioSection, BatterySection, MyProfile, SocialPage, PilotProfile } from './components';
 import { LoginPage } from './components/LoginPage';
 import { SignupPage } from './components/SignupPage';
 import { getItems, getSources, refreshFeeds } from './api';
 import { getInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem, getInventorySummary, addEquipmentToInventory } from './equipmentApi';
-import { listAircraft, createAircraft, updateAircraft, deleteAircraft, getAircraftDetails, setAircraftComponent, setELRSSettings } from './aircraftApi';
+import { listAircraft, createAircraft, updateAircraft, deleteAircraft, getAircraftDetails, setAircraftComponent, setReceiverSettings } from './aircraftApi';
 import { useFilters, useDebounce } from './hooks';
 import { useAuth } from './hooks/useAuth';
 import type { FeedItem, SourceInfo, FilterParams } from './types';
 import type { EquipmentItem, InventoryItem, EquipmentSearchParams, EquipmentCategory, ItemCondition, AddInventoryParams, InventorySummary, AppSection } from './equipmentTypes';
-import type { Aircraft, AircraftDetailsResponse, CreateAircraftParams, UpdateAircraftParams, SetComponentParams, ELRSConfig } from './aircraftTypes';
+import type { Aircraft, AircraftDetailsResponse, CreateAircraftParams, UpdateAircraftParams, SetComponentParams, ReceiverConfig } from './aircraftTypes';
 
 type AuthModal = 'none' | 'login' | 'signup';
 
@@ -26,6 +26,8 @@ const pathToSection: Record<string, AppSection> = {
   '/aircraft': 'aircraft',
   '/radio': 'radio',
   '/batteries': 'batteries',
+  '/social': 'social',
+  '/profile': 'profile',
 };
 
 const sectionToPath: Record<AppSection, string> = {
@@ -38,6 +40,9 @@ const sectionToPath: Record<AppSection, string> = {
   'aircraft': '/aircraft',
   'radio': '/radio',
   'batteries': '/batteries',
+  'social': '/social',
+  'profile': '/profile',
+  'pilot-profile': '/social/pilots', // Dynamic - handled separately
 };
 
 function App() {
@@ -91,6 +96,9 @@ function App() {
   const [showAircraftForm, setShowAircraftForm] = useState(false);
   const [editingAircraft, setEditingAircraft] = useState<Aircraft | null>(null);
   const [selectedAircraftDetails, setSelectedAircraftDetails] = useState<AircraftDetailsResponse | null>(null);
+
+  // Social/Pilot state
+  const [selectedPilotId, setSelectedPilotId] = useState<string | null>(null);
 
   // Filters
   const { filters, updateFilter } = useFilters();
@@ -395,9 +403,9 @@ function App() {
     await setAircraftComponent(selectedAircraftDetails.aircraft.id, params);
   }, [selectedAircraftDetails]);
 
-  const handleSetELRSSettings = useCallback(async (settings: ELRSConfig) => {
+  const handleSetReceiverSettings = useCallback(async (settings: ReceiverConfig) => {
     if (!selectedAircraftDetails) return;
-    await setELRSSettings(selectedAircraftDetails.aircraft.id, { settings });
+    await setReceiverSettings(selectedAircraftDetails.aircraft.id, { settings });
   }, [selectedAircraftDetails]);
 
   const refreshAircraftDetails = useCallback(async () => {
@@ -522,9 +530,13 @@ function App() {
               setEditingInventoryItem(null);
               setShowAddInventoryModal(true);
             }}
-            onAddRadio={() => navigate('/radio')}
             onSelectAircraft={handleSelectAircraft}
             onSelectNewsItem={setSelectedItem}
+            onSelectPilot={(pilotId) => {
+              setSelectedPilotId(pilotId);
+              navigate('/social');
+            }}
+            onGoToSocial={() => navigate('/social')}
           />
         )}
 
@@ -548,9 +560,13 @@ function App() {
               setEditingInventoryItem(null);
               setShowAddInventoryModal(true);
             }}
-            onAddRadio={() => navigate('/radio')}
             onSelectAircraft={handleSelectAircraft}
             onSelectNewsItem={setSelectedItem}
+            onSelectPilot={(pilotId) => {
+              setSelectedPilotId(pilotId);
+              navigate('/social');
+            }}
+            onGoToSocial={() => navigate('/social')}
           />
         )}
 
@@ -628,7 +644,7 @@ function App() {
               <div>
                 <h1 className="text-xl font-semibold text-white">My Aircraft</h1>
                 <p className="text-sm text-slate-400">
-                  Manage your drones, components, and ELRS settings
+                  Manage your drones, components, and receiver settings
                 </p>
               </div>
               <button
@@ -669,6 +685,27 @@ function App() {
         {activeSection === 'batteries' && (
           <BatterySection
             onError={(message) => setError(message)}
+          />
+        )}
+
+        {/* Profile Section */}
+        {activeSection === 'profile' && (
+          <MyProfile />
+        )}
+
+        {/* Social/Pilot Directory Section */}
+        {activeSection === 'social' && !selectedPilotId && (
+          <SocialPage
+            onSelectPilot={(pilotId) => setSelectedPilotId(pilotId)}
+          />
+        )}
+
+        {/* Pilot Profile View */}
+        {activeSection === 'social' && selectedPilotId && (
+          <PilotProfile
+            pilotId={selectedPilotId}
+            onBack={() => setSelectedPilotId(null)}
+            onSelectPilot={(pilotId) => setSelectedPilotId(pilotId)}
           />
         )}
       </div>
@@ -719,7 +756,7 @@ function App() {
           details={selectedAircraftDetails}
           onClose={() => setSelectedAircraftDetails(null)}
           onSetComponent={handleSetAircraftComponent}
-          onSetELRSSettings={handleSetELRSSettings}
+          onSetReceiverSettings={handleSetReceiverSettings}
           onRefresh={refreshAircraftDetails}
         />
       )}
