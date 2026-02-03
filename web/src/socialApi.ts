@@ -128,10 +128,7 @@ export async function updateSocialSettings(
 ): Promise<SocialSettings> {
   const response = await fetch(`${API_BASE}/me/social-settings`, {
     method: 'PUT',
-    headers: {
-      ...getAuthHeaders(),
-      'Content-Type': 'application/json',
-    },
+    headers: getAuthHeaders(),
     body: JSON.stringify(settings),
   });
 
