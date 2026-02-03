@@ -233,8 +233,8 @@ func (s *UserStore) SearchPilots(ctx context.Context, params models.PilotSearchP
 	}
 
 	limit := params.Limit
-	if limit <= 0 || limit > 20 {
-		limit = 20
+	if limit <= 0 || limit > 50 {
+		limit = 50
 	}
 
 	searchTerm := "%" + strings.ToLower(strings.TrimSpace(query)) + "%"
