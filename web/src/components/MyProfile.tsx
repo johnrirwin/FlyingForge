@@ -106,14 +106,16 @@ export function MyProfile() {
         setPendingAvatar(null);
       }
       
-      // Omit fields when blank to avoid empty string UNIQUE constraint violations
+      // Build update params - include fields that have changed from original
       const params: UpdateProfileParams = {};
       const trimmedDisplayName = formData.displayName.trim();
       
-      if (trimmedCallSign) {
+      // Always send callSign if it changed (including clearing it)
+      if (trimmedCallSign !== (profile?.callSign || '')) {
         params.callSign = trimmedCallSign;
       }
-      if (trimmedDisplayName) {
+      // Always send displayName if it changed (including clearing it)
+      if (trimmedDisplayName !== (profile?.displayName || '')) {
         params.displayName = trimmedDisplayName;
       }
       
