@@ -68,11 +68,17 @@ export function MyProfile() {
       setError(null);
       setSuccess(null);
       
-      // Send empty strings to clear values (not undefined which skips the field)
-      const params: UpdateProfileParams = {
-        callSign: formData.callSign.trim(),
-        displayName: formData.displayName.trim(),
-      };
+      // Omit fields when blank to avoid empty string UNIQUE constraint violations
+      const params: UpdateProfileParams = {};
+      const trimmedCallSign = formData.callSign.trim();
+      const trimmedDisplayName = formData.displayName.trim();
+      
+      if (trimmedCallSign) {
+        params.callSign = trimmedCallSign;
+      }
+      if (trimmedDisplayName) {
+        params.displayName = trimmedDisplayName;
+      }
       
       const updatedProfile = await updateProfile(params);
       setProfile(updatedProfile);
