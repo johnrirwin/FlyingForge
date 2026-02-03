@@ -71,7 +71,7 @@ func (api *OrderAPI) handleOrderItem(w http.ResponseWriter, r *http.Request) {
 }
 
 func (api *OrderAPI) listOrders(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(auth.UserIDKey).(string)
+	userID := auth.GetUserID(r.Context())
 
 	query := r.URL.Query()
 
@@ -110,7 +110,7 @@ func (api *OrderAPI) listOrders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (api *OrderAPI) getOrder(w http.ResponseWriter, r *http.Request, id string) {
-	userID := r.Context().Value(auth.UserIDKey).(string)
+	userID := auth.GetUserID(r.Context())
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
@@ -146,7 +146,7 @@ func (api *OrderAPI) getOrder(w http.ResponseWriter, r *http.Request, id string)
 }
 
 func (api *OrderAPI) createOrder(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(auth.UserIDKey).(string)
+	userID := auth.GetUserID(r.Context())
 
 	var params models.AddOrderParams
 	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
@@ -196,7 +196,7 @@ func (api *OrderAPI) createOrder(w http.ResponseWriter, r *http.Request) {
 }
 
 func (api *OrderAPI) updateOrder(w http.ResponseWriter, r *http.Request, id string) {
-	userID := r.Context().Value(auth.UserIDKey).(string)
+	userID := auth.GetUserID(r.Context())
 
 	var params models.UpdateOrderParams
 	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
@@ -256,7 +256,7 @@ func (api *OrderAPI) updateOrder(w http.ResponseWriter, r *http.Request, id stri
 }
 
 func (api *OrderAPI) deleteOrder(w http.ResponseWriter, r *http.Request, id string) {
-	userID := r.Context().Value(auth.UserIDKey).(string)
+	userID := auth.GetUserID(r.Context())
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
