@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import type { AircraftPublic, ComponentCategory } from '../socialTypes';
-import { getPublicAircraftImageUrl } from '../socialApi';
+import { AircraftImage } from './AircraftImage';
 
 interface PublicAircraftModalProps {
   aircraft: AircraftPublic;
@@ -32,7 +32,6 @@ const CATEGORY_ORDER: ComponentCategory[] = [
 
 export function PublicAircraftModal({ aircraft, onClose }: PublicAircraftModalProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('components');
-  const [imageError, setImageError] = useState(false);
 
   const hasComponents = aircraft.components && aircraft.components.length > 0;
   const hasReceiverSettings = aircraft.receiverSettings && 
@@ -59,22 +58,12 @@ export function PublicAircraftModal({ aircraft, onClose }: PublicAircraftModalPr
         <div className="flex items-center justify-between p-4 border-b border-slate-700">
           <div className="flex items-center gap-4">
             {/* Aircraft image/icon */}
-            <div className="w-16 h-16 rounded-lg overflow-hidden bg-slate-700 flex-shrink-0">
-              {aircraft.hasImage && !imageError ? (
-                <img
-                  src={getPublicAircraftImageUrl(aircraft.id)}
-                  alt={aircraft.name}
-                  className="w-full h-full object-cover"
-                  onError={() => setImageError(true)}
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <svg className="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                </div>
-              )}
-            </div>
+            <AircraftImage
+              aircraftId={aircraft.id}
+              aircraftName={aircraft.name}
+              hasImage={aircraft.hasImage}
+              className="w-16 h-16 rounded-lg object-cover"
+            />
             <div>
               <h2 className="text-lg font-semibold text-white">{aircraft.name}</h2>
               {aircraft.nickname && (

@@ -18,15 +18,29 @@ function getAuthHeaders(): HeadersInit {
   };
 }
 
-// Get public aircraft image URL (for pilot profiles)
-export function getPublicAircraftImageUrl(aircraftId: string): string {
-  const tokens = getStoredTokens();
+// Fetch public aircraft image with proper Authorization header
+// Returns a blob URL that can be used in img src attributes
+// The blob URL should be revoked when no longer needed using URL.revokeObjectURL()
+export async function fetchPublicAircraftImage(aircraftId: string): Promise<string | null> {
   const timestamp = Date.now();
-  const baseUrl = `${API_BASE}/pilots/aircraft/${aircraftId}/image`;
-  if (tokens?.accessToken) {
-    return `${baseUrl}?token=${encodeURIComponent(tokens.accessToken)}&t=${timestamp}`;
+  const url = `${API_BASE}/pilots/aircraft/${aircraftId}/image?t=${timestamp}`;
+  
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+  } catch (error) {
+    console.error('Failed to fetch aircraft image:', error);
+    return null;
   }
-  return `${baseUrl}?t=${timestamp}`;
 }
 
 // Follow a pilot

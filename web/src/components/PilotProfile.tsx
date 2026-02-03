@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getPilotProfile } from '../pilotApi';
-import { followPilot, unfollowPilot, getPublicAircraftImageUrl } from '../socialApi';
+import { followPilot, unfollowPilot } from '../socialApi';
 import type { PilotProfile as PilotProfileType, AircraftPublic } from '../socialTypes';
 import { useAuth } from '../hooks/useAuth';
 import { PublicAircraftModal } from './PublicAircraftModal';
 import { FollowListModal } from './FollowListModal';
+import { AircraftImage } from './AircraftImage';
 
 type FollowListType = 'followers' | 'following' | null;
 
@@ -265,8 +266,6 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
 }
 
 function AircraftCard({ aircraft, onClick }: { aircraft: AircraftPublic; onClick: () => void }) {
-  const [imageError, setImageError] = useState(false);
-  
   const formatType = (type?: string) => {
     if (!type) return 'Unknown Type';
     return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
@@ -282,18 +281,17 @@ function AircraftCard({ aircraft, onClick }: { aircraft: AircraftPublic; onClick
     >
       {/* Image */}
       <div className="aspect-video bg-slate-800 flex items-center justify-center relative">
-        {aircraft.hasImage && !imageError ? (
-          <img
-            src={getPublicAircraftImageUrl(aircraft.id)}
-            alt={aircraft.name}
-            className="w-full h-full object-cover"
-            onError={() => setImageError(true)}
-          />
-        ) : (
-          <svg className="w-12 h-12 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-          </svg>
-        )}
+        <AircraftImage
+          aircraftId={aircraft.id}
+          aircraftName={aircraft.name}
+          hasImage={aircraft.hasImage}
+          className="w-full h-full object-cover absolute inset-0"
+          fallbackIcon={
+            <svg className="w-12 h-12 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+          }
+        />
         {/* Click hint overlay */}
         <div className="absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 hover:opacity-100">
           <span className="bg-slate-900/90 px-3 py-1.5 rounded-lg text-sm text-white">
