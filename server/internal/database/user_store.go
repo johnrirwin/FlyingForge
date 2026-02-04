@@ -721,6 +721,13 @@ func (s *UserStore) DeleteFollow(ctx context.Context, followerUserID, followedUs
 	return err
 }
 
+// DeleteAllFollowsForUser removes all follow relationships for a user (both as follower and followed)
+func (s *UserStore) DeleteAllFollowsForUser(ctx context.Context, userID string) error {
+	query := `DELETE FROM follows WHERE follower_user_id = $1 OR followed_user_id = $1`
+	_, err := s.db.ExecContext(ctx, query, userID)
+	return err
+}
+
 // GetFollow checks if a follow relationship exists
 func (s *UserStore) GetFollow(ctx context.Context, followerUserID, followedUserID string) (*models.Follow, error) {
 	query := `

@@ -26,6 +26,8 @@ export function MyProfile() {
   });
   const [validationError, setValidationError] = useState<string | null>(null);
   const [pendingAvatar, setPendingAvatar] = useState<PendingAvatar | null>(null);
+  const [showClearCallSignModal, setShowClearCallSignModal] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -87,6 +89,18 @@ export function MyProfile() {
         return;
       }
     }
+
+    // Check if user is clearing their callsign (had one before, now removing it)
+    if (!trimmedCallSign && profile?.callSign) {
+      setShowClearCallSignModal(true);
+      return;
+    }
+
+    await saveProfile();
+  };
+
+  const saveProfile = async () => {
+    const trimmedCallSign = formData.callSign.trim();
 
     try {
       setIsSaving(true);
@@ -151,6 +165,19 @@ export function MyProfile() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleConfirmClearCallSign = async () => {
+    setShowClearCallSignModal(false);
+    setConfirmText('');
+    await saveProfile();
+  };
+
+  const handleCancelClearCallSign = () => {
+    setShowClearCallSignModal(false);
+    setConfirmText('');
+    // Restore the original callsign
+    setFormData(prev => ({ ...prev, callSign: profile?.callSign || '' }));
   };
 
   const handleAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -366,6 +393,70 @@ export function MyProfile() {
           <p>Last updated: {profile?.updatedAt ? new Date(profile.updatedAt).toLocaleDateString() : 'N/A'}</p>
         </div>
       </div>
+
+      {/* Clear Call Sign Confirmation Modal */}
+      {showClearCallSignModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full shadow-2xl border border-slate-700">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-white">Remove Call Sign?</h3>
+            </div>
+            
+            <div className="mb-4">
+              <p className="text-slate-300 mb-3">
+                Removing your call sign will:
+              </p>
+              <ul className="text-sm text-slate-400 space-y-2 mb-4">
+                <li className="flex items-start gap-2">
+                  <span className="text-red-400 mt-0.5">•</span>
+                  <span>Remove all pilots you are following</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-red-400 mt-0.5">•</span>
+                  <span>Remove all pilots following you</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-red-400 mt-0.5">•</span>
+                  <span>Hide your profile from the pilot directory</span>
+                </li>
+              </ul>
+              <p className="text-sm text-slate-400">
+                Type <span className="font-mono text-red-400 bg-red-400/10 px-1.5 py-0.5 rounded">confirm</span> to proceed:
+              </p>
+            </div>
+            
+            <input
+              type="text"
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder="Type 'confirm' to proceed"
+              className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent mb-4"
+              autoFocus
+            />
+            
+            <div className="flex gap-3">
+              <button
+                onClick={handleCancelClearCallSign}
+                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmClearCallSign}
+                disabled={confirmText.toLowerCase() !== 'confirm'}
+                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Remove Call Sign
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

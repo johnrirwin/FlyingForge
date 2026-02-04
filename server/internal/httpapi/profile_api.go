@@ -117,6 +117,26 @@ func (api *ProfileAPI) handleUpdateProfile(w http.ResponseWriter, r *http.Reques
 				api.writeError(w, http.StatusConflict, "callsign_taken", "this callsign is already in use")
 				return
 			}
+		} else {
+			// Callsign is being cleared - check if user had one and delete all follows
+			currentUser, err := api.userStore.GetByID(r.Context(), userID)
+			if err != nil {
+				api.logger.Error("Failed to get current user", logging.WithField("error", err.Error()))
+				api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to update profile")
+				return
+			}
+			if currentUser != nil && currentUser.CallSign != "" {
+				// User had a callsign and is clearing it - delete all follow relationships
+				if err := api.userStore.DeleteAllFollowsForUser(r.Context(), userID); err != nil {
+					api.logger.Error("Failed to delete follows when clearing callsign",
+						logging.WithField("error", err.Error()),
+						logging.WithField("userID", userID))
+					// Continue anyway - the callsign update is more important
+				} else {
+					api.logger.Info("Deleted all follows for user clearing callsign",
+						logging.WithField("userID", userID))
+				}
+			}
 		}
 	}
 
