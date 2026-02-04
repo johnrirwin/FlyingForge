@@ -837,21 +837,21 @@ function PIDDisplay({ pids }: { pids: PIDProfile }) {
               <td className="py-1 text-center font-mono">{pids.roll.p}</td>
               <td className="py-1 text-center font-mono">{pids.roll.i}</td>
               <td className="py-1 text-center font-mono">{pids.roll.d}</td>
-              <td className="py-1 text-center font-mono">{pids.roll.ff || '-'}</td>
+              <td className="py-1 text-center font-mono">{pids.roll.ff ?? '-'}</td>
             </tr>
             <tr>
               <td className="py-1 text-slate-300">Pitch</td>
               <td className="py-1 text-center font-mono">{pids.pitch.p}</td>
               <td className="py-1 text-center font-mono">{pids.pitch.i}</td>
               <td className="py-1 text-center font-mono">{pids.pitch.d}</td>
-              <td className="py-1 text-center font-mono">{pids.pitch.ff || '-'}</td>
+              <td className="py-1 text-center font-mono">{pids.pitch.ff ?? '-'}</td>
             </tr>
             <tr>
               <td className="py-1 text-slate-300">Yaw</td>
               <td className="py-1 text-center font-mono">{pids.yaw.p}</td>
               <td className="py-1 text-center font-mono">{pids.yaw.i}</td>
               <td className="py-1 text-center font-mono">{pids.yaw.d}</td>
-              <td className="py-1 text-center font-mono">{pids.yaw.ff || '-'}</td>
+              <td className="py-1 text-center font-mono">{pids.yaw.ff ?? '-'}</td>
             </tr>
           </tbody>
         </table>
