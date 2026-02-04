@@ -84,7 +84,7 @@ describe('Sidebar', () => {
       expect(screen.getByText('My Gear')).toBeInTheDocument()
       expect(screen.getByText('My Aircraft')).toBeInTheDocument()
       expect(screen.getByText('My Radio')).toBeInTheDocument()
-      expect(screen.getByText('Batteries')).toBeInTheDocument()
+      expect(screen.getByText('My Batteries')).toBeInTheDocument()
     })
 
     it('renders Dashboard instead of Home/Getting Started for authenticated users', () => {
@@ -131,17 +131,6 @@ describe('Sidebar', () => {
       expect(shopButton).toHaveClass('bg-primary-600/20')
       expect(shopButton).toHaveClass('text-primary-400')
     })
-
-    it('shows item count badge on My Gear when inventory summary exists', () => {
-      render(<Sidebar {...createDefaultProps({ 
-        isAuthenticated: true, 
-        user: mockUser,
-        inventorySummary: mockInventorySummary 
-      })} />)
-      
-      // Should show the total items count
-      expect(screen.getByText('15')).toBeInTheDocument()
-    })
   })
 
   describe('Inventory Filters', () => {
@@ -172,8 +161,8 @@ describe('Sidebar', () => {
       expect(screen.getByText('Total Items')).toBeInTheDocument()
       expect(screen.getByText('Total Value')).toBeInTheDocument()
       expect(screen.getByText('$2500')).toBeInTheDocument()
-      // 15 appears twice (badge + summary), just verify the summary section exists
-      expect(screen.getAllByText('15')).toHaveLength(2)
+      // 15 appears once in the inventory summary section
+      expect(screen.getByText('15')).toBeInTheDocument()
     })
 
     it('calls onInventoryFilterChange when condition is changed', () => {
