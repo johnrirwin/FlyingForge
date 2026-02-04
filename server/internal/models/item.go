@@ -16,11 +16,19 @@ type FeedItem struct {
 	Thumbnail   string      `json:"thumbnail,omitempty"`
 	Tags        []string    `json:"tags"`
 	Engagement  *Engagement `json:"engagement,omitempty"`
+	Media       *MediaInfo  `json:"media,omitempty"`
 }
 
 type Engagement struct {
 	Upvotes  int `json:"upvotes,omitempty"`
 	Comments int `json:"comments,omitempty"`
+}
+
+type MediaInfo struct {
+	Type     string `json:"type,omitempty"`     // "video", "image"
+	ImageUrl string `json:"imageUrl,omitempty"` // Thumbnail URL
+	VideoUrl string `json:"videoUrl,omitempty"` // Video URL (for YouTube)
+	Duration string `json:"duration,omitempty"` // Video duration
 }
 
 type SourceInfo struct {
@@ -30,6 +38,8 @@ type SourceInfo struct {
 	SourceType  string `json:"sourceType"`
 	Description string `json:"description"`
 	FeedType    string `json:"feedType"`
+	ChannelID   string `json:"channelId,omitempty"` // YouTube channel ID
+	Category    string `json:"category,omitempty"`  // news, community, creator
 	Enabled     bool   `json:"enabled"`
 }
 

@@ -146,11 +146,31 @@ func (a *App) initCache() cache.Cache {
 }
 
 func (a *App) initFetchers(limiter *ratelimit.Limiter) []sources.Fetcher {
-	sourcesConfig := sources.DefaultConfig()
-	var fetchers []sources.Fetcher
-	fetchers = append(fetchers, sources.CreateDroneRSSFetchers(limiter, sourcesConfig)...)
-	fetchers = append(fetchers, sources.CreateDroneRedditFetchers(limiter, sourcesConfig)...)
-	return fetchers
+	fetcherConfig := sources.DefaultConfig()
+	
+	// Try to load feeds from config file
+	configPath := sources.FindFeedsConfig()
+	if configPath != "" {
+		feedsConfig, err := sources.LoadFeedsConfig(configPath)
+		if err != nil {
+			a.Logger.Warn("Failed to load feeds config, using defaults", logging.WithFields(map[string]interface{}{
+				"path":  configPath,
+				"error": err.Error(),
+			}))
+		} else {
+			a.Logger.Info("Loaded feeds configuration", logging.WithFields(map[string]interface{}{
+				"path":    configPath,
+				"sources": len(feedsConfig.Sources),
+			}))
+			return sources.CreateFetchersFromConfig(feedsConfig, limiter, fetcherConfig)
+		}
+	} else {
+		a.Logger.Info("No feeds.json found, using default sources")
+	}
+	
+	// Fallback to default config
+	defaultConfig := sources.GetDefaultFeedsConfig()
+	return sources.CreateFetchersFromConfig(defaultConfig, limiter, fetcherConfig)
 }
 
 func (a *App) initSellers(limiter *ratelimit.Limiter) *sellers.Registry {

@@ -1,0 +1,179 @@
+{
+  "sources": [
+    {
+      "name": "DroneDJ",
+      "url": "https://dronedj.com/feed/",
+      "type": "rss",
+      "category": "news",
+      "enabled": true
+    },
+    {
+      "name": "DroneLife",
+      "url": "https://dronelife.com/feed/",
+      "type": "rss",
+      "category": "news",
+      "enabled": true
+    },
+    {
+      "name": "sUAS News",
+      "url": "https://www.suasnews.com/feed/",
+      "type": "rss",
+      "category": "news",
+      "enabled": true
+    },
+    {
+      "name": "DroneBlog",
+      "url": "https://www.droneblog.com/feed/",
+      "type": "rss",
+      "category": "news",
+      "enabled": true
+    },
+    {
+      "name": "Haye's UAV",
+      "url": "https://www.yourdroneadvisor.com/feed/",
+      "type": "rss",
+      "category": "news",
+      "enabled": true
+    },
+    {
+      "name": "Commercial UAV News",
+      "url": "https://www.commercialuavnews.com/feed",
+      "type": "rss",
+      "category": "news",
+      "enabled": true
+    },
+    {
+      "name": "r/fpv",
+      "url": "https://www.reddit.com/r/fpv/.rss",
+      "type": "reddit",
+      "category": "community",
+      "enabled": true
+    },
+    {
+      "name": "r/Multicopter",
+      "url": "https://www.reddit.com/r/Multicopter/.rss",
+      "type": "reddit",
+      "category": "community",
+      "enabled": true
+    },
+    {
+      "name": "r/drones",
+      "url": "https://www.reddit.com/r/drones/.rss",
+      "type": "reddit",
+      "category": "community",
+      "enabled": true
+    },
+    {
+      "name": "r/djimavic",
+      "url": "https://www.reddit.com/r/djimavic/.rss",
+      "type": "reddit",
+      "category": "community",
+      "enabled": true
+    },
+    {
+      "name": "Joshua Bardwell",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCX3eufnI7A2I7IkKHZn8KSQ",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": true
+    },
+    {
+      "name": "Mads Tech",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCxpgzA0iO-7anEAyiLMDRmg",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": true
+    },
+    {
+      "name": "Mr Steele",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCQEqPV0AwJ6mQYLmSO0rcNA",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": true
+    },
+    {
+      "name": "Rotor Riot",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCemG3VoNCmjP8ucHR2YY7hw",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": true
+    },
+    {
+      "name": "Botgrinder",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCZQvJ1pE1p6v7ZQy7K1yG9A",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": true
+    },
+    {
+      "name": "Cricket FPV",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UC7O8m9Z6HkZ0zQJkJp6p6Lg",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": true
+    },
+    {
+      "name": "Captain Vanover",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UC5z0Z7pP6m2p1VZJvKp2fMg",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": true
+    },
+    {
+      "name": "BubbyFPV",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCkJ7PZ0p8Qm6ZQ5n9Y6dK1A",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": true
+    },
+    {
+      "name": "FlytPath",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UC9PycnkleNM93xCRl_ZsIjA",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": true
+    },
+    {
+      "name": "Ken Heron",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCCN3j77kPMeQu41gfMNd13A",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": true
+    },
+    {
+      "name": "51 Drones",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UC7J3hH0KpYp9K7n7PZ5k1Jw",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": true
+    },
+    {
+      "name": "Ready Set Drone",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCj8MpuOzk1WcV9nK6N6Yz7A",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": true
+    },
+    {
+      "name": "Captain Drone",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCx5WjZ0Z0Z0Z0Z0Z0Z0Z0Z",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": true
+    },
+    {
+      "name": "Drone Camps RC",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCwojJxGQ0f1MZKpN9Y6A9fA",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": true
+    },
+    {
+      "name": "Drone Valley",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCkzT6mF8k6P9z8N0y5YFJ0A",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": true
+    }
+  ]
+}
