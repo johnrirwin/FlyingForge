@@ -18,7 +18,7 @@ resource "random_password" "db_password" {
 # Store DB password in Secrets Manager
 resource "aws_secretsmanager_secret" "db_password" {
   name                    = "${var.app_name}/db-password"
-  recovery_window_in_days = 0
+  recovery_window_in_days = 7
 
   tags = {
     Name = "${var.app_name}-db-password"

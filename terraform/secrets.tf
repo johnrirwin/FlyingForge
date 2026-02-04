@@ -1,7 +1,7 @@
 # Application Secrets
 resource "aws_secretsmanager_secret" "app_secrets" {
   name                    = "${var.app_name}/app-secrets"
-  recovery_window_in_days = 0
+  recovery_window_in_days = 7
 
   tags = {
     Name = "${var.app_name}-app-secrets"
@@ -20,7 +20,7 @@ resource "aws_secretsmanager_secret_version" "app_secrets" {
 # Database URL secret (constructed from RDS output)
 resource "aws_secretsmanager_secret" "database_url" {
   name                    = "${var.app_name}/database-url"
-  recovery_window_in_days = 0
+  recovery_window_in_days = 7
 
   tags = {
     Name = "${var.app_name}-database-url"
@@ -35,7 +35,7 @@ resource "aws_secretsmanager_secret_version" "database_url" {
 # Redis URL secret
 resource "aws_secretsmanager_secret" "redis_url" {
   name                    = "${var.app_name}/redis-url"
-  recovery_window_in_days = 0
+  recovery_window_in_days = 7
 
   tags = {
     Name = "${var.app_name}-redis-url"
