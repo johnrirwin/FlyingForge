@@ -112,7 +112,7 @@ describe('useGoogleAnalytics', () => {
 
       expect(configCall).toBeDefined()
       expect(configCall?.[1]).toBe('G-TEST123456')
-      expect(configCall?.[2]).toEqual({ send_page_view: false })
+      expect(configCall?.[2]).toEqual({ send_page_view: false, debug_mode: true })
     })
 
     it('does not re-initialize if called multiple times', async () => {
