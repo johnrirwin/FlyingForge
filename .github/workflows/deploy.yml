@@ -178,6 +178,8 @@ jobs:
             -var="google_client_id=${{ secrets.GOOGLE_CLIENT_ID }}" \
             -var="google_client_secret=${{ secrets.GOOGLE_CLIENT_SECRET }}" \
             -var="encryption_key=${{ secrets.ENCRYPTION_KEY }}" \
+            -var="domain_name=flyingforge.com" \
+            -var="create_dns_record=true" \
             -out=tfplan
 
       - name: Terraform Apply
