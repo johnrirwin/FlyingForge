@@ -25,7 +25,6 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
   const [error, setError] = useState<string | null>(null);
   const [isFollowing, setIsFollowing] = useState(false);
   const [isFollowLoading, setIsFollowLoading] = useState(false);
-  const [followError, setFollowError] = useState<string | null>(null);
   const [selectedAircraft, setSelectedAircraft] = useState<AircraftPublic | null>(null);
   const [showFollowList, setShowFollowList] = useState<FollowListType>(null);
   const [showCallSignPrompt, setShowCallSignPrompt] = useState(false);
@@ -55,7 +54,6 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
     
     try {
       setIsFollowLoading(true);
-      setFollowError(null); // Clear any previous follow errors
       if (isFollowing) {
         await unfollowPilot(pilotId);
         setIsFollowing(false);
@@ -74,14 +72,13 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
         trackEvent('social_follow');
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to toggle follow';
       // Check if this is a callsign required error - show the modal instead
       if (err instanceof ApiError && err.code === 'callsign_required') {
         setShowCallSignPrompt(true);
       } else {
-        setFollowError(message);
+        // Log other errors but don't show inline - they're usually transient
+        console.error('Failed to toggle follow:', err);
       }
-      console.error('Failed to toggle follow:', err);
     } finally {
       setIsFollowLoading(false);
     }
@@ -228,22 +225,17 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
 
           {/* Follow Button */}
           {!isOwnProfile && (
-            <div className="flex flex-col items-end gap-2">
-              <button
-                onClick={handleFollowToggle}
-                disabled={isFollowLoading}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  isFollowing
-                    ? 'bg-slate-700 text-white hover:bg-slate-600'
-                    : 'bg-primary-500 text-white hover:bg-primary-600'
-                } disabled:opacity-50`}
-              >
-                {isFollowLoading ? '...' : isFollowing ? 'Following' : 'Follow'}
-              </button>
-              {followError && (
-                <p className="text-sm text-red-400 max-w-xs text-right">{followError}</p>
-              )}
-            </div>
+            <button
+              onClick={handleFollowToggle}
+              disabled={isFollowLoading}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                isFollowing
+                  ? 'bg-slate-700 text-white hover:bg-slate-600'
+                  : 'bg-primary-500 text-white hover:bg-primary-600'
+              } disabled:opacity-50`}
+            >
+              {isFollowLoading ? '...' : isFollowing ? 'Following' : 'Follow'}
+            </button>
           )}
         </div>
       </div>
