@@ -9,6 +9,17 @@ import { getStoredTokens } from './authApi';
 
 const API_BASE = '/api';
 
+// Custom error class for API errors with error codes
+export class ApiError extends Error {
+  code: string;
+  
+  constructor(message: string, code: string) {
+    super(message);
+    this.code = code;
+    this.name = 'ApiError';
+  }
+}
+
 // Helper to get auth headers
 function getAuthHeaders(): HeadersInit {
   const tokens = getStoredTokens();
@@ -52,7 +63,7 @@ export async function followPilot(userId: string): Promise<FollowResponse> {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.message || 'Failed to follow pilot');
+    throw new ApiError(error.message || 'Failed to follow pilot', error.code || 'unknown_error');
   }
 
   return response.json();

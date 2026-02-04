@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getPilotProfile } from '../pilotApi';
-import { followPilot, unfollowPilot } from '../socialApi';
+import { followPilot, unfollowPilot, ApiError } from '../socialApi';
 import { updateProfile } from '../profileApi';
 import type { PilotProfile as PilotProfileType, AircraftPublic } from '../socialTypes';
 import { useAuth } from '../hooks/useAuth';
@@ -76,7 +76,7 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to toggle follow';
       // Check if this is a callsign required error - show the modal instead
-      if (message.toLowerCase().includes('call sign')) {
+      if (err instanceof ApiError && err.code === 'callsign_required') {
         setShowCallSignPrompt(true);
       } else {
         setFollowError(message);
