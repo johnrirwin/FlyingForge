@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"golang.org/x/crypto/bcrypt"
 
 	"github.com/johnrirwin/flyingforge/internal/config"
 	"github.com/johnrirwin/flyingforge/internal/database"
@@ -37,118 +36,6 @@ func NewService(userStore *database.UserStore, cfg config.AuthConfig, logger *lo
 		userStore: userStore,
 		logger:    logger,
 	}
-}
-
-// SignupWithEmail creates a new user with email/password
-func (s *Service) SignupWithEmail(ctx context.Context, params models.SignupParams) (*models.AuthResponse, error) {
-	email := strings.ToLower(strings.TrimSpace(params.Email))
-
-	// Validate input
-	if email == "" {
-		return nil, &AuthError{Code: "invalid_input", Message: "email is required"}
-	}
-	if params.Password == "" {
-		return nil, &AuthError{Code: "invalid_input", Message: "password is required"}
-	}
-	if len(params.Password) < 8 {
-		return nil, &AuthError{Code: "invalid_input", Message: "password must be at least 8 characters"}
-	}
-
-	// Check if user exists
-	existing, err := s.userStore.GetByEmail(ctx, email)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check existing user: %w", err)
-	}
-	if existing != nil {
-		return nil, &AuthError{Code: "user_exists", Message: "a user with this email already exists"}
-	}
-
-	// Hash password
-	passwordHash, err := bcrypt.GenerateFromPassword([]byte(params.Password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, fmt.Errorf("failed to hash password: %w", err)
-	}
-
-	// Create user
-	user, err := s.userStore.Create(ctx, models.CreateUserParams{
-		Email:       email,
-		Password:    string(passwordHash),
-		DisplayName: strings.TrimSpace(params.DisplayName),
-		CallSign:    strings.TrimSpace(params.CallSign),
-		Status:      models.UserStatusActive,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create user: %w", err)
-	}
-
-	// Generate tokens
-	tokens, err := s.generateTokens(ctx, user)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate tokens: %w", err)
-	}
-
-	s.logger.Info("User signed up with email", logging.WithFields(map[string]interface{}{
-		"userId": user.ID,
-		"email":  user.Email,
-	}))
-
-	return &models.AuthResponse{
-		User:      user,
-		Tokens:    tokens,
-		IsNewUser: true,
-	}, nil
-}
-
-// LoginWithEmail authenticates a user with email/password
-func (s *Service) LoginWithEmail(ctx context.Context, params models.LoginParams) (*models.AuthResponse, error) {
-	email := strings.ToLower(strings.TrimSpace(params.Email))
-
-	if email == "" || params.Password == "" {
-		return nil, &AuthError{Code: "invalid_input", Message: "email and password are required"}
-	}
-
-	// Get user
-	user, err := s.userStore.GetByEmail(ctx, email)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user: %w", err)
-	}
-	if user == nil {
-		return nil, &AuthError{Code: "invalid_credentials", Message: "invalid email or password"}
-	}
-
-	// Check status
-	if user.Status != models.UserStatusActive {
-		return nil, &AuthError{Code: "account_disabled", Message: "account is disabled"}
-	}
-
-	// Check password
-	if user.PasswordHash == "" {
-		return nil, &AuthError{Code: "invalid_credentials", Message: "this account uses social login"}
-	}
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(params.Password)); err != nil {
-		return nil, &AuthError{Code: "invalid_credentials", Message: "invalid email or password"}
-	}
-
-	// Update last login
-	if err := s.userStore.UpdateLastLogin(ctx, user.ID); err != nil {
-		s.logger.Warn("Failed to update last login", logging.WithField("error", err.Error()))
-	}
-
-	// Generate tokens
-	tokens, err := s.generateTokens(ctx, user)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate tokens: %w", err)
-	}
-
-	s.logger.Info("User logged in with email", logging.WithFields(map[string]interface{}{
-		"userId": user.ID,
-		"email":  user.Email,
-	}))
-
-	return &models.AuthResponse{
-		User:   user,
-		Tokens: tokens,
-	}, nil
 }
 
 // LoginWithGoogle authenticates a user with Google OAuth

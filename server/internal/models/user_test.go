@@ -19,25 +19,21 @@ func TestAuthProvider_Values(t *testing.T) {
 	if AuthProviderGoogle != "google" {
 		t.Errorf("AuthProviderGoogle = %q, want %q", AuthProviderGoogle, "google")
 	}
-	if AuthProviderEmail != "email" {
-		t.Errorf("AuthProviderEmail = %q, want %q", AuthProviderEmail, "email")
-	}
 }
 
-func TestUser_JSONOmitsPasswordHash(t *testing.T) {
-	// The PasswordHash field has json:"-" tag
-	// This test verifies the tag exists by checking struct tag behavior
-	// (This is mostly a documentation test - the real verification is the tag itself)
+func TestUser_Creation(t *testing.T) {
+	// Verify a user can be created with basic fields
 	user := User{
-		ID:           "123",
-		Email:        "test@example.com",
-		PasswordHash: "secret-hash",
-		DisplayName:  "Test User",
-		Status:       UserStatusActive,
+		ID:          "123",
+		Email:       "test@example.com",
+		DisplayName: "Test User",
+		Status:      UserStatusActive,
 	}
 
-	// Just verify the struct can be created with a password hash
-	if user.PasswordHash != "secret-hash" {
-		t.Errorf("User.PasswordHash = %q, want %q", user.PasswordHash, "secret-hash")
+	if user.ID != "123" {
+		t.Errorf("User.ID = %q, want %q", user.ID, "123")
+	}
+	if user.Email != "test@example.com" {
+		t.Errorf("User.Email = %q, want %q", user.Email, "test@example.com")
 	}
 }

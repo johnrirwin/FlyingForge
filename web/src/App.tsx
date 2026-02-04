@@ -1,9 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, Sidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, Homepage, GettingStarted, RadioSection, BatterySection, MyProfile, SocialPage, PilotProfile, OrdersPage } from './components';
 import { LoginPage } from './components/LoginPage';
-import { SignupPage } from './components/SignupPage';
-import { getItems, getSources, refreshFeeds } from './api';
+import { getItems, getSources, refreshFeeds, RateLimitError } from './api';
 import { getInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem, getInventorySummary, addEquipmentToInventory } from './equipmentApi';
 import { listAircraft, createAircraft, updateAircraft, deleteAircraft, getAircraftDetails, setAircraftComponent, setReceiverSettings } from './aircraftApi';
 import { useFilters, useDebounce } from './hooks';
@@ -12,7 +11,7 @@ import type { FeedItem, SourceInfo, FilterParams } from './types';
 import type { EquipmentItem, InventoryItem, EquipmentSearchParams, EquipmentCategory, ItemCondition, AddInventoryParams, InventorySummary, AppSection } from './equipmentTypes';
 import type { Aircraft, AircraftDetailsResponse, CreateAircraftParams, UpdateAircraftParams, SetComponentParams, ReceiverConfig } from './aircraftTypes';
 
-type AuthModal = 'none' | 'login' | 'signup';
+type AuthModal = 'none' | 'login';
 
 
 // Map URL paths to AppSection values
@@ -71,6 +70,8 @@ function App() {
   const [selectedItem, setSelectedItem] = useState<FeedItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshCooldown, setRefreshCooldown] = useState(0);
+  const cooldownIntervalRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState(0);
 
@@ -261,6 +262,39 @@ function App() {
     loadAircraft();
   }, [activeSection, isAuthenticated]);
 
+  // Start cooldown timer
+  const startCooldown = useCallback((seconds: number) => {
+    setRefreshCooldown(seconds);
+    
+    // Clear any existing interval
+    if (cooldownIntervalRef.current) {
+      clearInterval(cooldownIntervalRef.current);
+    }
+    
+    // Start countdown
+    cooldownIntervalRef.current = window.setInterval(() => {
+      setRefreshCooldown(prev => {
+        if (prev <= 1) {
+          if (cooldownIntervalRef.current) {
+            clearInterval(cooldownIntervalRef.current);
+            cooldownIntervalRef.current = null;
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
+  // Cleanup cooldown interval on unmount
+  useEffect(() => {
+    return () => {
+      if (cooldownIntervalRef.current) {
+        clearInterval(cooldownIntervalRef.current);
+      }
+    };
+  }, []);
+
   // Refresh handler
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -294,11 +328,16 @@ function App() {
       setItems(response.items || []);
       setTotalCount(response.totalCount || 0);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to refresh feeds');
+      if (err instanceof RateLimitError) {
+        // Start 2 minute cooldown
+        startCooldown(120);
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to refresh feeds');
+      }
     } finally {
       setIsRefreshing(false);
     }
-  }, [filters.sources, filters.sourceType, filters.sort, debouncedQuery]);
+  }, [filters.sources, filters.sourceType, filters.sort, debouncedQuery, startCooldown]);
 
   // Equipment search handler
   const handleEquipmentSearchChange = useCallback((params: Partial<EquipmentSearchParams>) => {
@@ -577,6 +616,7 @@ function App() {
               onSortChange={s => updateFilter('sort', s)}
               onRefresh={handleRefresh}
               isRefreshing={isRefreshing}
+              refreshCooldown={refreshCooldown}
               totalCount={totalCount}
             />
             <FeedList
@@ -759,16 +799,9 @@ function App() {
         />
       )}
 
-      {/* Auth Modals */}
+      {/* Auth Modal */}
       {authModal === 'login' && (
         <LoginPage
-          onSwitchToSignup={() => setAuthModal('signup')}
-          onClose={() => setAuthModal('none')}
-        />
-      )}
-      {authModal === 'signup' && (
-        <SignupPage
-          onSwitchToLogin={() => setAuthModal('login')}
           onClose={() => setAuthModal('none')}
         />
       )}

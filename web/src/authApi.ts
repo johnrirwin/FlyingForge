@@ -1,8 +1,6 @@
 import type {
   AuthResponse,
   AuthTokens,
-  SignupParams,
-  LoginParams,
   GoogleLoginParams,
   RefreshParams,
   User,
@@ -91,28 +89,6 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 // Auth API functions
-
-export async function signup(params: SignupParams): Promise<AuthResponse> {
-  const response = await authFetch('/api/auth/signup', {
-    method: 'POST',
-    body: JSON.stringify(params),
-  });
-  
-  const data = await handleResponse<AuthResponse>(response);
-  storeTokens(data.tokens);
-  return data;
-}
-
-export async function login(params: LoginParams): Promise<AuthResponse> {
-  const response = await authFetch('/api/auth/login', {
-    method: 'POST',
-    body: JSON.stringify(params),
-  });
-  
-  const data = await handleResponse<AuthResponse>(response);
-  storeTokens(data.tokens);
-  return data;
-}
 
 export async function loginWithGoogle(params: GoogleLoginParams): Promise<AuthResponse> {
   const response = await authFetch('/api/auth/google', {

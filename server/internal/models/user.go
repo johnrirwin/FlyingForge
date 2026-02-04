@@ -20,7 +20,6 @@ type AuthProvider string
 
 const (
 	AuthProviderGoogle AuthProvider = "google"
-	AuthProviderEmail  AuthProvider = "email"
 )
 
 // AvatarType represents which avatar to use
@@ -57,15 +56,14 @@ func DefaultSocialSettings() SocialSettings {
 
 // User represents a user in the system
 type User struct {
-	ID           string     `json:"id"`
-	Email        string     `json:"email"`
-	PasswordHash string     `json:"-"` // Never expose password hash
-	DisplayName  string     `json:"displayName"`
-	AvatarURL    string     `json:"avatarUrl,omitempty"` // Legacy field, kept for compatibility
-	Status       UserStatus `json:"status"`
-	CreatedAt    time.Time  `json:"createdAt"`
-	UpdatedAt    time.Time  `json:"updatedAt"`
-	LastLoginAt  *time.Time `json:"lastLoginAt,omitempty"`
+	ID          string     `json:"id"`
+	Email       string     `json:"email"`
+	DisplayName string     `json:"displayName"`
+	AvatarURL   string     `json:"avatarUrl,omitempty"` // Legacy field, kept for compatibility
+	Status      UserStatus `json:"status"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	UpdatedAt   time.Time  `json:"updatedAt"`
+	LastLoginAt *time.Time `json:"lastLoginAt,omitempty"`
 
 	// Profile fields
 	CallSign        string     `json:"callSign,omitempty"`
@@ -126,20 +124,6 @@ type AuthResponse struct {
 	IsLinked  bool        `json:"isLinked,omitempty"`
 }
 
-// SignupParams represents email/password signup parameters
-type SignupParams struct {
-	Email       string `json:"email"`
-	Password    string `json:"password"`
-	DisplayName string `json:"displayName"`
-	CallSign    string `json:"callSign"`
-}
-
-// LoginParams represents email/password login parameters
-type LoginParams struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
 // GoogleLoginParams represents Google OAuth login parameters
 type GoogleLoginParams struct {
 	// Either IDToken (from Google Identity Services) or Code (from auth code flow)
@@ -162,7 +146,6 @@ type GoogleClaims struct {
 // CreateUserParams represents parameters for creating a user
 type CreateUserParams struct {
 	Email           string     `json:"email"`
-	Password        string     `json:"password,omitempty"`
 	DisplayName     string     `json:"displayName"`
 	CallSign        string     `json:"callSign,omitempty"`
 	AvatarURL       string     `json:"avatarUrl,omitempty"`
@@ -176,7 +159,6 @@ type UpdateUserParams struct {
 	DisplayName     *string     `json:"displayName,omitempty"`
 	AvatarURL       *string     `json:"avatarUrl,omitempty"`
 	Status          *UserStatus `json:"status,omitempty"`
-	Password        *string     `json:"password,omitempty"`
 	CallSign        *string     `json:"callSign,omitempty"`
 	GoogleName      *string     `json:"googleName,omitempty"`
 	GoogleAvatarURL *string     `json:"googleAvatarUrl,omitempty"`

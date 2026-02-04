@@ -104,6 +104,7 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationFCConfigs,
 		migrationAircraftTuningSnapshots,
 		migrationTuningSnapshotDiffBackup,
+		migrationDropPasswordHash,
 	}
 
 	for i, migration := range migrations {
@@ -120,7 +121,6 @@ const migrationUsers = `
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email VARCHAR(255) NOT NULL UNIQUE,
-    password_hash VARCHAR(255),
     display_name VARCHAR(255) NOT NULL,
     avatar_url VARCHAR(1024),
     status VARCHAR(20) NOT NULL DEFAULT 'active',
@@ -515,4 +515,9 @@ CREATE INDEX IF NOT EXISTS idx_tuning_snapshots_created ON aircraft_tuning_snaps
 const migrationTuningSnapshotDiffBackup = `
 -- Add diff_backup column to store 'diff all' output for restore purposes
 ALTER TABLE aircraft_tuning_snapshots ADD COLUMN IF NOT EXISTS diff_backup TEXT;
+`
+
+const migrationDropPasswordHash = `
+-- Remove password_hash column as we now use Google-only authentication
+ALTER TABLE users DROP COLUMN IF EXISTS password_hash;
 `

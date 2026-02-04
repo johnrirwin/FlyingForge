@@ -34,11 +34,16 @@ func NewEquipmentAPI(equipmentSvc *equipment.Service, inventorySvc inventory.Inv
 
 // RegisterRoutes registers equipment and inventory routes on the given mux
 func (api *EquipmentAPI) RegisterRoutes(mux *http.ServeMux, corsMiddleware func(http.HandlerFunc) http.HandlerFunc) {
-	// Equipment routes (public)
-	mux.HandleFunc("/api/equipment/search", corsMiddleware(api.handleSearchEquipment))
-	mux.HandleFunc("/api/equipment/category/", corsMiddleware(api.handleGetByCategory))
-	mux.HandleFunc("/api/equipment/sellers", corsMiddleware(api.handleGetSellers))
-	mux.HandleFunc("/api/equipment/sync", corsMiddleware(api.handleSyncProducts))
+	if api.authMiddleware == nil {
+		api.logger.Error("Equipment API routes not registered: authMiddleware is nil")
+		return
+	}
+
+	// Equipment routes (require authentication)
+	mux.HandleFunc("/api/equipment/search", corsMiddleware(api.authMiddleware.RequireAuth(api.handleSearchEquipment)))
+	mux.HandleFunc("/api/equipment/category/", corsMiddleware(api.authMiddleware.RequireAuth(api.handleGetByCategory)))
+	mux.HandleFunc("/api/equipment/sellers", corsMiddleware(api.authMiddleware.RequireAuth(api.handleGetSellers)))
+	mux.HandleFunc("/api/equipment/sync", corsMiddleware(api.authMiddleware.RequireAuth(api.handleSyncProducts)))
 
 	// Inventory routes (require authentication)
 	mux.HandleFunc("/api/inventory", corsMiddleware(api.authMiddleware.RequireAuth(api.handleInventory)))

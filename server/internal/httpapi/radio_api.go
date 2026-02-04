@@ -34,8 +34,8 @@ func NewRadioAPI(radioSvc *radiosvc.Service, authMiddleware *auth.Middleware, lo
 
 // RegisterRoutes registers radio routes on the given mux
 func (api *RadioAPI) RegisterRoutes(mux *http.ServeMux, corsMiddleware func(http.HandlerFunc) http.HandlerFunc) {
-	// Radio models (public)
-	mux.HandleFunc("/api/radio/models", corsMiddleware(api.handleGetRadioModels))
+	// Radio models (require authentication)
+	mux.HandleFunc("/api/radio/models", corsMiddleware(api.authMiddleware.RequireAuth(api.handleGetRadioModels)))
 
 	// Radios (require authentication)
 	mux.HandleFunc("/api/radios", corsMiddleware(api.authMiddleware.RequireAuth(api.handleRadios)))

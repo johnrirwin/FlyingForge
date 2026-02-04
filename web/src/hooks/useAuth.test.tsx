@@ -26,15 +26,12 @@ describe('useAuth', () => {
     expect(result.current).toHaveProperty('tokens')
     expect(result.current).toHaveProperty('isAuthenticated')
     expect(result.current).toHaveProperty('error')
-    expect(result.current).toHaveProperty('signup')
-    expect(result.current).toHaveProperty('login')
     expect(result.current).toHaveProperty('loginWithGoogle')
     expect(result.current).toHaveProperty('logout')
     expect(result.current).toHaveProperty('clearError')
 
     // Functions should be callable
-    expect(typeof result.current.signup).toBe('function')
-    expect(typeof result.current.login).toBe('function')
+    expect(typeof result.current.loginWithGoogle).toBe('function')
     expect(typeof result.current.logout).toBe('function')
     expect(typeof result.current.clearError).toBe('function')
   })

@@ -9,6 +9,7 @@ interface TopBarProps {
   onSortChange: (sort: 'newest' | 'score') => void;
   onRefresh: () => void;
   isRefreshing: boolean;
+  refreshCooldown: number; // seconds remaining
   totalCount: number;
 }
 
@@ -23,8 +24,24 @@ export function TopBar({
   onSortChange,
   onRefresh,
   isRefreshing,
+  refreshCooldown,
   totalCount,
 }: TopBarProps) {
+  // Format cooldown time as M:SS
+  const formatCooldown = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const isRefreshDisabled = isRefreshing || refreshCooldown > 0;
+
+  const getRefreshButtonText = () => {
+    if (isRefreshing) return 'Refreshing...';
+    if (refreshCooldown > 0) return `Refresh (${formatCooldown(refreshCooldown)})`;
+    return 'Refresh';
+  };
+
   return (
     <header className="bg-slate-800 border-b border-slate-700 px-6 py-4">
       <div className="flex items-center gap-4 flex-wrap">
@@ -127,7 +144,7 @@ export function TopBar({
         {/* Refresh */}
         <button
           onClick={onRefresh}
-          disabled={isRefreshing}
+          disabled={isRefreshDisabled}
           className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:bg-primary-800 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
         >
           <svg
@@ -143,7 +160,7 @@ export function TopBar({
               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
             />
           </svg>
-          {isRefreshing ? 'Refreshing...' : 'Refresh'}
+          {getRefreshButtonText()}
         </button>
 
         {/* Count */}

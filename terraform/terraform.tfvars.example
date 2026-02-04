@@ -1,0 +1,32 @@
+# Example Terraform variables file
+# Copy to terraform.tfvars and fill in values
+
+aws_region  = "us-east-1"
+environment = "production"
+app_name    = "flyingforge"
+
+# Database
+db_instance_class    = "db.t3.micro"
+db_allocated_storage = 20
+db_name              = "flyingforge"
+db_username          = "flyingforge"
+
+# Redis
+redis_node_type = "cache.t3.micro"
+
+# ECS
+server_cpu           = 512
+server_memory        = 1024
+web_cpu              = 256
+web_memory           = 512
+server_desired_count = 2
+web_desired_count    = 2
+
+# Domain (optional - leave empty if not using custom domain)
+domain_name       = ""
+create_dns_record = false
+
+# Secrets (set via environment variables or -var flag, NOT in this file)
+# google_client_id     = ""
+# google_client_secret = ""
+# encryption_key       = ""

@@ -15,6 +15,7 @@ describe('TopBar', () => {
     onSortChange: vi.fn(),
     onRefresh: vi.fn(),
     isRefreshing: false,
+    refreshCooldown: 0,
     totalCount: 42,
   }
 

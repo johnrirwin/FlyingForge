@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 
 	"github.com/johnrirwin/flyingforge/internal/auth"
 	"github.com/johnrirwin/flyingforge/internal/logging"
@@ -16,86 +17,30 @@ type AuthAPI struct {
 	authService    *auth.Service
 	authMiddleware *auth.Middleware
 	logger         *logging.Logger
+	frontendURL    string
 }
 
 // NewAuthAPI creates a new auth API handler
 func NewAuthAPI(authService *auth.Service, authMiddleware *auth.Middleware, logger *logging.Logger) *AuthAPI {
+	frontendURL := os.Getenv("AUTH_FRONTEND_URL")
+	if frontendURL == "" {
+		frontendURL = "http://localhost:3000"
+	}
 	return &AuthAPI{
 		authService:    authService,
 		authMiddleware: authMiddleware,
 		logger:         logger,
+		frontendURL:    frontendURL,
 	}
 }
 
 // RegisterRoutes registers auth routes on the given mux
 func (api *AuthAPI) RegisterRoutes(mux *http.ServeMux, corsMiddleware func(http.HandlerFunc) http.HandlerFunc) {
-	mux.HandleFunc("/api/auth/signup", corsMiddleware(api.handleSignup))
-	mux.HandleFunc("/api/auth/login", corsMiddleware(api.handleLogin))
 	mux.HandleFunc("/api/auth/google", corsMiddleware(api.handleGoogleLogin))
 	mux.HandleFunc("/api/auth/google/callback", api.handleGoogleCallback)
 	mux.HandleFunc("/api/auth/refresh", corsMiddleware(api.handleRefresh))
 	mux.HandleFunc("/api/auth/logout", corsMiddleware(api.authMiddleware.RequireAuth(api.handleLogout)))
 	mux.HandleFunc("/api/auth/me", corsMiddleware(api.authMiddleware.RequireAuth(api.handleGetMe)))
-}
-
-func (api *AuthAPI) handleSignup(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var params models.SignupParams
-	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
-		api.writeError(w, http.StatusBadRequest, "invalid_request", "invalid request body")
-		return
-	}
-
-	response, err := api.authService.SignupWithEmail(r.Context(), params)
-	if err != nil {
-		if authErr, ok := err.(*auth.AuthError); ok {
-			status := http.StatusBadRequest
-			if authErr.Code == "user_exists" {
-				status = http.StatusConflict
-			}
-			api.writeError(w, status, authErr.Code, authErr.Message)
-			return
-		}
-		api.logger.Error("Signup failed", logging.WithField("error", err.Error()))
-		api.writeError(w, http.StatusInternalServerError, "internal_error", "signup failed")
-		return
-	}
-
-	api.writeJSON(w, http.StatusCreated, response)
-}
-
-func (api *AuthAPI) handleLogin(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var params models.LoginParams
-	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
-		api.writeError(w, http.StatusBadRequest, "invalid_request", "invalid request body")
-		return
-	}
-
-	response, err := api.authService.LoginWithEmail(r.Context(), params)
-	if err != nil {
-		if authErr, ok := err.(*auth.AuthError); ok {
-			status := http.StatusUnauthorized
-			if authErr.Code == "account_disabled" {
-				status = http.StatusForbidden
-			}
-			api.writeError(w, status, authErr.Code, authErr.Message)
-			return
-		}
-		api.logger.Error("Login failed", logging.WithField("error", err.Error()))
-		api.writeError(w, http.StatusInternalServerError, "internal_error", "login failed")
-		return
-	}
-
-	api.writeJSON(w, http.StatusOK, response)
 }
 
 func (api *AuthAPI) handleGoogleLogin(w http.ResponseWriter, r *http.Request) {
@@ -232,13 +177,10 @@ func (api *AuthAPI) handleGoogleCallback(w http.ResponseWriter, r *http.Request)
 	code := r.URL.Query().Get("code")
 	errorParam := r.URL.Query().Get("error")
 
-	// Frontend URL to redirect to
-	frontendURL := "http://localhost:3000"
-
 	if errorParam != "" {
 		errorDesc := r.URL.Query().Get("error_description")
 		redirectURL := fmt.Sprintf("%s/login?error=%s&error_description=%s",
-			frontendURL,
+			api.frontendURL,
 			url.QueryEscape(errorParam),
 			url.QueryEscape(errorDesc))
 		http.Redirect(w, r, redirectURL, http.StatusFound)
@@ -246,7 +188,7 @@ func (api *AuthAPI) handleGoogleCallback(w http.ResponseWriter, r *http.Request)
 	}
 
 	if code == "" {
-		redirectURL := fmt.Sprintf("%s/login?error=missing_code", frontendURL)
+		redirectURL := fmt.Sprintf("%s/login?error=missing_code", api.frontendURL)
 		http.Redirect(w, r, redirectURL, http.StatusFound)
 		return
 	}
@@ -258,7 +200,7 @@ func (api *AuthAPI) handleGoogleCallback(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		api.logger.Error("Google callback failed", logging.WithField("error", err.Error()))
 		redirectURL := fmt.Sprintf("%s/login?error=auth_failed&error_description=%s",
-			frontendURL,
+			api.frontendURL,
 			url.QueryEscape(err.Error()))
 		http.Redirect(w, r, redirectURL, http.StatusFound)
 		return
@@ -266,7 +208,7 @@ func (api *AuthAPI) handleGoogleCallback(w http.ResponseWriter, r *http.Request)
 
 	// Redirect to frontend with tokens in URL fragment (more secure than query params)
 	redirectURL := fmt.Sprintf("%s/auth/callback#access_token=%s&refresh_token=%s",
-		frontendURL,
+		api.frontendURL,
 		url.QueryEscape(response.Tokens.AccessToken),
 		url.QueryEscape(response.Tokens.RefreshToken))
 	http.Redirect(w, r, redirectURL, http.StatusFound)

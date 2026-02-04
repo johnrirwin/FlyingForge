@@ -64,3 +64,6 @@ func (l *Limiter) ResetAll() {
 	defer l.mu.Unlock()
 	l.hosts = make(map[string]time.Time)
 }
+
+// Ensure Limiter implements RateLimiter interface
+var _ RateLimiter = (*Limiter)(nil)

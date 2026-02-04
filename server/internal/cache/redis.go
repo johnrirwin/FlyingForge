@@ -106,5 +106,10 @@ func (c *RedisCache) Close() error {
 	return c.client.Close()
 }
 
+// Client returns the underlying Redis client for use by other components
+func (c *RedisCache) Client() *redis.Client {
+	return c.client
+}
+
 // Ensure RedisCache implements Cache interface
 var _ Cache = (*RedisCache)(nil)

@@ -3,8 +3,6 @@ import type { ReactNode } from 'react';
 import type {
   AuthState,
   AuthAction,
-  SignupParams,
-  LoginParams,
   GoogleLoginParams,
   AuthError,
   User,
@@ -68,8 +66,6 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
 
 // Context type - exported for use by useAuth hook
 export interface AuthContextType extends AuthState {
-  signup: (params: SignupParams) => Promise<void>;
-  login: (params: LoginParams) => Promise<void>;
   loginWithGoogle: (params: GoogleLoginParams) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => void;
@@ -114,34 +110,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     checkAuth();
   }, []);
 
-  const signup = useCallback(async (params: SignupParams) => {
-    dispatch({ type: 'AUTH_START' });
-    try {
-      const response = await authApi.signup(params);
-      dispatch({
-        type: 'AUTH_SUCCESS',
-        payload: { user: response.user, tokens: response.tokens },
-      });
-    } catch (error) {
-      dispatch({ type: 'AUTH_ERROR', payload: error as AuthError });
-      throw error;
-    }
-  }, []);
-
-  const login = useCallback(async (params: LoginParams) => {
-    dispatch({ type: 'AUTH_START' });
-    try {
-      const response = await authApi.login(params);
-      dispatch({
-        type: 'AUTH_SUCCESS',
-        payload: { user: response.user, tokens: response.tokens },
-      });
-    } catch (error) {
-      dispatch({ type: 'AUTH_ERROR', payload: error as AuthError });
-      throw error;
-    }
-  }, []);
-
   const loginWithGoogle = useCallback(async (params: GoogleLoginParams) => {
     dispatch({ type: 'AUTH_START' });
     try {
@@ -174,8 +142,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const value: AuthContextType = {
     ...state,
-    signup,
-    login,
     loginWithGoogle,
     logout,
     updateUser,

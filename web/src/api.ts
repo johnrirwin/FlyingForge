@@ -2,6 +2,14 @@ import type { AggregatedResponse, FeedItem, FilterParams, SourcesResponse } from
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
+// Custom error class for rate limiting
+export class RateLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RateLimitError';
+  }
+}
+
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
@@ -13,6 +21,12 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ message: 'Request failed' }));
+    
+    // Throw specific error for rate limiting
+    if (response.status === 429) {
+      throw new RateLimitError(error.message || 'Rate limit exceeded');
+    }
+    
     throw new Error(error.message || `HTTP ${response.status}`);
   }
 

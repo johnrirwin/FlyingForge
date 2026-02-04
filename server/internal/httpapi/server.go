@@ -18,6 +18,7 @@ import (
 	"github.com/johnrirwin/flyingforge/internal/logging"
 	"github.com/johnrirwin/flyingforge/internal/models"
 	"github.com/johnrirwin/flyingforge/internal/radio"
+	"github.com/johnrirwin/flyingforge/internal/ratelimit"
 )
 
 type Server struct {
@@ -36,9 +37,10 @@ type Server struct {
 	inventoryStore *database.InventoryStore
 	logger         *logging.Logger
 	server         *http.Server
+	refreshLimiter ratelimit.RateLimiter
 }
 
-func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, radioSvc *radio.Service, batterySvc *battery.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, userStore *database.UserStore, aircraftStore *database.AircraftStore, orderStore *database.OrderStore, fcConfigStore *database.FCConfigStore, inventoryStore *database.InventoryStore, logger *logging.Logger) *Server {
+func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, radioSvc *radio.Service, batterySvc *battery.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, userStore *database.UserStore, aircraftStore *database.AircraftStore, orderStore *database.OrderStore, fcConfigStore *database.FCConfigStore, inventoryStore *database.InventoryStore, refreshLimiter ratelimit.RateLimiter, logger *logging.Logger) *Server {
 	return &Server{
 		agg:            agg,
 		equipmentSvc:   equipmentSvc,
@@ -54,13 +56,14 @@ func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventoryS
 		fcConfigStore:  fcConfigStore,
 		inventoryStore: inventoryStore,
 		logger:         logger,
+		refreshLimiter: refreshLimiter,
 	}
 }
 
 func (s *Server) Start(addr string) error {
 	mux := http.NewServeMux()
 
-	// News feed routes
+	// News feed routes (public read, rate-limited refresh)
 	mux.HandleFunc("/api/items", s.corsMiddleware(s.handleGetItems))
 	mux.HandleFunc("/api/sources", s.corsMiddleware(s.handleGetSources))
 	mux.HandleFunc("/api/refresh", s.corsMiddleware(s.handleRefresh))
@@ -223,6 +226,16 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Rate limit by client IP (once per 2 minutes)
+	clientIP := s.getClientIP(r)
+	if !s.refreshLimiter.Allow(clientIP) {
+		s.writeJSON(w, http.StatusTooManyRequests, map[string]string{
+			"status":  "error",
+			"message": "Rate limit exceeded. Please wait 2 minutes before refreshing again.",
+		})
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()
 
@@ -239,6 +252,30 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		"status":  "success",
 		"message": "Feed refreshed successfully",
 	})
+}
+
+// getClientIP extracts the client IP from the request, handling X-Forwarded-For
+func (s *Server) getClientIP(r *http.Request) string {
+	// Check X-Forwarded-For header (for load balancers/proxies)
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		// Take the first IP in the list
+		if idx := strings.Index(xff, ","); idx != -1 {
+			return strings.TrimSpace(xff[:idx])
+		}
+		return strings.TrimSpace(xff)
+	}
+
+	// Check X-Real-IP header
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return strings.TrimSpace(xri)
+	}
+
+	// Fall back to RemoteAddr
+	addr := r.RemoteAddr
+	if idx := strings.LastIndex(addr, ":"); idx != -1 {
+		return addr[:idx]
+	}
+	return addr
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
