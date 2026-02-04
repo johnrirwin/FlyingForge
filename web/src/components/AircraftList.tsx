@@ -1,4 +1,5 @@
 import type { Aircraft } from '../aircraftTypes';
+import { AIRCRAFT_TYPES } from '../aircraftTypes';
 import { AircraftCard } from './AircraftCard';
 
 interface AircraftListProps {
@@ -54,17 +55,50 @@ export function AircraftList({
     );
   }
 
+  // Group aircraft by type
+  const aircraftByType = aircraft.reduce((acc, item) => {
+    const type = item.type;
+    if (!acc[type]) {
+      acc[type] = [];
+    }
+    acc[type].push(item);
+    return acc;
+  }, {} as Record<string, Aircraft[]>);
+
+  // Sort types by the order in AIRCRAFT_TYPES
+  const sortedTypes = AIRCRAFT_TYPES
+    .filter(t => aircraftByType[t.value])
+    .map(t => ({
+      value: t.value,
+      label: t.label,
+      icon: t.icon,
+      items: aircraftByType[t.value],
+    }));
+
   return (
     <div className="flex-1 overflow-y-auto p-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {aircraft.map((item) => (
-          <AircraftCard
-            key={item.id}
-            aircraft={item}
-            onSelect={onSelect}
-            onEdit={onEdit}
-            onDelete={onDelete}
-          />
+      <div className="space-y-8">
+        {sortedTypes.map(type => (
+          <section key={type.value}>
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-xl">{type.icon}</span>
+              <h2 className="text-lg font-semibold text-white">{type.label}</h2>
+              <span className="px-2 py-0.5 bg-slate-700 rounded-full text-xs text-slate-400">
+                {type.items.length}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {type.items.map((item) => (
+                <AircraftCard
+                  key={item.id}
+                  aircraft={item}
+                  onSelect={onSelect}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                />
+              ))}
+            </div>
+          </section>
         ))}
       </div>
     </div>
