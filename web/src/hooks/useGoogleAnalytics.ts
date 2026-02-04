@@ -1,6 +1,32 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 
+/**
+ * Google Analytics 4 Integration Hook
+ *
+ * This hook provides GA4 tracking functionality for the application.
+ *
+ * THIRD-PARTY DEPENDENCY NOTICE:
+ * This integration loads the gtag.js script dynamically from Google's servers
+ * (googletagmanager.com). This is standard practice for GA4 and required for
+ * the service to function, as Google frequently updates the script.
+ *
+ * CONTENT SECURITY POLICY (CSP):
+ * If using CSP headers, ensure the following domains are allowed:
+ * - script-src: https://www.googletagmanager.com
+ * - connect-src: https://www.google-analytics.com https://analytics.google.com
+ *
+ * PRIVACY CONSIDERATIONS:
+ * - GA collects user interaction data (page views, events, timing)
+ * - IP addresses are anonymized by default in GA4
+ * - Consider adding a cookie consent banner for GDPR/CCPA compliance
+ * - Review Google's data processing terms: https://business.safety.google/adsprocessorterms/
+ *
+ * SUBRESOURCE INTEGRITY (SRI):
+ * SRI is not used because Google updates the gtag.js script without changing
+ * the URL. This is standard for all GA implementations.
+ */
+
 // Declare gtag on window for TypeScript
 declare global {
   interface Window {
