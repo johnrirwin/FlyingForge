@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 
 	"github.com/johnrirwin/flyingforge/internal/auth"
 	"github.com/johnrirwin/flyingforge/internal/logging"
@@ -16,14 +17,20 @@ type AuthAPI struct {
 	authService    *auth.Service
 	authMiddleware *auth.Middleware
 	logger         *logging.Logger
+	frontendURL    string
 }
 
 // NewAuthAPI creates a new auth API handler
 func NewAuthAPI(authService *auth.Service, authMiddleware *auth.Middleware, logger *logging.Logger) *AuthAPI {
+	frontendURL := os.Getenv("AUTH_FRONTEND_URL")
+	if frontendURL == "" {
+		frontendURL = "http://localhost:3000"
+	}
 	return &AuthAPI{
 		authService:    authService,
 		authMiddleware: authMiddleware,
 		logger:         logger,
+		frontendURL:    frontendURL,
 	}
 }
 
@@ -232,13 +239,10 @@ func (api *AuthAPI) handleGoogleCallback(w http.ResponseWriter, r *http.Request)
 	code := r.URL.Query().Get("code")
 	errorParam := r.URL.Query().Get("error")
 
-	// Frontend URL to redirect to
-	frontendURL := "http://localhost:3000"
-
 	if errorParam != "" {
 		errorDesc := r.URL.Query().Get("error_description")
 		redirectURL := fmt.Sprintf("%s/login?error=%s&error_description=%s",
-			frontendURL,
+			api.frontendURL,
 			url.QueryEscape(errorParam),
 			url.QueryEscape(errorDesc))
 		http.Redirect(w, r, redirectURL, http.StatusFound)
@@ -246,7 +250,7 @@ func (api *AuthAPI) handleGoogleCallback(w http.ResponseWriter, r *http.Request)
 	}
 
 	if code == "" {
-		redirectURL := fmt.Sprintf("%s/login?error=missing_code", frontendURL)
+		redirectURL := fmt.Sprintf("%s/login?error=missing_code", api.frontendURL)
 		http.Redirect(w, r, redirectURL, http.StatusFound)
 		return
 	}
@@ -258,7 +262,7 @@ func (api *AuthAPI) handleGoogleCallback(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		api.logger.Error("Google callback failed", logging.WithField("error", err.Error()))
 		redirectURL := fmt.Sprintf("%s/login?error=auth_failed&error_description=%s",
-			frontendURL,
+			api.frontendURL,
 			url.QueryEscape(err.Error()))
 		http.Redirect(w, r, redirectURL, http.StatusFound)
 		return
@@ -266,7 +270,7 @@ func (api *AuthAPI) handleGoogleCallback(w http.ResponseWriter, r *http.Request)
 
 	// Redirect to frontend with tokens in URL fragment (more secure than query params)
 	redirectURL := fmt.Sprintf("%s/auth/callback#access_token=%s&refresh_token=%s",
-		frontendURL,
+		api.frontendURL,
 		url.QueryEscape(response.Tokens.AccessToken),
 		url.QueryEscape(response.Tokens.RefreshToken))
 	http.Redirect(w, r, redirectURL, http.StatusFound)
