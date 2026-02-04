@@ -7,6 +7,7 @@ import { getInventory, addInventoryItem, updateInventoryItem, deleteInventoryIte
 import { listAircraft, createAircraft, updateAircraft, deleteAircraft, getAircraftDetails, setAircraftComponent, setReceiverSettings } from './aircraftApi';
 import { useFilters, useDebounce } from './hooks';
 import { useAuth } from './hooks/useAuth';
+import { useGoogleAnalytics } from './hooks/useGoogleAnalytics';
 import type { FeedItem, SourceInfo, FilterParams } from './types';
 import type { EquipmentItem, InventoryItem, EquipmentSearchParams, EquipmentCategory, ItemCondition, AddInventoryParams, InventorySummary, AppSection } from './equipmentTypes';
 import type { Aircraft, AircraftDetailsResponse, CreateAircraftParams, UpdateAircraftParams, SetComponentParams, ReceiverConfig } from './aircraftTypes';
@@ -53,6 +54,9 @@ function App() {
   // Router hooks
   const location = useLocation();
   const navigate = useNavigate();
+  
+  // Initialize Google Analytics and track page views
+  useGoogleAnalytics();
   
   // Check if this is the OAuth callback
   const isAuthCallback = location.pathname === '/auth/callback';
