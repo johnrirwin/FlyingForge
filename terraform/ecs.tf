@@ -153,17 +153,49 @@ resource "aws_ecs_task_definition" "server" {
         {
           name  = "CORS_ALLOWED_ORIGINS"
           value = var.domain_name != "" ? "https://${var.domain_name}" : "http://${aws_lb.main.dns_name}"
+        },
+        {
+          name  = "DB_HOST"
+          value = aws_db_instance.main.address
+        },
+        {
+          name  = "DB_PORT"
+          value = "5432"
+        },
+        {
+          name  = "DB_USER"
+          value = var.db_username
+        },
+        {
+          name  = "DB_NAME"
+          value = var.db_name
+        },
+        {
+          name  = "DB_SSLMODE"
+          value = "require"
+        },
+        {
+          name  = "REDIS_ADDR"
+          value = "${aws_elasticache_cluster.main.cache_nodes[0].address}:6379"
+        },
+        {
+          name  = "CACHE_BACKEND"
+          value = "redis"
+        },
+        {
+          name  = "GOOGLE_REDIRECT_URI"
+          value = var.domain_name != "" ? "https://${var.domain_name}/api/auth/google/callback" : "http://${aws_lb.main.dns_name}/api/auth/google/callback"
+        },
+        {
+          name  = "AUTH_FRONTEND_URL"
+          value = var.domain_name != "" ? "https://${var.domain_name}" : "http://${aws_lb.main.dns_name}"
         }
       ]
 
       secrets = [
         {
-          name      = "DATABASE_URL"
-          valueFrom = aws_secretsmanager_secret.database_url.arn
-        },
-        {
-          name      = "REDIS_URL"
-          valueFrom = aws_secretsmanager_secret.redis_url.arn
+          name      = "DB_PASSWORD"
+          valueFrom = aws_secretsmanager_secret.db_password.arn
         },
         {
           name      = "GOOGLE_CLIENT_ID"
@@ -174,7 +206,7 @@ resource "aws_ecs_task_definition" "server" {
           valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:GOOGLE_CLIENT_SECRET::"
         },
         {
-          name      = "ENCRYPTION_KEY"
+          name      = "BIND_PHRASE_ENCRYPTION_KEY"
           valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:ENCRYPTION_KEY::"
         }
       ]
