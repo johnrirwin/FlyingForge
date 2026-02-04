@@ -115,11 +115,11 @@ func (s *FCConfigStore) GetConfig(ctx context.Context, id string, userID string)
 	config.MCUType = mcuType.String
 
 	if len(parseWarnings) > 0 {
-		json.Unmarshal(parseWarnings, &config.ParseWarnings)
+		_ = json.Unmarshal(parseWarnings, &config.ParseWarnings)
 	}
 	if len(parsedTuning) > 0 {
 		config.ParsedTuning = &models.ParsedTuning{}
-		json.Unmarshal(parsedTuning, config.ParsedTuning)
+		_ = json.Unmarshal(parsedTuning, config.ParsedTuning)
 	}
 
 	return config, nil
@@ -142,7 +142,6 @@ func (s *FCConfigStore) ListConfigs(ctx context.Context, userID string, params m
 		countQuery += fmt.Sprintf(" AND inventory_item_id = $%d", argIdx)
 		listQuery += fmt.Sprintf(" AND inventory_item_id = $%d", argIdx)
 		args = append(args, params.InventoryItemID)
-		argIdx++
 	}
 
 	listQuery += " ORDER BY created_at DESC"
@@ -205,7 +204,7 @@ func (s *FCConfigStore) ListConfigs(ctx context.Context, userID string, params m
 		config.MCUType = mcuType.String
 
 		if len(parseWarnings) > 0 {
-			json.Unmarshal(parseWarnings, &config.ParseWarnings)
+			_ = json.Unmarshal(parseWarnings, &config.ParseWarnings)
 		}
 
 		configs = append(configs, config)
@@ -378,7 +377,7 @@ func (s *FCConfigStore) GetLatestTuningSnapshot(ctx context.Context, aircraftID 
 	snapshot.TuningData = tuningData
 
 	if len(parseWarnings) > 0 {
-		json.Unmarshal(parseWarnings, &snapshot.ParseWarnings)
+		_ = json.Unmarshal(parseWarnings, &snapshot.ParseWarnings)
 	}
 
 	return snapshot, nil
@@ -436,7 +435,7 @@ func (s *FCConfigStore) ListTuningSnapshots(ctx context.Context, aircraftID stri
 		snapshot.Notes = notes.String
 
 		if len(parseWarnings) > 0 {
-			json.Unmarshal(parseWarnings, &snapshot.ParseWarnings)
+			_ = json.Unmarshal(parseWarnings, &snapshot.ParseWarnings)
 		}
 
 		snapshots = append(snapshots, snapshot)
@@ -539,7 +538,7 @@ func (s *FCConfigStore) GetLatestTuningSnapshotPublic(ctx context.Context, aircr
 	snapshot.TuningData = tuningData
 
 	if len(parseWarnings) > 0 {
-		json.Unmarshal(parseWarnings, &snapshot.ParseWarnings)
+		_ = json.Unmarshal(parseWarnings, &snapshot.ParseWarnings)
 	}
 
 	return snapshot, nil
