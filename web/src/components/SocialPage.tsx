@@ -5,6 +5,7 @@ import { updateProfile, validateCallSign } from '../profileApi';
 import type { PilotSearchResult, PilotSummary, PilotProfile } from '../socialTypes';
 import { useDebounce } from '../hooks';
 import { useAuth } from '../hooks/useAuth';
+import { trackEvent } from '../hooks/useGoogleAnalytics';
 
 type SocialTab = 'search' | 'following' | 'followers';
 
@@ -193,6 +194,8 @@ export function SocialPage({ onSelectPilot }: SocialPageProps) {
       const response = await searchPilots(searchQuery);
       setSearchResults(response.pilots);
       setHasSearched(true);
+      // Track pilot search (don't include query for privacy)
+      trackEvent('social_pilot_search', { result_count: response.pilots.length });
     } catch (err) {
       setSearchError(err instanceof Error ? err.message : 'Search failed');
       setSearchResults([]);
@@ -284,8 +287,12 @@ export function SocialPage({ onSelectPilot }: SocialPageProps) {
   useEffect(() => {
     if (activeTab === 'following' && isAuthenticated) {
       loadFollowing();
+      // Track viewing following list
+      trackEvent('social_view_following');
     } else if (activeTab === 'followers' && isAuthenticated) {
       loadFollowers();
+      // Track viewing followers list
+      trackEvent('social_view_followers');
     }
   }, [activeTab, isAuthenticated, loadFollowing, loadFollowers]);
 
@@ -301,7 +308,11 @@ export function SocialPage({ onSelectPilot }: SocialPageProps) {
 
   const PilotCard = ({ pilot }: { pilot: PilotSearchResult | PilotSummary }) => (
     <button
-      onClick={() => onSelectPilot(pilot.id)}
+      onClick={() => {
+        onSelectPilot(pilot.id);
+        // Track viewing pilot profile
+        trackEvent('social_view_profile');
+      }}
       className="flex items-center gap-3 p-4 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors text-left group"
     >
       {/* Avatar */}
