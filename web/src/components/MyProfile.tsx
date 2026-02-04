@@ -32,6 +32,15 @@ export function MyProfile() {
     loadProfile();
   }, []);
 
+  // Cleanup pending avatar preview URL on unmount or when it changes
+  useEffect(() => {
+    return () => {
+      if (pendingAvatar) {
+        URL.revokeObjectURL(pendingAvatar.previewUrl);
+      }
+    };
+  }, [pendingAvatar]);
+
   const loadProfile = async () => {
     try {
       setIsLoading(true);
