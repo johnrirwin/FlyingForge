@@ -68,6 +68,8 @@ function createDefaultProps(overrides = {}) {
     authLoading: false,
     onSignIn: vi.fn(),
     onSignOut: vi.fn(),
+    isMobileMenuOpen: false,
+    onMobileMenuClose: vi.fn(),
     ...overrides,
   }
 }

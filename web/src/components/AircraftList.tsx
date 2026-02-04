@@ -76,18 +76,18 @@ export function AircraftList({
     }));
 
   return (
-    <div className="flex-1 overflow-y-auto p-6">
-      <div className="space-y-8">
+    <div className="flex-1 overflow-y-auto p-4 md:p-6">
+      <div className="space-y-6 md:space-y-8">
         {sortedTypes.map(type => (
           <section key={type.value}>
-            <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center gap-3 mb-3 md:mb-4">
               <span className="text-xl">{type.icon}</span>
-              <h2 className="text-lg font-semibold text-white">{type.label}</h2>
+              <h2 className="text-base md:text-lg font-semibold text-white">{type.label}</h2>
               <span className="px-2 py-0.5 bg-slate-700 rounded-full text-xs text-slate-400">
                 {type.items.length}
               </span>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">
               {type.items.map((item) => (
                 <AircraftCard
                   key={item.id}

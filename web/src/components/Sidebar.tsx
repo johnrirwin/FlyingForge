@@ -19,6 +19,9 @@ interface SidebarProps {
   authLoading: boolean;
   onSignIn: () => void;
   onSignOut: () => void;
+  // Mobile props
+  isMobileMenuOpen: boolean;
+  onMobileMenuClose: () => void;
 }
 
 export function Sidebar({
@@ -35,6 +38,8 @@ export function Sidebar({
   authLoading,
   onSignIn,
   onSignOut,
+  isMobileMenuOpen,
+  onMobileMenuClose,
 }: SidebarProps) {
   const handleCategorySelect = (category: EquipmentCategory | undefined) => {
     if (activeSection === 'equipment') {
@@ -47,6 +52,12 @@ export function Sidebar({
   const selectedCategory = activeSection === 'equipment' 
     ? searchParams.category 
     : inventoryCategory;
+
+  // Handle navigation and close mobile menu
+  const handleNavigation = (section: AppSection) => {
+    onSectionChange(section);
+    onMobileMenuClose();
+  };
 
   // Navigation item component with lock state for unauthenticated sections
   const NavItem = ({
@@ -67,7 +78,7 @@ export function Sidebar({
 
     return (
       <button
-        onClick={() => onSectionChange(section)}
+        onClick={() => handleNavigation(section)}
         disabled={false} // Always allow click - handleSectionChange in App.tsx will handle auth prompt
         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
           isActive
@@ -95,9 +106,38 @@ export function Sidebar({
   };
 
   return (
-    <aside className="w-64 flex-shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col overflow-hidden">
-      {/* Section Switcher */}
-      <div className="p-4 border-b border-slate-800">
+    <>
+      {/* Mobile overlay backdrop */}
+      {isMobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={onMobileMenuClose}
+        />
+      )}
+      
+      {/* Sidebar */}
+      <aside
+        className={`
+          fixed md:static inset-y-0 left-0 z-50
+          w-64 flex-shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col overflow-hidden
+          transform transition-transform duration-300 ease-in-out
+          ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+        `}
+      >
+        {/* Mobile close button */}
+        <div className="md:hidden flex justify-end p-2">
+          <button
+            onClick={onMobileMenuClose}
+            className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Section Switcher */}
+        <div className="p-4 border-b border-slate-800">
         <nav className="flex flex-col gap-1">
           {/* Home - only shown when NOT authenticated */}
           {!isAuthenticated && (
@@ -372,5 +412,6 @@ export function Sidebar({
         )}
       </div>
     </aside>
+    </>
   );
 }

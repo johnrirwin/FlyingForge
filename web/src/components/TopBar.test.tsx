@@ -94,7 +94,7 @@ describe('TopBar', () => {
   it('renders sort buttons', () => {
     render(<TopBar {...defaultProps} />)
     expect(screen.getByText('Newest')).toBeInTheDocument()
-    expect(screen.getByText('Top Score')).toBeInTheDocument()
+    expect(screen.getByText('Top')).toBeInTheDocument()
   })
 
   it('highlights active sort button', () => {
@@ -107,7 +107,7 @@ describe('TopBar', () => {
     const onSortChange = vi.fn()
     render(<TopBar {...defaultProps} onSortChange={onSortChange} />)
 
-    fireEvent.click(screen.getByText('Top Score'))
+    fireEvent.click(screen.getByText('Top'))
     expect(onSortChange).toHaveBeenCalledWith('score')
   })
 

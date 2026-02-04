@@ -70,8 +70,8 @@ export function FeedList({ items, sources, isLoading, error, onItemClick }: Feed
 
   // Import FeedCard dynamically to avoid circular imports
   return (
-    <div className="flex-1 overflow-y-auto p-6">
-      <div className="space-y-4 max-w-4xl mx-auto">
+    <div className="flex-1 overflow-y-auto p-4 md:p-6">
+      <div className="space-y-3 md:space-y-4 max-w-4xl mx-auto">
         {items.map(item => (
           <FeedCardWrapper
             key={item.id}

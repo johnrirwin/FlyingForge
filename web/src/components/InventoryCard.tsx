@@ -236,23 +236,23 @@ export function InventoryList({ items, isLoading, hasLoaded, error, onEdit, onDe
     }));
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 relative">
+    <div className="flex-1 overflow-y-auto p-4 md:p-6 relative">
       {/* Show subtle loading overlay when filtering existing items */}
       {isLoading && items.length > 0 && (
         <div className="absolute inset-0 bg-slate-900/50 flex items-center justify-center z-10">
           <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
         </div>
       )}
-      <div className={`space-y-8 ${isLoading ? 'opacity-50' : ''}`}>
+      <div className={`space-y-6 md:space-y-8 ${isLoading ? 'opacity-50' : ''}`}>
         {sortedCategories.map(category => (
           <section key={category.value}>
-            <div className="flex items-center gap-3 mb-4">
-              <h2 className="text-lg font-semibold text-white">{category.label}</h2>
+            <div className="flex items-center gap-3 mb-3 md:mb-4">
+              <h2 className="text-base md:text-lg font-semibold text-white">{category.label}</h2>
               <span className="px-2 py-0.5 bg-slate-700 rounded-full text-xs text-slate-400">
                 {category.items.length}
               </span>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">
               {category.items.map(item => (
                 <InventoryCard
                   key={item.id}

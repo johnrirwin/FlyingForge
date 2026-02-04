@@ -57,6 +57,9 @@ function App() {
   // Auth state - ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
   const { isAuthenticated, user, logout, isLoading: authLoading } = useAuth();
   const [authModal, setAuthModal] = useState<AuthModal>('none');
+  
+  // Mobile menu state
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Track previous auth state to detect logout
   const [wasAuthenticated, setWasAuthenticated] = useState<boolean | null>(null);
@@ -526,6 +529,20 @@ function App() {
 
   return (
     <div className="flex h-screen bg-slate-900 text-white overflow-hidden">
+      {/* Mobile Header */}
+      <div className="md:hidden fixed top-0 left-0 right-0 z-30 bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between">
+        <button
+          onClick={() => setIsMobileMenuOpen(true)}
+          className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <span className="text-lg font-semibold text-primary-400">FlyingForge</span>
+        <div className="w-10" /> {/* Spacer for balance */}
+      </div>
+
       {/* Sidebar with section navigation */}
       <Sidebar
         activeSection={activeSection}
@@ -541,10 +558,12 @@ function App() {
         authLoading={authLoading}
         onSignIn={() => setAuthModal('login')}
         onSignOut={handleLogout}
+        isMobileMenuOpen={isMobileMenuOpen}
+        onMobileMenuClose={() => setIsMobileMenuOpen(false)}
       />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 pt-14 md:pt-0">
         {/* Homepage Section - for unauthenticated users */}
         {activeSection === 'home' && !isAuthenticated && (
           <Homepage
