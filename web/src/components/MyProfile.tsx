@@ -27,19 +27,25 @@ export function MyProfile() {
   const [validationError, setValidationError] = useState<string | null>(null);
   const [pendingAvatar, setPendingAvatar] = useState<PendingAvatar | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pendingAvatarRef = useRef<PendingAvatar | null>(null);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    pendingAvatarRef.current = pendingAvatar;
+  }, [pendingAvatar]);
 
   useEffect(() => {
     loadProfile();
   }, []);
 
-  // Cleanup pending avatar preview URL on unmount or when it changes
+  // Cleanup pending avatar preview URL on unmount
   useEffect(() => {
     return () => {
-      if (pendingAvatar) {
-        URL.revokeObjectURL(pendingAvatar.previewUrl);
+      if (pendingAvatarRef.current) {
+        URL.revokeObjectURL(pendingAvatarRef.current.previewUrl);
       }
     };
-  }, [pendingAvatar]);
+  }, []);
 
   const loadProfile = async () => {
     try {
