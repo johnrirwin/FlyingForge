@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getPilotProfile } from '../pilotApi';
-import { followPilot, unfollowPilot } from '../socialApi';
+import { followPilot, unfollowPilot, ApiError } from '../socialApi';
+import { updateProfile } from '../profileApi';
 import type { PilotProfile as PilotProfileType, AircraftPublic } from '../socialTypes';
 import { useAuth } from '../hooks/useAuth';
 import { PublicAircraftModal } from './PublicAircraftModal';
 import { FollowListModal } from './FollowListModal';
+import { CallSignPromptModal } from './SocialPage';
 import { AircraftImage } from './AircraftImage';
 import { trackEvent } from '../hooks/useGoogleAnalytics';
 
@@ -17,14 +19,16 @@ interface PilotProfileProps {
 }
 
 export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfileProps) {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [profile, setProfile] = useState<PilotProfileType | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isFollowing, setIsFollowing] = useState(false);
   const [isFollowLoading, setIsFollowLoading] = useState(false);
+  const [followError, setFollowError] = useState<string | null>(null);
   const [selectedAircraft, setSelectedAircraft] = useState<AircraftPublic | null>(null);
   const [showFollowList, setShowFollowList] = useState<FollowListType>(null);
+  const [showCallSignPrompt, setShowCallSignPrompt] = useState(false);
 
   const isOwnProfile = user?.id === pilotId;
 
@@ -51,6 +55,7 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
     
     try {
       setIsFollowLoading(true);
+      setFollowError(null); // Clear any previous follow errors
       if (isFollowing) {
         await unfollowPilot(pilotId);
         setIsFollowing(false);
@@ -69,7 +74,41 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
         trackEvent('social_follow');
       }
     } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to toggle follow';
+      // Check if this is a callsign required error - show the modal instead
+      if (err instanceof ApiError && err.code === 'callsign_required') {
+        setShowCallSignPrompt(true);
+      } else {
+        setFollowError(message);
+      }
       console.error('Failed to toggle follow:', err);
+    } finally {
+      setIsFollowLoading(false);
+    }
+  };
+
+  // Handle saving callsign and then following
+  const handleSaveCallSignAndFollow = async (callSign: string) => {
+    // First save the callsign - let errors propagate to the modal's error handling
+    await updateProfile({ callSign });
+    // Update local state after backend succeeded
+    updateUser({ callSign });
+    
+    // Now try to follow - keep modal open until this succeeds
+    try {
+      setIsFollowLoading(true);
+      await followPilot(pilotId);
+      setIsFollowing(true);
+      if (profile) {
+        setProfile({ ...profile, followerCount: profile.followerCount + 1 });
+      }
+      trackEvent('social_follow');
+      // Only close modal after entire flow succeeds
+      setShowCallSignPrompt(false);
+    } catch (err) {
+      // Re-throw with clearer message since callsign was saved but follow failed
+      const message = err instanceof Error ? err.message : 'Failed to follow';
+      throw new Error(`Call sign saved! But follow failed: ${message}. Click "Continue" to try again.`);
     } finally {
       setIsFollowLoading(false);
     }
@@ -189,17 +228,22 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
 
           {/* Follow Button */}
           {!isOwnProfile && (
-            <button
-              onClick={handleFollowToggle}
-              disabled={isFollowLoading}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                isFollowing
-                  ? 'bg-slate-700 text-white hover:bg-slate-600'
-                  : 'bg-primary-500 text-white hover:bg-primary-600'
-              } disabled:opacity-50`}
-            >
-              {isFollowLoading ? '...' : isFollowing ? 'Following' : 'Follow'}
-            </button>
+            <div className="flex flex-col items-end gap-2">
+              <button
+                onClick={handleFollowToggle}
+                disabled={isFollowLoading}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  isFollowing
+                    ? 'bg-slate-700 text-white hover:bg-slate-600'
+                    : 'bg-primary-500 text-white hover:bg-primary-600'
+                } disabled:opacity-50`}
+              >
+                {isFollowLoading ? '...' : isFollowing ? 'Following' : 'Follow'}
+              </button>
+              {followError && (
+                <p className="text-sm text-red-400 max-w-xs text-right">{followError}</p>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -254,6 +298,18 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
               onSelectPilot(newPilotId);
             }
           }}
+        />
+      )}
+
+      {/* Call Sign Prompt Modal */}
+      {showCallSignPrompt && (
+        <CallSignPromptModal
+          onClose={() => setShowCallSignPrompt(false)}
+          onSave={handleSaveCallSignAndFollow}
+          title="Set Your Call Sign"
+          subtitle="Required to follow other pilots"
+          description="To follow other pilots in the community, you need to set up your call sign first. This helps build a trusted community where pilots can connect with each other."
+          initialCallSign={user?.callSign || ''}
         />
       )}
     </div>

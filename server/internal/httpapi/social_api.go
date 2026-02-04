@@ -72,6 +72,18 @@ func (api *SocialAPI) handleFollow(w http.ResponseWriter, r *http.Request) {
 func (api *SocialAPI) followUser(w http.ResponseWriter, r *http.Request, followerID, followedID string) {
 	ctx := r.Context()
 
+	// Check if follower has a callsign set (required to follow)
+	follower, err := api.userStore.GetByID(ctx, followerID)
+	if err != nil {
+		api.logger.Error("Failed to get follower user", logging.WithField("error", err.Error()))
+		api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to follow user")
+		return
+	}
+	if follower == nil || follower.CallSign == "" {
+		api.writeError(w, http.StatusBadRequest, "callsign_required", "you must set a call sign before following other pilots")
+		return
+	}
+
 	// Check if target user exists
 	targetUser, err := api.userStore.GetByID(ctx, followedID)
 	if err != nil {

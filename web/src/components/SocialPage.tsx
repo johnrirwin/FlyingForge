@@ -13,15 +13,25 @@ interface SocialPageProps {
   onSelectPilot: (pilotId: string) => void;
 }
 
+interface CallSignPromptModalProps {
+  onClose: () => void;
+  onSave: (callSign: string) => Promise<void>;
+  title?: string;
+  subtitle?: string;
+  description?: string;
+  initialCallSign?: string;
+}
+
 // Modal component for prompting callsign setup
-function CallSignPromptModal({ 
+export function CallSignPromptModal({ 
   onClose, 
-  onSave 
-}: { 
-  onClose: () => void; 
-  onSave: (callSign: string) => Promise<void>; 
-}) {
-  const [callSign, setCallSign] = useState('');
+  onSave,
+  title = 'Set Your Call Sign',
+  subtitle = 'Required to appear in search results',
+  description = 'To protect your privacy, you need a call sign to be visible to other pilots in the community. Only your call sign will be shown publicly.',
+  initialCallSign = '',
+}: CallSignPromptModalProps) {
+  const [callSign, setCallSign] = useState(initialCallSign);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -60,14 +70,13 @@ function CallSignPromptModal({
             </svg>
           </div>
           <div>
-            <h2 className="text-lg font-bold text-white">Set Your Call Sign</h2>
-            <p className="text-sm text-slate-400">Required to appear in search results</p>
+            <h2 className="text-lg font-bold text-white">{title}</h2>
+            <p className="text-sm text-slate-400">{subtitle}</p>
           </div>
         </div>
 
         <p className="text-slate-300 text-sm mb-4">
-          To protect your privacy, you need a call sign to be visible to other pilots in the community. 
-          Only your call sign will be shown publicly.
+          {description}
         </p>
 
         <form onSubmit={handleSubmit}>
@@ -463,39 +472,39 @@ export function SocialPage({ onSelectPilot }: SocialPageProps) {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-slate-800 p-1 rounded-lg w-full">
+      <div className="flex gap-1 mb-6 bg-slate-800 p-1 rounded-lg w-full overflow-hidden">
         <button
           onClick={() => setActiveTab('search')}
-          className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
+          className={`flex-1 min-w-0 px-2 sm:px-4 py-2 rounded-md font-medium transition-colors text-sm sm:text-base ${
             activeTab === 'search'
               ? 'bg-primary-500 text-white'
               : 'text-slate-400 hover:text-white hover:bg-slate-700'
           }`}
         >
-          <span className="flex items-center justify-center gap-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <span className="flex items-center justify-center gap-1 sm:gap-2">
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
-            Search
+            <span className="truncate">Search</span>
           </span>
         </button>
         {isAuthenticated && (
           <>
             <button
               onClick={() => setActiveTab('following')}
-              className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
+              className={`flex-1 min-w-0 px-2 sm:px-4 py-2 rounded-md font-medium transition-colors text-sm sm:text-base ${
                 activeTab === 'following'
                   ? 'bg-primary-500 text-white'
                   : 'text-slate-400 hover:text-white hover:bg-slate-700'
               }`}
             >
-              <span className="flex items-center justify-center gap-2">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <span className="flex items-center justify-center gap-1 sm:gap-2">
+                <svg className="w-4 h-4 flex-shrink-0 hidden sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
-                Following
+                <span className="truncate">Following</span>
                 {followingCount > 0 && (
-                  <span className="text-xs bg-slate-600 px-1.5 py-0.5 rounded-full">
+                  <span className="text-xs bg-slate-600 px-1.5 py-0.5 rounded-full flex-shrink-0">
                     {followingCount}
                   </span>
                 )}
@@ -503,19 +512,19 @@ export function SocialPage({ onSelectPilot }: SocialPageProps) {
             </button>
             <button
               onClick={() => setActiveTab('followers')}
-              className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
+              className={`flex-1 min-w-0 px-2 sm:px-4 py-2 rounded-md font-medium transition-colors text-sm sm:text-base ${
                 activeTab === 'followers'
                   ? 'bg-primary-500 text-white'
                   : 'text-slate-400 hover:text-white hover:bg-slate-700'
               }`}
             >
-              <span className="flex items-center justify-center gap-2">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <span className="flex items-center justify-center gap-1 sm:gap-2">
+                <svg className="w-4 h-4 flex-shrink-0 hidden sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                 </svg>
-                Followers
+                <span className="truncate">Followers</span>
                 {followersCount > 0 && (
-                  <span className="text-xs bg-slate-600 px-1.5 py-0.5 rounded-full">
+                  <span className="text-xs bg-slate-600 px-1.5 py-0.5 rounded-full flex-shrink-0">
                     {followersCount}
                   </span>
                 )}
