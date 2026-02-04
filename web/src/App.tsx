@@ -46,6 +46,9 @@ const sectionToPath: Record<AppSection, string> = {
   'pilot-profile': '/social/pilots', // Dynamic - handled separately
 };
 
+// Pagination constant for news feed infinite scroll
+const ITEMS_PER_PAGE = 30;
+
 function App() {
   // Router hooks
   const location = useLocation();
@@ -79,7 +82,6 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState(0);
   const [currentOffset, setCurrentOffset] = useState(0);
-  const ITEMS_PER_PAGE = 30;
 
   // Equipment state (for search params only)
   const [equipmentSearchParams, setEquipmentSearchParams] = useState<EquipmentSearchParams>({});
