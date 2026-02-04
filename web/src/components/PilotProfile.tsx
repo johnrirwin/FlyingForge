@@ -73,7 +73,12 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
       }
     } catch (err) {
       // Check if this is a callsign required error - show the modal instead
-      if (err instanceof ApiError && err.code === 'callsign_required') {
+      // Use both instanceof and property check for robustness with bundlers
+      const isCallSignRequired = 
+        (err instanceof ApiError && err.code === 'callsign_required') ||
+        (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'callsign_required');
+      
+      if (isCallSignRequired) {
         setShowCallSignPrompt(true);
       } else {
         // Log other errors but don't show inline - they're usually transient

@@ -63,7 +63,7 @@ export async function followPilot(userId: string): Promise<FollowResponse> {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new ApiError(error.message || 'Failed to follow pilot', error.code || 'unknown_error');
+    throw new ApiError(error.message || 'Failed to follow pilot', error.error || 'unknown_error');
   }
 
   return response.json();
