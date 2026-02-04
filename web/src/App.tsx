@@ -382,6 +382,14 @@ function App() {
         params.query = debouncedQuery;
       }
 
+      if (filters.fromDate) {
+        params.fromDate = filters.fromDate;
+      }
+
+      if (filters.toDate) {
+        params.toDate = filters.toDate;
+      }
+
       const response = await getItems(params);
       setItems(response.items || []);
       setTotalCount(response.totalCount || 0);
@@ -396,7 +404,7 @@ function App() {
     } finally {
       setIsRefreshing(false);
     }
-  }, [filters.sources, filters.sourceType, filters.sort, debouncedQuery, startCooldown]);
+  }, [filters.sources, filters.sourceType, filters.sort, filters.fromDate, filters.toDate, debouncedQuery, startCooldown]);
 
   // Equipment search handler
   const handleEquipmentSearchChange = useCallback((params: Partial<EquipmentSearchParams>) => {
