@@ -13,7 +13,7 @@ const (
 	CategoryVTX         EquipmentCategory = "vtx"
 	CategoryFC          EquipmentCategory = "flight_controllers"
 	CategoryESC         EquipmentCategory = "esc"
-	CategoryStacks      EquipmentCategory = "stacks"
+	CategoryAIO         EquipmentCategory = "aio"
 	CategoryMotors      EquipmentCategory = "motors"
 	CategoryPropellers  EquipmentCategory = "propellers"
 	CategoryReceivers   EquipmentCategory = "receivers"
@@ -30,7 +30,7 @@ func AllCategories() []EquipmentCategory {
 		CategoryVTX,
 		CategoryFC,
 		CategoryESC,
-		CategoryStacks,
+		CategoryAIO,
 		CategoryMotors,
 		CategoryPropellers,
 		CategoryReceivers,

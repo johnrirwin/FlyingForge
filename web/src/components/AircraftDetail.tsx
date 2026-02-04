@@ -10,6 +10,8 @@ import { AIRCRAFT_TYPES, COMPONENT_CATEGORIES } from '../aircraftTypes';
 import type { InventoryItem, AddInventoryParams, EquipmentCategory } from '../equipmentTypes';
 import { getInventory } from '../equipmentApi';
 import { getAircraftImageUrl } from '../aircraftApi';
+import { getAircraftTuning, createTuningSnapshot } from '../fcConfigApi';
+import type { AircraftTuningResponse, PIDProfile, RateProfile, FilterSettings } from '../fcConfigTypes';
 
 interface AircraftDetailProps {
   details: AircraftDetailsResponse;
@@ -19,7 +21,7 @@ interface AircraftDetailProps {
   onRefresh: () => void;
 }
 
-type ViewMode = 'components' | 'receiver';
+type ViewMode = 'components' | 'receiver' | 'tuning';
 
 export function AircraftDetail({
   details,
@@ -41,6 +43,15 @@ export function AircraftDetail({
   const [isSavingReceiver, setIsSavingReceiver] = useState(false);
   const [receiverSaved, setReceiverSaved] = useState(false);
 
+  // Tuning state
+  const [tuningData, setTuningData] = useState<AircraftTuningResponse | null>(null);
+  const [isLoadingTuning, setIsLoadingTuning] = useState(false);
+  const [showCliUpload, setShowCliUpload] = useState(false);
+  const [cliDump, setCliDump] = useState('');
+  const [diffBackup, setDiffBackup] = useState('');
+  const [isUploadingTuning, setIsUploadingTuning] = useState(false);
+  const [uploadMode, setUploadMode] = useState<'dump' | 'backup'>('dump');
+
   const { aircraft, components } = details;
   const aircraftType = AIRCRAFT_TYPES.find(t => t.value === aircraft.type);
 
@@ -59,6 +70,61 @@ export function AircraftDetail({
     };
     loadInventory();
   }, []);
+
+  // Load tuning data when switching to tuning tab
+  useEffect(() => {
+    if (viewMode === 'tuning' && !tuningData) {
+      loadTuningData();
+    }
+  }, [viewMode]);
+
+  const loadTuningData = async () => {
+    setIsLoadingTuning(true);
+    try {
+      const data = await getAircraftTuning(aircraft.id);
+      setTuningData(data);
+    } catch (err) {
+      console.error('Failed to load tuning data:', err);
+    } finally {
+      setIsLoadingTuning(false);
+    }
+  };
+
+  const handleUploadTuning = async () => {
+    // Validate based on mode
+    if (uploadMode === 'dump' && !cliDump.trim()) return;
+    if (uploadMode === 'backup' && !diffBackup.trim()) return;
+    
+    setIsUploadingTuning(true);
+    try {
+      if (uploadMode === 'backup') {
+        // Diff backup only mode - update existing or create new with just backup
+        await createTuningSnapshot(aircraft.id, { 
+          diffBackup: diffBackup.trim(),
+          diffBackupOnly: tuningData?.hasTuning ? true : false,
+        });
+      } else {
+        // Dump mode
+        await createTuningSnapshot(aircraft.id, { 
+          rawCliDump: cliDump,
+        });
+      }
+      setCliDump('');
+      setDiffBackup('');
+      setShowCliUpload(false);
+      setUploadMode('dump');
+      // Reload tuning data
+      const data = await getAircraftTuning(aircraft.id);
+      setTuningData(data);
+    } catch (err) {
+      console.error('Failed to upload tuning:', err);
+      alert(uploadMode === 'backup' 
+        ? 'Failed to update backup.' 
+        : 'Failed to upload tuning data. Please check the CLI dump format.');
+    } finally {
+      setIsUploadingTuning(false);
+    }
+  };
 
   // Get component by category
   const getComponentByCategory = (category: ComponentCategory): AircraftComponent | undefined => {
@@ -190,6 +256,16 @@ export function AircraftDetail({
             }`}
           >
             Components
+          </button>
+          <button
+            onClick={() => setViewMode('tuning')}
+            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+              viewMode === 'tuning'
+                ? 'text-primary-400 border-b-2 border-primary-400'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Tuning
           </button>
           <button
             onClick={() => setViewMode('receiver')}
@@ -457,6 +533,24 @@ export function AircraftDetail({
               </div>
             </div>
           )}
+
+          {viewMode === 'tuning' && (
+            <TuningTabContent
+              aircraftName={aircraft.name}
+              tuningData={tuningData}
+              isLoading={isLoadingTuning}
+              showCliUpload={showCliUpload}
+              setShowCliUpload={setShowCliUpload}
+              cliDump={cliDump}
+              setCliDump={setCliDump}
+              diffBackup={diffBackup}
+              setDiffBackup={setDiffBackup}
+              isUploading={isUploadingTuning}
+              onUpload={handleUploadTuning}
+              uploadMode={uploadMode}
+              setUploadMode={setUploadMode}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -511,5 +605,502 @@ function QuickAddForm({ category, onSubmit, isSubmitting }: QuickAddFormProps) {
         Add
       </button>
     </form>
+  );
+}
+
+// Tuning Tab Content
+interface TuningTabContentProps {
+  aircraftName: string;
+  tuningData: AircraftTuningResponse | null;
+  isLoading: boolean;
+  showCliUpload: boolean;
+  setShowCliUpload: (show: boolean) => void;
+  cliDump: string;
+  setCliDump: (dump: string) => void;
+  diffBackup: string;
+  setDiffBackup: (backup: string) => void;
+  isUploading: boolean;
+  onUpload: () => void;
+  uploadMode: 'dump' | 'backup';
+  setUploadMode: (mode: 'dump' | 'backup') => void;
+}
+
+function TuningTabContent({
+  aircraftName,
+  tuningData,
+  isLoading,
+  showCliUpload,
+  setShowCliUpload,
+  cliDump,
+  setCliDump,
+  diffBackup,
+  setDiffBackup,
+  isUploading,
+  onUpload,
+  uploadMode,
+  setUploadMode,
+}: TuningTabContentProps) {
+  const handleDownloadBackup = () => {
+    if (!tuningData?.diffBackup) return;
+    const blob = new Blob([tuningData.diffBackup], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    // Build filename: aircraft-name_board-name_YYYY-MM-DD.txt
+    const safeName = aircraftName.replace(/[^a-zA-Z0-9-_]/g, '-').toLowerCase();
+    const board = tuningData.boardName?.replace(/[^a-zA-Z0-9-_]/g, '-').toLowerCase() || 'unknown';
+    const date = new Date().toISOString().split('T')[0];
+    a.download = `${safeName}_${board}_${date}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary-400 border-t-transparent"></div>
+      </div>
+    );
+  }
+
+  if (showCliUpload) {
+    const isInitialUpload = !tuningData?.hasTuning;
+    const title = isInitialUpload 
+      ? 'Upload Tuning Data' 
+      : (uploadMode === 'dump' ? 'Update Tuning' : 'Update Backup');
+
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h4 className="text-white font-medium">{title}</h4>
+          <button
+            onClick={() => setShowCliUpload(false)}
+            className="text-slate-400 hover:text-white transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+        <div className="bg-slate-700/50 border border-slate-700 rounded-lg p-4 space-y-4">
+          {/* Mode selector - show on initial upload OR when updating */}
+          {isInitialUpload && (
+            <div className="flex gap-2 p-1 bg-slate-600/50 rounded-lg w-fit">
+              <button
+                onClick={() => setUploadMode('dump')}
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                  uploadMode === 'dump' 
+                    ? 'bg-primary-600 text-white' 
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                CLI Dump
+              </button>
+              <button
+                onClick={() => setUploadMode('backup')}
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                  uploadMode === 'backup' 
+                    ? 'bg-primary-600 text-white' 
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Diff Backup
+              </button>
+            </div>
+          )}
+
+          {uploadMode === 'dump' ? (
+            <div>
+              <p className="text-sm text-slate-300 mb-2">
+                Paste your full CLI dump below. Run <code className="bg-slate-600 px-1 rounded">dump</code> in the Betaflight CLI tab to get this.
+              </p>
+              <textarea
+                value={cliDump}
+                onChange={(e) => setCliDump(e.target.value)}
+                placeholder="Paste your CLI dump here..."
+                rows={10}
+                className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white text-sm font-mono placeholder-slate-400 focus:outline-none focus:border-primary-500"
+              />
+            </div>
+          ) : (
+            <div>
+              <p className="text-sm text-slate-300 mb-2">
+                Paste your diff backup below. Run <code className="bg-slate-600 px-1 rounded">diff all</code> in the Betaflight CLI tab.
+                {!isInitialUpload && ' This will update only the backup without changing your tuning data.'}
+              </p>
+              <textarea
+                value={diffBackup}
+                onChange={(e) => setDiffBackup(e.target.value)}
+                placeholder="Paste your diff all output here..."
+                rows={10}
+                className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white text-sm font-mono placeholder-slate-400 focus:outline-none focus:border-primary-500"
+              />
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => setShowCliUpload(false)}
+              className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onUpload}
+              disabled={isUploading || (uploadMode === 'dump' ? !cliDump.trim() : !diffBackup.trim())}
+              className="px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:bg-primary-600/50 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+            >
+              {isUploading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white" />
+                  {uploadMode === 'dump' ? 'Parsing...' : 'Saving...'}
+                </>
+              ) : (
+                uploadMode === 'dump' ? 'Upload & Parse' : 'Save Backup'
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!tuningData?.hasTuning) {
+    return (
+      <div className="text-center py-12">
+        <div className="text-4xl mb-4">🎛️</div>
+        <h4 className="text-white font-medium mb-2">No Tuning Data</h4>
+        <p className="text-slate-400 text-sm mb-6">
+          Upload a CLI dump to view tuning settings, or a diff backup for easy restore.
+        </p>
+        <button
+          onClick={() => { setUploadMode('dump'); setShowCliUpload(true); }}
+          className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors"
+        >
+          Upload Tuning Data
+        </button>
+      </div>
+    );
+  }
+
+  const { tuning, firmwareName, firmwareVersion, boardName, parseStatus, snapshotDate } = tuningData;
+
+  return (
+    <div className="space-y-4">
+      {/* Header info */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-slate-400">Firmware:</span>
+            <span className="text-white font-medium">
+              {firmwareName || 'Unknown'} {firmwareVersion && `v${firmwareVersion}`}
+            </span>
+          </div>
+          {boardName && (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-slate-400">Board:</span>
+              <span className="text-white">{boardName}</span>
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          {tuningData.hasDiffBackup && (
+            <button
+              onClick={handleDownloadBackup}
+              className="text-sm text-green-400 hover:text-green-300 transition-colors flex items-center gap-1"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Download Backup
+            </button>
+          )}
+          <button
+            onClick={() => { setUploadMode('backup'); setShowCliUpload(true); }}
+            className="text-sm text-slate-400 hover:text-slate-300 transition-colors"
+          >
+            Update Backup
+          </button>
+          <button
+            onClick={() => { setUploadMode('dump'); setShowCliUpload(true); }}
+            className="text-sm text-primary-400 hover:text-primary-300 transition-colors"
+          >
+            Update Tuning
+          </button>
+        </div>
+      </div>
+
+      {parseStatus === 'partial' && (
+        <div className="bg-yellow-900/30 border border-yellow-700/50 rounded-lg px-3 py-2 text-sm text-yellow-300">
+          ⚠️ Some settings could not be parsed from the CLI dump.
+        </div>
+      )}
+
+      {snapshotDate && (
+        <div className="text-xs text-slate-500">
+          Last updated: {new Date(snapshotDate).toLocaleDateString()}
+        </div>
+      )}
+
+      {/* PIDs */}
+      {tuning?.pids && <PIDDisplay pids={tuning.pids} />}
+
+      {/* Rates */}
+      {tuning?.rates && <RatesDisplay rates={tuning.rates} />}
+
+      {/* Filters */}
+      {tuning?.filters && <FiltersDisplay filters={tuning.filters} />}
+
+      {/* Motor/Loop Settings */}
+      {tuning?.motorMixer && (
+        <div className="bg-slate-700/50 border border-slate-700 rounded-lg p-4">
+          <h4 className="text-white font-medium mb-3">Motor & Loop</h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {tuning.motorMixer.motorProtocol && (
+              <ValueCard label="Protocol" value={tuning.motorMixer.motorProtocol} />
+            )}
+            {tuning.motorMixer.gyroHz && (
+              <ValueCard label="Gyro" value={`${tuning.motorMixer.gyroHz} Hz`} />
+            )}
+            {tuning.motorMixer.pidHz && (
+              <ValueCard label="PID Loop" value={`${tuning.motorMixer.pidHz} Hz`} />
+            )}
+            {tuning.motorMixer.digitalIdlePercent !== undefined && (
+              <ValueCard label="Motor Idle" value={`${(tuning.motorMixer.digitalIdlePercent / 10).toFixed(1)}%`} />
+            )}
+            {tuning.motorMixer.dshotBidir !== undefined && (
+              <ValueCard label="Bidirectional" value={tuning.motorMixer.dshotBidir ? 'Yes' : 'No'} />
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// PID Display Component
+function PIDDisplay({ pids }: { pids: PIDProfile }) {
+  return (
+    <div className="bg-slate-700/50 border border-slate-700 rounded-lg p-4">
+      <h4 className="text-white font-medium mb-3">PID Values</h4>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-slate-400 text-left">
+              <th className="pb-2"></th>
+              <th className="pb-2 text-center">P</th>
+              <th className="pb-2 text-center">I</th>
+              <th className="pb-2 text-center">D</th>
+              <th className="pb-2 text-center">FF</th>
+            </tr>
+          </thead>
+          <tbody className="text-white">
+            <tr>
+              <td className="py-1 text-slate-300">Roll</td>
+              <td className="py-1 text-center font-mono">{pids.roll.p}</td>
+              <td className="py-1 text-center font-mono">{pids.roll.i}</td>
+              <td className="py-1 text-center font-mono">{pids.roll.d}</td>
+              <td className="py-1 text-center font-mono">{pids.roll.ff ?? '-'}</td>
+            </tr>
+            <tr>
+              <td className="py-1 text-slate-300">Pitch</td>
+              <td className="py-1 text-center font-mono">{pids.pitch.p}</td>
+              <td className="py-1 text-center font-mono">{pids.pitch.i}</td>
+              <td className="py-1 text-center font-mono">{pids.pitch.d}</td>
+              <td className="py-1 text-center font-mono">{pids.pitch.ff ?? '-'}</td>
+            </tr>
+            <tr>
+              <td className="py-1 text-slate-300">Yaw</td>
+              <td className="py-1 text-center font-mono">{pids.yaw.p}</td>
+              <td className="py-1 text-center font-mono">{pids.yaw.i}</td>
+              <td className="py-1 text-center font-mono">{pids.yaw.d}</td>
+              <td className="py-1 text-center font-mono">{pids.yaw.ff ?? '-'}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* Additional PID settings */}
+      <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+        {pids.iTermRelax && (
+          <ValueCard label="I-Term Relax" value={pids.iTermRelax} small />
+        )}
+        {pids.antiGravityGain && (
+          <ValueCard label="Anti-Gravity" value={pids.antiGravityGain.toString()} small />
+        )}
+        {pids.tpaRate !== undefined && pids.tpaRate > 0 && (
+          <ValueCard label="TPA Rate" value={`${pids.tpaRate}%`} small />
+        )}
+        {pids.tpaBreakpoint !== undefined && pids.tpaBreakpoint > 0 && (
+          <ValueCard label="TPA Breakpoint" value={pids.tpaBreakpoint.toString()} small />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Rates Display Component
+function RatesDisplay({ rates }: { rates: RateProfile }) {
+  return (
+    <div className="bg-slate-700/50 border border-slate-700 rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-white font-medium">Rates</h4>
+        {rates.rateType && (
+          <span className="text-xs bg-slate-600 text-slate-300 px-2 py-0.5 rounded">
+            {rates.rateType}
+          </span>
+        )}
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-slate-400 text-left">
+              <th className="pb-2"></th>
+              <th className="pb-2 text-center">Roll</th>
+              <th className="pb-2 text-center">Pitch</th>
+              <th className="pb-2 text-center">Yaw</th>
+            </tr>
+          </thead>
+          <tbody className="text-white">
+            <tr>
+              <td className="py-1 text-slate-300">RC Rate</td>
+              <td className="py-1 text-center font-mono">{rates.rcRates?.roll ?? '-'}</td>
+              <td className="py-1 text-center font-mono">{rates.rcRates?.pitch ?? '-'}</td>
+              <td className="py-1 text-center font-mono">{rates.rcRates?.yaw ?? '-'}</td>
+            </tr>
+            <tr>
+              <td className="py-1 text-slate-300">Super Rate</td>
+              <td className="py-1 text-center font-mono">{rates.superRates?.roll ?? '-'}</td>
+              <td className="py-1 text-center font-mono">{rates.superRates?.pitch ?? '-'}</td>
+              <td className="py-1 text-center font-mono">{rates.superRates?.yaw ?? '-'}</td>
+            </tr>
+            <tr>
+              <td className="py-1 text-slate-300">RC Expo</td>
+              <td className="py-1 text-center font-mono">{rates.rcExpo?.roll ?? '-'}</td>
+              <td className="py-1 text-center font-mono">{rates.rcExpo?.pitch ?? '-'}</td>
+              <td className="py-1 text-center font-mono">{rates.rcExpo?.yaw ?? '-'}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// Filters Display Component
+function FiltersDisplay({ filters }: { filters: FilterSettings }) {
+  return (
+    <div className="bg-slate-700/50 border border-slate-700 rounded-lg p-4">
+      <h4 className="text-white font-medium mb-3">Filters</h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Gyro Filters */}
+        <div>
+          <h5 className="text-sm text-slate-400 mb-2">Gyro Lowpass</h5>
+          <div className="space-y-1 text-sm">
+            {filters.gyroLowpassEnabled && filters.gyroLowpassHz && (
+              <div className="flex justify-between">
+                <span className="text-slate-300">LPF 1</span>
+                <span className="text-white font-mono">{filters.gyroLowpassHz} Hz ({filters.gyroLowpassType || 'PT1'})</span>
+              </div>
+            )}
+            {filters.gyroLowpass2Enabled && filters.gyroLowpass2Hz && (
+              <div className="flex justify-between">
+                <span className="text-slate-300">LPF 2</span>
+                <span className="text-white font-mono">{filters.gyroLowpass2Hz} Hz ({filters.gyroLowpass2Type || 'PT1'})</span>
+              </div>
+            )}
+            {filters.gyroDynLowpassEnabled && (
+              <div className="flex justify-between">
+                <span className="text-slate-300">Dynamic</span>
+                <span className="text-white font-mono">{filters.gyroDynLowpassMinHz}-{filters.gyroDynLowpassMaxHz} Hz</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* D-term Filters */}
+        <div>
+          <h5 className="text-sm text-slate-400 mb-2">D-Term Lowpass</h5>
+          <div className="space-y-1 text-sm">
+            {filters.dtermLowpassEnabled && filters.dtermLowpassHz && (
+              <div className="flex justify-between">
+                <span className="text-slate-300">LPF 1</span>
+                <span className="text-white font-mono">{filters.dtermLowpassHz} Hz ({filters.dtermLowpassType || 'PT1'})</span>
+              </div>
+            )}
+            {filters.dtermLowpass2Enabled && filters.dtermLowpass2Hz && (
+              <div className="flex justify-between">
+                <span className="text-slate-300">LPF 2</span>
+                <span className="text-white font-mono">{filters.dtermLowpass2Hz} Hz ({filters.dtermLowpass2Type || 'PT1'})</span>
+              </div>
+            )}
+            {filters.dtermDynLowpassEnabled && (
+              <div className="flex justify-between">
+                <span className="text-slate-300">Dynamic</span>
+                <span className="text-white font-mono">{filters.dtermDynLowpassMinHz}-{filters.dtermDynLowpassMaxHz} Hz</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Notch Filters */}
+        <div>
+          <h5 className="text-sm text-slate-400 mb-2">Notch Filters</h5>
+          <div className="space-y-1 text-sm">
+            {filters.dynNotchEnabled && (
+              <div className="flex justify-between">
+                <span className="text-slate-300">Dynamic Notch</span>
+                <span className="text-white font-mono">{filters.dynNotchCount}x @ {filters.dynNotchMinHz}-{filters.dynNotchMaxHz} Hz</span>
+              </div>
+            )}
+            {filters.gyroNotch1Enabled && filters.gyroNotch1Hz && (
+              <div className="flex justify-between">
+                <span className="text-slate-300">Gyro Notch 1</span>
+                <span className="text-white font-mono">{filters.gyroNotch1Hz} Hz</span>
+              </div>
+            )}
+            {filters.gyroNotch2Enabled && filters.gyroNotch2Hz && (
+              <div className="flex justify-between">
+                <span className="text-slate-300">Gyro Notch 2</span>
+                <span className="text-white font-mono">{filters.gyroNotch2Hz} Hz</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* RPM Filter */}
+        <div>
+          <h5 className="text-sm text-slate-400 mb-2">RPM Filter</h5>
+          <div className="space-y-1 text-sm">
+            {filters.rpmFilterEnabled ? (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-slate-300">Harmonics</span>
+                  <span className="text-white font-mono">{filters.rpmFilterHarmonics}</span>
+                </div>
+                {filters.rpmFilterMinHz && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-300">Min Hz</span>
+                    <span className="text-white font-mono">{filters.rpmFilterMinHz}</span>
+                  </div>
+                )}
+              </>
+            ) : (
+              <span className="text-slate-500">Disabled</span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Small value card component
+function ValueCard({ label, value, small }: { label: string; value: string; small?: boolean }) {
+  return (
+    <div className={small ? '' : 'bg-slate-600/50 rounded-lg p-2'}>
+      <div className="text-xs text-slate-400">{label}</div>
+      <div className={`text-white ${small ? 'text-sm' : 'font-medium'}`}>{value}</div>
+    </div>
   );
 }

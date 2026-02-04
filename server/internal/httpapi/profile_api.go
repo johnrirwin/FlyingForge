@@ -213,9 +213,11 @@ func (api *ProfileAPI) handleAvatar(w http.ResponseWriter, r *http.Request) {
 	// In production, you'd upload to S3/CloudStorage and store the URL
 	dataURL := fmt.Sprintf("data:%s;base64,%s", contentType, base64.StdEncoding.EncodeToString(data))
 
-	// Update user's avatar_url directly (simple approach - just replace the avatar)
+	// Update user's custom_avatar_url and set avatar_type to custom
+	avatarType := models.AvatarTypeCustom
 	updateParams := models.UpdateUserParams{
-		AvatarURL: &dataURL,
+		CustomAvatarURL: &dataURL,
+		AvatarType:      &avatarType,
 	}
 
 	user, err := api.userStore.Update(r.Context(), userID, updateParams)
@@ -226,7 +228,9 @@ func (api *ProfileAPI) handleAvatar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]interface{}{
-		"avatarUrl": user.AvatarURL,
+		"avatarUrl":       user.CustomAvatarURL,
+		"avatarType":      user.AvatarType,
+		"effectiveAvatar": user.EffectiveAvatarURL(),
 	}
 
 	api.writeJSON(w, http.StatusOK, response)

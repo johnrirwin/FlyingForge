@@ -15,15 +15,17 @@ import (
 type PilotAPI struct {
 	userStore      *database.UserStore
 	aircraftStore  *database.AircraftStore
+	fcConfigStore  *database.FCConfigStore
 	authMiddleware *auth.Middleware
 	logger         *logging.Logger
 }
 
 // NewPilotAPI creates a new pilot API handler
-func NewPilotAPI(userStore *database.UserStore, aircraftStore *database.AircraftStore, authMiddleware *auth.Middleware, logger *logging.Logger) *PilotAPI {
+func NewPilotAPI(userStore *database.UserStore, aircraftStore *database.AircraftStore, fcConfigStore *database.FCConfigStore, authMiddleware *auth.Middleware, logger *logging.Logger) *PilotAPI {
 	return &PilotAPI{
 		userStore:      userStore,
 		aircraftStore:  aircraftStore,
+		fcConfigStore:  fcConfigStore,
 		authMiddleware: authMiddleware,
 		logger:         logger,
 	}
@@ -193,6 +195,27 @@ func (api *PilotAPI) handlePilotProfile(w http.ResponseWriter, r *http.Request) 
 				aircraftPublic.ReceiverSettings = sanitized
 				// Log that sanitization was performed for observability
 				api.logger.Debug("Sanitized receiver settings for aircraft", logging.WithField("aircraft_id", a.ID))
+			}
+
+			// Get tuning data if available
+			if api.fcConfigStore != nil {
+				tuningSnapshot, err := api.fcConfigStore.GetLatestTuningSnapshotPublic(ctx, a.ID)
+				if err == nil && tuningSnapshot != nil {
+					// Parse the tuning data
+					var tuningData *models.ParsedTuning
+					if len(tuningSnapshot.TuningData) > 0 {
+						tuningData = &models.ParsedTuning{}
+						json.Unmarshal(tuningSnapshot.TuningData, tuningData)
+					}
+					aircraftPublic.Tuning = &models.AircraftTuningPublic{
+						FirmwareName:    tuningSnapshot.FirmwareName,
+						FirmwareVersion: tuningSnapshot.FirmwareVersion,
+						BoardTarget:     tuningSnapshot.BoardTarget,
+						BoardName:       tuningSnapshot.BoardName,
+						ParsedTuning:    tuningData,
+						SnapshotDate:    tuningSnapshot.CreatedAt,
+					}
+				}
 			}
 
 			publicAircraft = append(publicAircraft, aircraftPublic)

@@ -9,6 +9,7 @@ import (
 	"github.com/johnrirwin/flyingforge/internal/battery"
 	"github.com/johnrirwin/flyingforge/internal/cache"
 	"github.com/johnrirwin/flyingforge/internal/config"
+	"github.com/johnrirwin/flyingforge/internal/crypto"
 	"github.com/johnrirwin/flyingforge/internal/database"
 	"github.com/johnrirwin/flyingforge/internal/equipment"
 	"github.com/johnrirwin/flyingforge/internal/httpapi"
@@ -41,6 +42,8 @@ type App struct {
 	userStore      *database.UserStore
 	aircraftStore  *database.AircraftStore
 	orderStore     *database.OrderStore
+	fcConfigStore  *database.FCConfigStore
+	inventoryStore *database.InventoryStore
 }
 
 // New creates and initializes a new App instance
@@ -180,12 +183,21 @@ func (a *App) initDatabaseServices() {
 
 	a.db = db
 
-	// Initialize inventory
-	inventoryStore := database.NewInventoryStore(db)
-	a.InventorySvc = inventory.NewService(inventoryStore, a.Logger)
+	// Initialize encryptor for sensitive data
+	encryptor, err := crypto.NewEncryptor(a.Config.Crypto.EncryptionKey)
+	if err != nil {
+		a.Logger.Warn("Failed to initialize encryptor - bind phrases will NOT be encrypted",
+			logging.WithField("error", err.Error()),
+			logging.WithField("hint", "Set BIND_PHRASE_ENCRYPTION_KEY env var to exactly 32 characters"))
+		encryptor = nil
+	}
 
-	// Initialize aircraft
-	a.aircraftStore = database.NewAircraftStore(db)
+	// Initialize inventory
+	a.inventoryStore = database.NewInventoryStore(db)
+	a.InventorySvc = inventory.NewService(a.inventoryStore, a.Logger)
+
+	// Initialize aircraft (with encryption support)
+	a.aircraftStore = database.NewAircraftStore(db, encryptor)
 	a.AircraftSvc = aircraft.NewService(a.aircraftStore, a.InventorySvc, a.Logger)
 
 	// Initialize radio
@@ -204,12 +216,15 @@ func (a *App) initDatabaseServices() {
 	// Initialize order store
 	a.orderStore = database.NewOrderStore(db)
 
+	// Initialize FC config store
+	a.fcConfigStore = database.NewFCConfigStore(db)
+
 	a.Logger.Info("Authentication service initialized")
 }
 
 func (a *App) initServers() {
-	// Initialize HTTP server with auth, aircraft, radio, battery, orders, and profile/pilot support
-	a.HTTPServer = httpapi.New(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.AircraftSvc, a.RadioSvc, a.BatterySvc, a.AuthService, a.AuthMiddleware, a.userStore, a.aircraftStore, a.orderStore, a.Logger)
+	// Initialize HTTP server with auth, aircraft, radio, battery, orders, fc-config, and profile/pilot support
+	a.HTTPServer = httpapi.New(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.AircraftSvc, a.RadioSvc, a.BatterySvc, a.AuthService, a.AuthMiddleware, a.userStore, a.aircraftStore, a.orderStore, a.fcConfigStore, a.inventoryStore, a.Logger)
 
 	// Initialize MCP server
 	mcpHandler := mcp.NewHandler(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.Logger)

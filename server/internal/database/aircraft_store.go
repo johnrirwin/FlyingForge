@@ -6,17 +6,19 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/johnrirwin/flyingforge/internal/crypto"
 	"github.com/johnrirwin/flyingforge/internal/models"
 )
 
 // AircraftStore handles aircraft database operations
 type AircraftStore struct {
-	db *DB
+	db        *DB
+	encryptor *crypto.Encryptor
 }
 
 // NewAircraftStore creates a new aircraft store
-func NewAircraftStore(db *DB) *AircraftStore {
-	return &AircraftStore{db: db}
+func NewAircraftStore(db *DB, encryptor *crypto.Encryptor) *AircraftStore {
+	return &AircraftStore{db: db, encryptor: encryptor}
 }
 
 // Create creates a new aircraft
@@ -398,8 +400,15 @@ func (s *AircraftStore) RemoveComponent(ctx context.Context, aircraftID string, 
 	return nil
 }
 
-// SetReceiverSettings sets or updates receiver settings for an aircraft
+// SetReceiverSettings sets or updates receiver settings for an aircraft.
+// SECURITY: Sensitive fields (BindPhrase, BindingPhrase, UID, WifiPassword) are encrypted before storage.
 func (s *AircraftStore) SetReceiverSettings(ctx context.Context, aircraftID string, settings json.RawMessage) (*models.AircraftReceiverSettings, error) {
+	// Encrypt sensitive fields before storing
+	encryptedSettings, err := s.encryptReceiverSettings(settings)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encrypt receiver settings: %w", err)
+	}
+
 	query := `
 		INSERT INTO aircraft_receiver_settings (aircraft_id, settings_json)
 		VALUES ($1, $2)
@@ -410,17 +419,25 @@ func (s *AircraftStore) SetReceiverSettings(ctx context.Context, aircraftID stri
 	`
 
 	rx := &models.AircraftReceiverSettings{}
-	err := s.db.QueryRowContext(ctx, query, aircraftID, settings).Scan(
+	err = s.db.QueryRowContext(ctx, query, aircraftID, encryptedSettings).Scan(
 		&rx.ID, &rx.AircraftID, &rx.Settings, &rx.CreatedAt, &rx.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to set receiver settings: %w", err)
 	}
 
+	// Decrypt the settings before returning so the caller gets plaintext
+	decryptedSettings, err := s.decryptReceiverSettings(rx.Settings)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt receiver settings: %w", err)
+	}
+	rx.Settings = decryptedSettings
+
 	return rx, nil
 }
 
-// GetReceiverSettings retrieves receiver settings for an aircraft
+// GetReceiverSettings retrieves receiver settings for an aircraft.
+// SECURITY: Sensitive fields are decrypted after retrieval from storage.
 func (s *AircraftStore) GetReceiverSettings(ctx context.Context, aircraftID string) (*models.AircraftReceiverSettings, error) {
 	query := `
 		SELECT id, aircraft_id, settings_json, created_at, updated_at
@@ -439,7 +456,69 @@ func (s *AircraftStore) GetReceiverSettings(ctx context.Context, aircraftID stri
 		return nil, fmt.Errorf("failed to get receiver settings: %w", err)
 	}
 
+	// Decrypt sensitive fields before returning
+	decryptedSettings, err := s.decryptReceiverSettings(rx.Settings)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt receiver settings: %w", err)
+	}
+	rx.Settings = decryptedSettings
+
 	return rx, nil
+}
+
+// encryptReceiverSettings encrypts sensitive fields in receiver settings JSON.
+// Fields encrypted: BindPhrase, BindingPhrase, UID, WifiPassword
+func (s *AircraftStore) encryptReceiverSettings(settings json.RawMessage) (json.RawMessage, error) {
+	if s.encryptor == nil || len(settings) == 0 {
+		return settings, nil
+	}
+
+	var data map[string]interface{}
+	if err := json.Unmarshal(settings, &data); err != nil {
+		return settings, nil // Return as-is if not valid JSON
+	}
+
+	// Encrypt sensitive string fields
+	sensitiveFields := []string{"bindPhrase", "bindingPhrase", "uid", "wifiPassword"}
+	for _, field := range sensitiveFields {
+		if val, ok := data[field].(string); ok && val != "" {
+			encrypted, err := s.encryptor.Encrypt(val)
+			if err != nil {
+				return nil, fmt.Errorf("failed to encrypt %s: %w", field, err)
+			}
+			data[field] = encrypted
+		}
+	}
+
+	return json.Marshal(data)
+}
+
+// decryptReceiverSettings decrypts sensitive fields in receiver settings JSON.
+func (s *AircraftStore) decryptReceiverSettings(settings json.RawMessage) (json.RawMessage, error) {
+	if s.encryptor == nil || len(settings) == 0 {
+		return settings, nil
+	}
+
+	var data map[string]interface{}
+	if err := json.Unmarshal(settings, &data); err != nil {
+		return settings, nil // Return as-is if not valid JSON
+	}
+
+	// Decrypt sensitive string fields
+	sensitiveFields := []string{"bindPhrase", "bindingPhrase", "uid", "wifiPassword"}
+	for _, field := range sensitiveFields {
+		if val, ok := data[field].(string); ok && val != "" {
+			decrypted, err := s.encryptor.Decrypt(val)
+			if err != nil {
+				// If decryption fails, the data might be unencrypted (legacy) or corrupted
+				// Log and continue with original value for backwards compatibility
+				continue
+			}
+			data[field] = decrypted
+		}
+	}
+
+	return json.Marshal(data)
 }
 
 // GetDetails retrieves full aircraft details including components and receiver settings

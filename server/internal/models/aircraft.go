@@ -23,6 +23,7 @@ type ComponentCategory string
 const (
 	ComponentCategoryFC       ComponentCategory = "fc"
 	ComponentCategoryESC      ComponentCategory = "esc"
+	ComponentCategoryAIO      ComponentCategory = "aio"
 	ComponentCategoryReceiver ComponentCategory = "receiver"
 	ComponentCategoryVTX      ComponentCategory = "vtx"
 	ComponentCategoryMotors   ComponentCategory = "motors"

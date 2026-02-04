@@ -41,6 +41,7 @@ export interface ReceiverSanitizedSettings {
 export type ComponentCategory = 
   | 'fc' 
   | 'esc' 
+  | 'aio'
   | 'receiver' 
   | 'vtx' 
   | 'motors' 
@@ -69,6 +70,57 @@ export interface AircraftPublic {
   createdAt: string;
   components?: AircraftComponentPublic[];
   receiverSettings?: ReceiverSanitizedSettings; // Sanitized receiver data
+  tuning?: AircraftTuningPublic; // Public tuning data (PIDs, rates, etc)
+}
+
+// Public tuning data for pilot profiles
+export interface AircraftTuningPublic {
+  firmwareName?: string;
+  firmwareVersion?: string;
+  boardTarget?: string;
+  boardName?: string;
+  parsedTuning?: ParsedTuningPublic;
+  snapshotDate?: string;
+}
+
+// Simplified parsed tuning for public display
+export interface ParsedTuningPublic {
+  pids?: PIDProfilePublic;
+  rates?: RateProfilePublic;
+  filters?: FilterSettingsPublic;
+  activePidProfile?: number;
+  activeRateProfile?: number;
+}
+
+export interface PIDProfilePublic {
+  profileIndex?: number;
+  roll?: { p?: number; i?: number; d?: number; ff?: number };
+  pitch?: { p?: number; i?: number; d?: number; ff?: number };
+  yaw?: { p?: number; i?: number; d?: number; ff?: number };
+}
+
+export interface RateAxisValues {
+  roll?: number;
+  pitch?: number;
+  yaw?: number;
+}
+
+export interface RateProfilePublic {
+  profileIndex?: number;
+  rateType?: string;
+  // Backend uses this structure
+  rcRates?: RateAxisValues;
+  superRates?: RateAxisValues;
+  rcExpo?: RateAxisValues;
+}
+
+export interface FilterSettingsPublic {
+  gyroLowpassHz?: number;
+  gyroLowpass2Hz?: number;
+  dtermLowpassHz?: number;
+  dtermLowpass2Hz?: number;
+  dynNotchEnabled?: boolean;
+  rpmFilterEnabled?: boolean;
 }
 
 // Full pilot profile (from /api/pilots/:id)
@@ -109,5 +161,7 @@ export interface FollowResponse {
 // Avatar upload response
 export interface AvatarUploadResponse {
   avatarUrl: string;
+  avatarType?: 'google' | 'custom';
+  effectiveAvatar?: string;
 }
 

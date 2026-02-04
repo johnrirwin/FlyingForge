@@ -1,5 +1,5 @@
 // Read-only aircraft detail modal for public pilot profiles
-// Shows components and sanitized receiver settings (no sensitive data)
+// Shows components, sanitized receiver settings (no sensitive data), and tuning data
 
 import { useState } from 'react';
 import type { AircraftPublic, ComponentCategory } from '../socialTypes';
@@ -10,12 +10,13 @@ interface PublicAircraftModalProps {
   onClose: () => void;
 }
 
-type ViewMode = 'components' | 'receiver';
+type ViewMode = 'components' | 'receiver' | 'tuning';
 
 // Component category display info
 const COMPONENT_INFO: Record<ComponentCategory, { label: string; icon: string }> = {
   fc: { label: 'Flight Controller', icon: '🧠' },
   esc: { label: 'ESC', icon: '⚡' },
+  aio: { label: 'AIO (FC/ESC)', icon: '🔌' },
   receiver: { label: 'Receiver', icon: '📡' },
   vtx: { label: 'Video Transmitter', icon: '📺' },
   motors: { label: 'Motors', icon: '🔄' },
@@ -27,7 +28,7 @@ const COMPONENT_INFO: Record<ComponentCategory, { label: string; icon: string }>
 
 // All component categories in display order
 const CATEGORY_ORDER: ComponentCategory[] = [
-  'fc', 'esc', 'receiver', 'vtx', 'motors', 'camera', 'frame', 'propellers', 'antenna'
+  'fc', 'esc', 'aio', 'receiver', 'vtx', 'motors', 'camera', 'frame', 'propellers', 'antenna'
 ];
 
 export function PublicAircraftModal({ aircraft, onClose }: PublicAircraftModalProps) {
@@ -36,6 +37,7 @@ export function PublicAircraftModal({ aircraft, onClose }: PublicAircraftModalPr
   const hasComponents = aircraft.components && aircraft.components.length > 0;
   const hasReceiverSettings = aircraft.receiverSettings && 
     Object.values(aircraft.receiverSettings).some(v => v);
+  const hasTuning = aircraft.tuning && aircraft.tuning.parsedTuning;
 
   // Get component by category
   const getComponentByCategory = (category: ComponentCategory) => {
@@ -97,6 +99,21 @@ export function PublicAircraftModal({ aircraft, onClose }: PublicAircraftModalPr
             Components
           </button>
           <button
+            onClick={() => setViewMode('tuning')}
+            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+              viewMode === 'tuning'
+                ? 'text-primary-400 border-b-2 border-primary-400'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Tuning
+            {hasTuning && (
+              <span className="ml-2 px-1.5 py-0.5 bg-blue-500/20 text-blue-400 text-[10px] rounded">
+                PIDs
+              </span>
+            )}
+          </button>
+          <button
             onClick={() => setViewMode('receiver')}
             className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
               viewMode === 'receiver'
@@ -104,10 +121,10 @@ export function PublicAircraftModal({ aircraft, onClose }: PublicAircraftModalPr
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            Receiver Settings
+            Receiver
             {hasReceiverSettings && (
               <span className="ml-2 px-1.5 py-0.5 bg-green-500/20 text-green-400 text-[10px] rounded">
-                Safe View
+                Safe
               </span>
             )}
           </button>
@@ -158,6 +175,173 @@ export function PublicAircraftModal({ aircraft, onClose }: PublicAircraftModalPr
               {!hasComponents && (
                 <div className="text-center py-8 text-slate-500">
                   <p>No components have been added to this aircraft yet.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {viewMode === 'tuning' && (
+            <div className="space-y-4">
+              {hasTuning ? (
+                <>
+                  {/* Firmware Info */}
+                  <div className="bg-slate-700/50 border border-slate-700 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-white font-medium">Firmware</h4>
+                      {aircraft.tuning?.snapshotDate && (
+                        <span className="text-xs text-slate-500">
+                          Updated {new Date(aircraft.tuning.snapshotDate).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <span className="text-slate-400">Version:</span>
+                        <span className="ml-2 text-white">
+                          {aircraft.tuning?.firmwareName} {aircraft.tuning?.firmwareVersion}
+                        </span>
+                      </div>
+                      {aircraft.tuning?.boardName && (
+                        <div>
+                          <span className="text-slate-400">Board:</span>
+                          <span className="ml-2 text-white">{aircraft.tuning.boardName}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* PID Display */}
+                  {aircraft.tuning?.parsedTuning?.pids && (
+                    <div className="bg-slate-700/50 border border-slate-700 rounded-lg p-4">
+                      <h4 className="text-white font-medium mb-3">PIDs</h4>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-slate-400 text-left">
+                              <th className="pb-2">Axis</th>
+                              <th className="pb-2 text-center">P</th>
+                              <th className="pb-2 text-center">I</th>
+                              <th className="pb-2 text-center">D</th>
+                              <th className="pb-2 text-center">F</th>
+                            </tr>
+                          </thead>
+                          <tbody className="text-white">
+                            <tr>
+                              <td className="py-1 text-slate-300">Roll</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.roll?.p ?? '-'}</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.roll?.i ?? '-'}</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.roll?.d ?? '-'}</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.roll?.ff ?? '-'}</td>
+                            </tr>
+                            <tr>
+                              <td className="py-1 text-slate-300">Pitch</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.pitch?.p ?? '-'}</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.pitch?.i ?? '-'}</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.pitch?.d ?? '-'}</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.pitch?.ff ?? '-'}</td>
+                            </tr>
+                            <tr>
+                              <td className="py-1 text-slate-300">Yaw</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.yaw?.p ?? '-'}</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.yaw?.i ?? '-'}</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.yaw?.d ?? '-'}</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.pids.yaw?.ff ?? '-'}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Rates Display - matches AircraftDetail layout */}
+                  {aircraft.tuning?.parsedTuning?.rates && (
+                    <div className="bg-slate-700/50 border border-slate-700 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-white font-medium">Rates</h4>
+                        {aircraft.tuning.parsedTuning.rates.rateType && (
+                          <span className="text-xs bg-slate-600 text-slate-300 px-2 py-0.5 rounded">
+                            {aircraft.tuning.parsedTuning.rates.rateType}
+                          </span>
+                        )}
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-slate-400 text-left">
+                              <th className="pb-2"></th>
+                              <th className="pb-2 text-center">Roll</th>
+                              <th className="pb-2 text-center">Pitch</th>
+                              <th className="pb-2 text-center">Yaw</th>
+                            </tr>
+                          </thead>
+                          <tbody className="text-white">
+                            <tr>
+                              <td className="py-1 text-slate-300">RC Rate</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.rcRates?.roll ?? '-'}</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.rcRates?.pitch ?? '-'}</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.rcRates?.yaw ?? '-'}</td>
+                            </tr>
+                            <tr>
+                              <td className="py-1 text-slate-300">Super Rate</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.superRates?.roll ?? '-'}</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.superRates?.pitch ?? '-'}</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.superRates?.yaw ?? '-'}</td>
+                            </tr>
+                            <tr>
+                              <td className="py-1 text-slate-300">RC Expo</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.rcExpo?.roll ?? '-'}</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.rcExpo?.pitch ?? '-'}</td>
+                              <td className="py-1 text-center font-mono">{aircraft.tuning.parsedTuning.rates.rcExpo?.yaw ?? '-'}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Filters Display */}
+                  {aircraft.tuning?.parsedTuning?.filters && (
+                    <div className="bg-slate-700/50 border border-slate-700 rounded-lg p-4">
+                      <h4 className="text-white font-medium mb-3">Filters</h4>
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        {aircraft.tuning.parsedTuning.filters.gyroLowpassHz !== undefined && (
+                          <div>
+                            <span className="text-slate-400">Gyro Lowpass:</span>
+                            <span className="ml-2 text-white">{aircraft.tuning.parsedTuning.filters.gyroLowpassHz} Hz</span>
+                          </div>
+                        )}
+                        {aircraft.tuning.parsedTuning.filters.dtermLowpassHz !== undefined && (
+                          <div>
+                            <span className="text-slate-400">D-Term Lowpass:</span>
+                            <span className="ml-2 text-white">{aircraft.tuning.parsedTuning.filters.dtermLowpassHz} Hz</span>
+                          </div>
+                        )}
+                        {aircraft.tuning.parsedTuning.filters.dynNotchEnabled !== undefined && (
+                          <div>
+                            <span className="text-slate-400">Dynamic Notch:</span>
+                            <span className={`ml-2 ${aircraft.tuning.parsedTuning.filters.dynNotchEnabled ? 'text-green-400' : 'text-slate-500'}`}>
+                              {aircraft.tuning.parsedTuning.filters.dynNotchEnabled ? 'Enabled' : 'Disabled'}
+                            </span>
+                          </div>
+                        )}
+                        {aircraft.tuning.parsedTuning.filters.rpmFilterEnabled !== undefined && (
+                          <div>
+                            <span className="text-slate-400">RPM Filter:</span>
+                            <span className={`ml-2 ${aircraft.tuning.parsedTuning.filters.rpmFilterEnabled ? 'text-green-400' : 'text-slate-500'}`}>
+                              {aircraft.tuning.parsedTuning.filters.rpmFilterEnabled ? 'Enabled' : 'Disabled'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-8 text-slate-500">
+                  <svg className="w-12 h-12 mx-auto mb-3 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  <p>No tuning data uploaded for this aircraft yet.</p>
                 </div>
               )}
             </div>

@@ -110,6 +110,10 @@ function App() {
   useEffect(() => {
     if (authLoading) return;
     
+    // Protected paths that require authentication
+    const protectedPaths = ['/dashboard', '/inventory', '/aircraft', '/radio', '/batteries', '/orders', '/profile', '/social'];
+    const isProtectedPath = protectedPaths.some(p => location.pathname.startsWith(p));
+    
     // On initial load after auth check completes
     if (wasAuthenticated === null) {
       setWasAuthenticated(isAuthenticated);
@@ -117,6 +121,10 @@ function App() {
       // This preserves the current section on refresh
       if (isAuthenticated && location.pathname === '/') {
         navigate('/dashboard', { replace: true });
+      }
+      // If trying to access protected path while not authenticated, show login modal
+      if (!isAuthenticated && isProtectedPath) {
+        setAuthModal('login');
       }
       return;
     }
@@ -457,8 +465,9 @@ function App() {
       navigate('/dashboard');
       return;
     }
-    // Dashboard, inventory, aircraft, radio, and batteries require authentication
-    if ((section === 'dashboard' || section === 'inventory' || section === 'aircraft' || section === 'radio' || section === 'batteries') && !isAuthenticated) {
+    // Protected sections that require authentication
+    const protectedSections = ['dashboard', 'inventory', 'aircraft', 'radio', 'batteries', 'orders', 'profile', 'social'];
+    if (protectedSections.includes(section) && !isAuthenticated) {
       setAuthModal('login');
       return;
     }

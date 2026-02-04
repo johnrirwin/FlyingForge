@@ -50,7 +50,7 @@ var rdqCategoryMapping = map[models.EquipmentCategory]string{
 	models.CategoryVTX:         "video-transmitters",
 	models.CategoryFC:          "flight-controllers",
 	models.CategoryESC:         "escs",
-	models.CategoryStacks:      "stacks",
+	models.CategoryAIO:         "stacks",
 	models.CategoryMotors:      "motors",
 	models.CategoryPropellers:  "propellers",
 	models.CategoryReceivers:   "receivers",

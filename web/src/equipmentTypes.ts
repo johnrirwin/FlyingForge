@@ -6,7 +6,7 @@ export type EquipmentCategory =
   | 'vtx'
   | 'flight_controllers'
   | 'esc'
-  | 'stacks'
+  | 'aio'
   | 'motors'
   | 'propellers'
   | 'receivers'
@@ -19,7 +19,7 @@ export const EQUIPMENT_CATEGORIES: { value: EquipmentCategory; label: string }[]
   { value: 'vtx', label: 'Video Transmitters' },
   { value: 'flight_controllers', label: 'Flight Controllers' },
   { value: 'esc', label: 'ESCs' },
-  { value: 'stacks', label: 'FC/ESC Stacks' },
+  { value: 'aio', label: 'AIO (FC/ESC)' },
   { value: 'motors', label: 'Motors' },
   { value: 'propellers', label: 'Propellers' },
   { value: 'receivers', label: 'Receivers' },

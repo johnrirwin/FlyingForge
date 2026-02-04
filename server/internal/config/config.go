@@ -14,6 +14,7 @@ type Config struct {
 	Database DatabaseConfig
 	Logging  LoggingConfig
 	Auth     AuthConfig
+	Crypto   CryptoConfig
 }
 
 // ServerConfig holds HTTP/MCP server configuration
@@ -56,6 +57,15 @@ type AuthConfig struct {
 	GoogleClientSecret string
 	GoogleRedirectURI  string
 	EnableAdminTools   bool
+}
+
+// CryptoConfig holds encryption configuration for sensitive data at rest
+type CryptoConfig struct {
+	// EncryptionKey must be exactly 32 bytes for AES-256 encryption.
+	// Used to encrypt sensitive user data like receiver bind phrases.
+	// CRITICAL: This key must be kept secret and backed up securely.
+	// Losing this key means losing access to all encrypted data.
+	EncryptionKey []byte
 }
 
 // Load parses flags and environment variables to build configuration
@@ -111,6 +121,9 @@ func Load() *Config {
 	// Load auth config from environment
 	cfg.Auth = loadAuthConfig()
 
+	// Load crypto config from environment
+	cfg.Crypto = loadCryptoConfig()
+
 	return cfg
 }
 
@@ -139,6 +152,20 @@ func loadAuthConfig() AuthConfig {
 		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 		GoogleRedirectURI:  getEnvOrDefault("GOOGLE_REDIRECT_URI", "http://localhost:8080/api/auth/google/callback"),
 		EnableAdminTools:   os.Getenv("ENABLE_ADMIN_TOOLS") == "true",
+	}
+}
+
+// loadCryptoConfig loads encryption configuration from environment variables.
+// BIND_PHRASE_ENCRYPTION_KEY must be exactly 32 bytes (characters) for AES-256.
+func loadCryptoConfig() CryptoConfig {
+	key := os.Getenv("BIND_PHRASE_ENCRYPTION_KEY")
+	if key == "" {
+		// Use a default key for development only - MUST be overridden in production
+		key = "CHANGE-THIS-32-BYTE-KEY-IN-PROD"
+	}
+
+	return CryptoConfig{
+		EncryptionKey: []byte(key),
 	}
 }
 

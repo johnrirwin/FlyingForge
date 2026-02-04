@@ -285,6 +285,17 @@ type AircraftPublic struct {
 	CreatedAt        time.Time                  `json:"createdAt"`
 	Components       []AircraftComponentPublic  `json:"components,omitempty"`
 	ReceiverSettings *ReceiverSanitizedSettings `json:"receiverSettings,omitempty"` // Sanitized receiver data
+	Tuning           *AircraftTuningPublic      `json:"tuning,omitempty"`           // Public tuning data
+}
+
+// AircraftTuningPublic represents tuning data for public view (PIDs, rates, filters)
+type AircraftTuningPublic struct {
+	FirmwareName    FCConfigFirmware `json:"firmwareName,omitempty"`
+	FirmwareVersion string           `json:"firmwareVersion,omitempty"`
+	BoardTarget     string           `json:"boardTarget,omitempty"`
+	BoardName       string           `json:"boardName,omitempty"`
+	ParsedTuning    *ParsedTuning    `json:"parsedTuning,omitempty"`
+	SnapshotDate    time.Time        `json:"snapshotDate,omitempty"`
 }
 
 // AircraftComponentPublic represents component info for public view

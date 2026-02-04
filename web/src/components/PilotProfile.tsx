@@ -151,11 +151,11 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
           )}
 
           {/* Info */}
-          <div className="flex-1">
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-white">{getDisplayName()}</h1>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-2xl font-bold text-white truncate">{getDisplayName()}</h1>
               {isOwnProfile && (
-                <span className="px-2 py-0.5 text-xs font-medium bg-slate-700 text-slate-300 rounded">
+                <span className="px-2 py-0.5 text-xs font-medium bg-slate-700 text-slate-300 rounded whitespace-nowrap flex-shrink-0">
                   You
                 </span>
               )}

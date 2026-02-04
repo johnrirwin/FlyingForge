@@ -101,6 +101,9 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationFollows,
 		migrationOrders,
 		migrationCustomAvatarText,
+		migrationFCConfigs,
+		migrationAircraftTuningSnapshots,
+		migrationTuningSnapshotDiffBackup,
 	}
 
 	for i, migration := range migrations {
@@ -449,4 +452,67 @@ const migrationCustomAvatarText = `
 -- Change avatar_url and custom_avatar_url from VARCHAR(1024) to TEXT to allow base64-encoded images
 ALTER TABLE users ALTER COLUMN avatar_url TYPE TEXT;
 ALTER TABLE users ALTER COLUMN custom_avatar_url TYPE TEXT;
+`
+
+// Migration for flight controller configs
+const migrationFCConfigs = `
+-- Create fc_configs table for storing Betaflight CLI dumps
+CREATE TABLE IF NOT EXISTS fc_configs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    inventory_item_id UUID NOT NULL REFERENCES inventory_items(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    notes TEXT,
+    raw_cli_dump TEXT NOT NULL,
+    firmware_name VARCHAR(50) NOT NULL DEFAULT 'betaflight',
+    firmware_version VARCHAR(50),
+    board_target VARCHAR(50),
+    board_name VARCHAR(50),
+    mcu_type VARCHAR(50),
+    parse_status VARCHAR(20) NOT NULL DEFAULT 'success',
+    parse_warnings JSONB DEFAULT '[]',
+    parsed_tuning JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for fc_configs
+CREATE INDEX IF NOT EXISTS idx_fc_configs_user ON fc_configs(user_id);
+CREATE INDEX IF NOT EXISTS idx_fc_configs_inventory_item ON fc_configs(inventory_item_id);
+CREATE INDEX IF NOT EXISTS idx_fc_configs_created ON fc_configs(created_at DESC);
+`
+
+// Migration for aircraft tuning snapshots
+const migrationAircraftTuningSnapshots = `
+-- Create aircraft_tuning_snapshots table for storing extracted tuning data
+CREATE TABLE IF NOT EXISTS aircraft_tuning_snapshots (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    aircraft_id UUID NOT NULL REFERENCES aircraft(id) ON DELETE CASCADE,
+    flight_controller_id UUID REFERENCES inventory_items(id) ON DELETE SET NULL,
+    flight_controller_config_id UUID REFERENCES fc_configs(id) ON DELETE SET NULL,
+    firmware_name VARCHAR(50) NOT NULL DEFAULT 'betaflight',
+    firmware_version VARCHAR(50),
+    board_target VARCHAR(50),
+    board_name VARCHAR(50),
+    tuning_data JSONB NOT NULL,
+    parse_status VARCHAR(20) NOT NULL DEFAULT 'success',
+    parse_warnings JSONB DEFAULT '[]',
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for aircraft_tuning_snapshots
+CREATE INDEX IF NOT EXISTS idx_tuning_snapshots_aircraft ON aircraft_tuning_snapshots(aircraft_id);
+CREATE INDEX IF NOT EXISTS idx_tuning_snapshots_fc ON aircraft_tuning_snapshots(flight_controller_id);
+CREATE INDEX IF NOT EXISTS idx_tuning_snapshots_config ON aircraft_tuning_snapshots(flight_controller_config_id);
+CREATE INDEX IF NOT EXISTS idx_tuning_snapshots_created ON aircraft_tuning_snapshots(created_at DESC);
+
+-- Add unique constraint to ensure one active snapshot per aircraft (most recent)
+-- Note: This is soft enforcement - application logic handles "active" concept
+`
+
+const migrationTuningSnapshotDiffBackup = `
+-- Add diff_backup column to store 'diff all' output for restore purposes
+ALTER TABLE aircraft_tuning_snapshots ADD COLUMN IF NOT EXISTS diff_backup TEXT;
 `
