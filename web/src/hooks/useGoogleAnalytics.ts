@@ -94,7 +94,6 @@ function initGA() {
   window.gtag('js', new Date());
   window.gtag('config', GA_MEASUREMENT_ID, {
     send_page_view: false, // We'll send page views manually on route changes
-    debug_mode: true, // Enable debug mode for DebugView in GA4
   });
 }
 
