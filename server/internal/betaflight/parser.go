@@ -157,8 +157,8 @@ func (p *Parser) parseMetadata(lines []string, result *ParseResult) {
 
 // parsePIDProfiles extracts PID tuning values
 func (p *Parser) parsePIDProfiles(lines []string, result *ParseResult) {
-	// Initialize default profile
 	profiles := make(map[int]*models.PIDProfile)
+	profileHasData := make(map[int]bool)
 	currentProfile := 0
 
 	for _, line := range lines {
@@ -171,37 +171,40 @@ func (p *Parser) parsePIDProfiles(lines []string, result *ParseResult) {
 			}
 		}
 
-		// Initialize profile if needed
-		if profiles[currentProfile] == nil {
-			profiles[currentProfile] = &models.PIDProfile{
-				ProfileIndex: currentProfile,
-			}
-		}
-
 		// Parse PID set commands
 		if strings.HasPrefix(line, "set ") {
-			p.parsePIDLine(line, profiles[currentProfile])
+			// Initialize profile if needed
+			if profiles[currentProfile] == nil {
+				profiles[currentProfile] = &models.PIDProfile{
+					ProfileIndex: currentProfile,
+				}
+			}
+			if p.parsePIDLine(line, profiles[currentProfile]) {
+				profileHasData[currentProfile] = true
+			}
 		}
 	}
 
-	// Convert map to slice
+	// Convert map to slice, only include profiles with actual data
 	for i := 0; i <= 3; i++ {
-		if profile, ok := profiles[i]; ok {
+		if profile, ok := profiles[i]; ok && profileHasData[i] {
 			result.ParsedTuning.PIDProfiles = append(result.ParsedTuning.PIDProfiles, *profile)
 		}
 	}
 }
 
 // parsePIDLine parses a single PID set command
-func (p *Parser) parsePIDLine(line string, profile *models.PIDProfile) {
+func (p *Parser) parsePIDLine(line string, profile *models.PIDProfile) bool {
 	// set p_roll = 45
 	// set d_pitch = 32
 	// set i_yaw = 85
 	// set f_roll = 120
 
+	foundAny := false
 	pidRe := regexp.MustCompile(`set\s+(p|i|d|f)_(roll|pitch|yaw)\s*=\s*(\d+)`)
 	if matches := pidRe.FindStringSubmatch(line); len(matches) >= 4 {
 		value, _ := strconv.Atoi(matches[3])
+		foundAny = true
 		switch matches[2] {
 		case "roll":
 			switch matches[1] {
@@ -240,70 +243,95 @@ func (p *Parser) parsePIDLine(line string, profile *models.PIDProfile) {
 	}
 
 	// Parse additional PID settings
-	p.parseAdditionalPIDSettings(line, profile)
+	if p.parseAdditionalPIDSettings(line, profile) {
+		foundAny = true
+	}
+
+	return foundAny
 }
 
 // parseAdditionalPIDSettings parses settings like anti_gravity, d_min, etc.
-func (p *Parser) parseAdditionalPIDSettings(line string, profile *models.PIDProfile) {
+func (p *Parser) parseAdditionalPIDSettings(line string, profile *models.PIDProfile) bool {
+	foundAny := false
 	if val := p.extractSetInt(line, "anti_gravity_gain"); val != nil {
 		profile.AntiGravityGain = *val
+		foundAny = true
 	}
 	if val := p.extractSetString(line, "anti_gravity_mode"); val != "" {
 		profile.AntiGravityMode = val
+		foundAny = true
 	}
 	if val := p.extractSetInt(line, "d_min_roll"); val != nil {
 		profile.DMinRoll = *val
+		foundAny = true
 	}
 	if val := p.extractSetInt(line, "d_min_pitch"); val != nil {
 		profile.DMinPitch = *val
+		foundAny = true
 	}
 	if val := p.extractSetInt(line, "d_min_yaw"); val != nil {
 		profile.DMinYaw = *val
+		foundAny = true
 	}
 	if val := p.extractSetInt(line, "d_min_gain"); val != nil {
 		profile.DMinGain = *val
+		foundAny = true
 	}
 	if val := p.extractSetInt(line, "d_min_advance"); val != nil {
 		profile.DMinAdvance = *val
+		foundAny = true
 	}
 	if val := p.extractSetString(line, "iterm_relax"); val != "" {
 		profile.ITermRelax = val
+		foundAny = true
 	}
 	if val := p.extractSetString(line, "iterm_relax_type"); val != "" {
 		profile.ITermRelaxType = val
+		foundAny = true
 	}
 	if val := p.extractSetInt(line, "iterm_relax_cutoff"); val != nil {
 		profile.ITermRelaxCutoff = *val
+		foundAny = true
 	}
 	if val := p.extractSetInt(line, "tpa_rate"); val != nil {
 		profile.TPARate = *val
+		foundAny = true
 	}
 	if val := p.extractSetInt(line, "tpa_breakpoint"); val != nil {
 		profile.TPABreakpoint = *val
+		foundAny = true
 	}
 	if val := p.extractSetString(line, "tpa_mode"); val != "" {
 		profile.TPAMode = val
+		foundAny = true
 	}
 	if val := p.extractSetInt(line, "feedforward_transition"); val != nil {
 		profile.FeedforwardTransition = *val
+		foundAny = true
 	}
 	if val := p.extractSetInt(line, "feedforward_averaging"); val != nil {
 		profile.FeedforwardAveraging = *val
+		foundAny = true
 	}
 	if val := p.extractSetInt(line, "feedforward_smooth_factor"); val != nil {
 		profile.FeedforwardSmooth = *val
+		foundAny = true
 	}
 	if val := p.extractSetInt(line, "feedforward_jitter_factor"); val != nil {
 		profile.FeedforwardJitterFactor = *val
+		foundAny = true
 	}
 	if val := p.extractSetInt(line, "feedforward_boost"); val != nil {
 		profile.FeedforwardBoost = *val
+		foundAny = true
 	}
+	return foundAny
 }
 
 // parseRateProfiles extracts rate settings
 func (p *Parser) parseRateProfiles(lines []string, result *ParseResult) {
 	profiles := make(map[int]*models.RateProfile)
+	profileHasData := make(map[int]bool)
 	currentProfile := 0
 
 	for _, line := range lines {
@@ -316,47 +344,53 @@ func (p *Parser) parseRateProfiles(lines []string, result *ParseResult) {
 			}
 		}
 
-		// Initialize profile if needed
-		if profiles[currentProfile] == nil {
-			profiles[currentProfile] = &models.RateProfile{
-				ProfileIndex: currentProfile,
-			}
-		}
-
 		// Parse rate set commands
 		if strings.HasPrefix(line, "set ") {
-			p.parseRateLine(line, profiles[currentProfile])
+			// Initialize profile if needed
+			if profiles[currentProfile] == nil {
+				profiles[currentProfile] = &models.RateProfile{
+					ProfileIndex: currentProfile,
+				}
+			}
+			if p.parseRateLine(line, profiles[currentProfile]) {
+				profileHasData[currentProfile] = true
+			}
 		}
 	}
 
-	// Convert map to slice
+	// Convert map to slice, only include profiles with actual data
 	for i := 0; i <= 5; i++ {
-		if profile, ok := profiles[i]; ok {
+		if profile, ok := profiles[i]; ok && profileHasData[i] {
 			result.ParsedTuning.RateProfiles = append(result.ParsedTuning.RateProfiles, *profile)
 		}
 	}
 }
 
 // parseRateLine parses a single rate set command
-func (p *Parser) parseRateLine(line string, profile *models.RateProfile) {
+func (p *Parser) parseRateLine(line string, profile *models.RateProfile) bool {
+	foundAny := false
 	if val := p.extractSetString(line, "rates_type"); val != "" {
 		profile.RateType = val
+		foundAny = true
 	}
 
 	// RC rates (comma separated: roll,pitch,yaw)
 	if val := p.extractSetString(line, "roll_rc_rate"); val != "" {
 		if v, err := strconv.Atoi(val); err == nil {
 			profile.RCRates.Roll = v
+			foundAny = true
 		}
 	}
 	if val := p.extractSetString(line, "pitch_rc_rate"); val != "" {
 		if v, err := strconv.Atoi(val); err == nil {
 			profile.RCRates.Pitch = v
+			foundAny = true
 		}
 	}
 	if val := p.extractSetString(line, "yaw_rc_rate"); val != "" {
 		if v, err := strconv.Atoi(val); err == nil {
 			profile.RCRates.Yaw = v
+			foundAny = true
 		}
 	}
 
@@ -364,16 +398,19 @@ func (p *Parser) parseRateLine(line string, profile *models.RateProfile) {
 	if val := p.extractSetString(line, "roll_srate"); val != "" {
 		if v, err := strconv.Atoi(val); err == nil {
 			profile.SuperRates.Roll = v
+			foundAny = true
 		}
 	}
 	if val := p.extractSetString(line, "pitch_srate"); val != "" {
 		if v, err := strconv.Atoi(val); err == nil {
 			profile.SuperRates.Pitch = v
+			foundAny = true
 		}
 	}
 	if val := p.extractSetString(line, "yaw_srate"); val != "" {
 		if v, err := strconv.Atoi(val); err == nil {
 			profile.SuperRates.Yaw = v
+			foundAny = true
 		}
 	}
 
@@ -381,37 +418,46 @@ func (p *Parser) parseRateLine(line string, profile *models.RateProfile) {
 	if val := p.extractSetString(line, "roll_expo"); val != "" {
 		if v, err := strconv.Atoi(val); err == nil {
 			profile.RCExpo.Roll = v
+			foundAny = true
 		}
 	}
 	if val := p.extractSetString(line, "pitch_expo"); val != "" {
 		if v, err := strconv.Atoi(val); err == nil {
 			profile.RCExpo.Pitch = v
+			foundAny = true
 		}
 	}
 	if val := p.extractSetString(line, "yaw_expo"); val != "" {
 		if v, err := strconv.Atoi(val); err == nil {
 			profile.RCExpo.Yaw = v
+			foundAny = true
 		}
 	}
 
 	// Throttle settings
 	if val := p.extractSetInt(line, "thr_mid"); val != nil {
 		profile.ThrottleMid = *val
+		foundAny = true
 	}
 	if val := p.extractSetInt(line, "thr_expo"); val != nil {
 		profile.ThrottleExpo = *val
+		foundAny = true
 	}
 	if val := p.extractSetString(line, "throttle_limit_type"); val != "" {
 		profile.ThrottleLimitType = val
+		foundAny = true
 	}
 	if val := p.extractSetInt(line, "throttle_limit_percent"); val != nil {
 		profile.ThrottleLimitPercent = *val
+		foundAny = true
 	}
+	return foundAny
 }
 
 // parseFilters extracts filter settings
 func (p *Parser) parseFilters(lines []string, result *ParseResult) {
 	filters := &models.FilterSettings{}
+	foundAny := false
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -423,120 +469,150 @@ func (p *Parser) parseFilters(lines []string, result *ParseResult) {
 		if val := p.extractSetInt(line, "gyro_lpf1_static_hz"); val != nil {
 			filters.GyroLowpassHz = *val
 			filters.GyroLowpassEnabled = *val > 0
+			foundAny = true
 		}
 		if val := p.extractSetString(line, "gyro_lpf1_type"); val != "" {
 			filters.GyroLowpassType = val
+			foundAny = true
 		}
 
 		// Gyro lowpass 2
 		if val := p.extractSetInt(line, "gyro_lpf2_static_hz"); val != nil {
 			filters.GyroLowpass2Hz = *val
 			filters.GyroLowpass2Enabled = *val > 0
+			foundAny = true
 		}
 		if val := p.extractSetString(line, "gyro_lpf2_type"); val != "" {
 			filters.GyroLowpass2Type = val
+			foundAny = true
 		}
 
 		// Dynamic gyro lowpass
 		if val := p.extractSetInt(line, "gyro_lpf1_dyn_min_hz"); val != nil {
 			filters.GyroDynLowpassMinHz = *val
 			filters.GyroDynLowpassEnabled = *val > 0
+			foundAny = true
 		}
 		if val := p.extractSetInt(line, "gyro_lpf1_dyn_max_hz"); val != nil {
 			filters.GyroDynLowpassMaxHz = *val
+			foundAny = true
 		}
 
 		// Gyro notch 1
 		if val := p.extractSetInt(line, "gyro_notch1_hz"); val != nil {
 			filters.GyroNotch1Hz = *val
 			filters.GyroNotch1Enabled = *val > 0
+			foundAny = true
 		}
 		if val := p.extractSetInt(line, "gyro_notch1_cutoff"); val != nil {
 			filters.GyroNotch1Cutoff = *val
+			foundAny = true
 		}
 
 		// Gyro notch 2
 		if val := p.extractSetInt(line, "gyro_notch2_hz"); val != nil {
 			filters.GyroNotch2Hz = *val
 			filters.GyroNotch2Enabled = *val > 0
+			foundAny = true
 		}
 		if val := p.extractSetInt(line, "gyro_notch2_cutoff"); val != nil {
 			filters.GyroNotch2Cutoff = *val
+			foundAny = true
 		}
 
 		// D-term lowpass 1
 		if val := p.extractSetInt(line, "dterm_lpf1_static_hz"); val != nil {
 			filters.DTermLowpassHz = *val
 			filters.DTermLowpassEnabled = *val > 0
+			foundAny = true
 		}
 		if val := p.extractSetString(line, "dterm_lpf1_type"); val != "" {
 			filters.DTermLowpassType = val
+			foundAny = true
 		}
 
 		// D-term lowpass 2
 		if val := p.extractSetInt(line, "dterm_lpf2_static_hz"); val != nil {
 			filters.DTermLowpass2Hz = *val
 			filters.DTermLowpass2Enabled = *val > 0
+			foundAny = true
 		}
 		if val := p.extractSetString(line, "dterm_lpf2_type"); val != "" {
 			filters.DTermLowpass2Type = val
+			foundAny = true
 		}
 
 		// Dynamic D-term lowpass
 		if val := p.extractSetInt(line, "dterm_lpf1_dyn_min_hz"); val != nil {
 			filters.DTermDynLowpassMinHz = *val
 			filters.DTermDynLowpassEnabled = *val > 0
+			foundAny = true
 		}
 		if val := p.extractSetInt(line, "dterm_lpf1_dyn_max_hz"); val != nil {
 			filters.DTermDynLowpassMaxHz = *val
+			foundAny = true
 		}
 
 		// D-term notch
 		if val := p.extractSetInt(line, "dterm_notch_hz"); val != nil {
 			filters.DTermNotchHz = *val
 			filters.DTermNotchEnabled = *val > 0
+			foundAny = true
 		}
 		if val := p.extractSetInt(line, "dterm_notch_cutoff"); val != nil {
 			filters.DTermNotchCutoff = *val
+			foundAny = true
 		}
 
 		// RPM filter
 		if val := p.extractSetInt(line, "rpm_filter_harmonics"); val != nil {
 			filters.RPMFilterHarmonics = *val
 			filters.RPMFilterEnabled = *val > 0
+			foundAny = true
 		}
 		if val := p.extractSetInt(line, "rpm_filter_min_hz"); val != nil {
 			filters.RPMFilterMinHz = *val
+			foundAny = true
 		}
 		if val := p.extractSetInt(line, "rpm_filter_fade_range_hz"); val != nil {
 			filters.RPMFilterFadeRange = *val
+			foundAny = true
 		}
 		if val := p.extractSetInt(line, "rpm_filter_q"); val != nil {
 			filters.RPMFilterQFactor = *val
+			foundAny = true
 		}
 
 		// Dynamic notch
 		if val := p.extractSetInt(line, "dyn_notch_count"); val != nil {
 			filters.DynNotchCount = *val
 			filters.DynNotchEnabled = *val > 0
+			foundAny = true
 		}
 		if val := p.extractSetInt(line, "dyn_notch_q"); val != nil {
 			filters.DynNotchQ = *val
+			foundAny = true
 		}
 		if val := p.extractSetInt(line, "dyn_notch_min_hz"); val != nil {
 			filters.DynNotchMinHz = *val
+			foundAny = true
 		}
 		if val := p.extractSetInt(line, "dyn_notch_max_hz"); val != nil {
 			filters.DynNotchMaxHz = *val
+			foundAny = true
 		}
 	}
 
-	result.ParsedTuning.Filters = filters
+	// Only set Filters if we found at least one filter setting
+	if foundAny {
+		result.ParsedTuning.Filters = filters
+	}
 }
 
 // parseMotorMixer extracts motor and mixer settings
 func (p *Parser) parseMotorMixer(lines []string, result *ParseResult) {
 	mixer := &models.MotorMixerConfig{}
+	foundAny := false
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -546,45 +622,57 @@ func (p *Parser) parseMotorMixer(lines []string, result *ParseResult) {
 
 		if val := p.extractSetString(line, "motor_pwm_protocol"); val != "" {
 			mixer.MotorProtocol = val
+			foundAny = true
 		}
 		if val := p.extractSetInt(line, "motor_pwm_rate"); val != nil {
 			mixer.MotorPWMRate = *val
+			foundAny = true
 		}
 		if val := p.extractSetInt(line, "dshot_idle_value"); val != nil {
 			mixer.DigitalIdlePercent = *val
+			foundAny = true
 		}
 		if val := p.extractSetInt(line, "motor_poles"); val != nil {
 			mixer.MotorPoles = *val
+			foundAny = true
 		}
 		if val := p.extractSetInt(line, "gyro_sync_denom"); val != nil {
 			mixer.GyroSyncDenom = *val
+			foundAny = true
 		}
 		if val := p.extractSetInt(line, "pid_process_denom"); val != nil {
 			mixer.PIDLoopDenom = *val
+			foundAny = true
 		}
 		if val := p.extractSetString(line, "dshot_bidir"); val != "" {
 			mixer.DShotBidir = val == "ON" || val == "1"
+			foundAny = true
 		}
 		if val := p.extractSetString(line, "dshot_bitbang"); val != "" {
 			mixer.DShotBitbang = val
+			foundAny = true
 		}
 	}
 
-	// Calculate Hz values
-	baseGyroHz := 8000 // Most modern FCs run at 8kHz
-	if mixer.GyroSyncDenom > 0 {
-		mixer.GyroHz = baseGyroHz / mixer.GyroSyncDenom
-	}
-	if mixer.PIDLoopDenom > 0 && mixer.GyroHz > 0 {
-		mixer.PIDHz = mixer.GyroHz / mixer.PIDLoopDenom
-	}
+	// Only set MotorMixer if we found at least one setting
+	if foundAny {
+		// Calculate Hz values
+		baseGyroHz := 8000 // Most modern FCs run at 8kHz
+		if mixer.GyroSyncDenom > 0 {
+			mixer.GyroHz = baseGyroHz / mixer.GyroSyncDenom
+		}
+		if mixer.PIDLoopDenom > 0 && mixer.GyroHz > 0 {
+			mixer.PIDHz = mixer.GyroHz / mixer.PIDLoopDenom
+		}
 
-	result.ParsedTuning.MotorMixer = mixer
+		result.ParsedTuning.MotorMixer = mixer
+	}
 }
 
 // parseFeatures extracts enabled features
 func (p *Parser) parseFeatures(lines []string, result *ParseResult) {
 	features := &models.FeatureFlags{}
+	foundAny := false
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -608,29 +696,41 @@ func (p *Parser) parseFeatures(lines []string, result *ParseResult) {
 		switch strings.ToUpper(featureName) {
 		case "GPS":
 			features.GPS = enabled
+			foundAny = true
 		case "TELEMETRY":
 			features.Telemetry = enabled
+			foundAny = true
 		case "OSD":
 			features.OSD = enabled
+			foundAny = true
 		case "LED_STRIP":
 			features.LED_STRIP = enabled
+			foundAny = true
 		case "AIRMODE":
 			features.Airmode = enabled
+			foundAny = true
 		case "ANTI_GRAVITY":
 			features.AntiGravity = enabled
+			foundAny = true
 		case "DYNAMIC_FILTER":
 			features.DynamicFilter = enabled
+			foundAny = true
 		case "RPM_FILTER":
 			features.RPMFilter = enabled
+			foundAny = true
 		}
 	}
 
-	result.ParsedTuning.Features = features
+	// Only set Features if we found at least one feature
+	if foundAny {
+		result.ParsedTuning.Features = features
+	}
 }
 
 // parseMiscSettings extracts misc settings
 func (p *Parser) parseMiscSettings(lines []string, result *ParseResult) {
 	misc := &models.MiscSettings{}
+	foundAny := false
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -640,25 +740,34 @@ func (p *Parser) parseMiscSettings(lines []string, result *ParseResult) {
 
 		if val := p.extractSetString(line, "name"); val != "" && val != "-" {
 			misc.Name = val
+			foundAny = true
 		}
 		if val := p.extractSetString(line, "crash_recovery"); val != "" {
 			misc.CrashRecovery = val
+			foundAny = true
 		}
 		if val := p.extractSetInt(line, "gyro_calib_noise_limit"); val != nil {
 			misc.GyroCalibNoise = *val
+			foundAny = true
 		}
 		if val := p.extractSetInt(line, "vbat_min_cell_voltage"); val != nil {
 			misc.VBatMinCellVoltage = *val
+			foundAny = true
 		}
 		if val := p.extractSetInt(line, "vbat_max_cell_voltage"); val != nil {
 			misc.VBatMaxCellVoltage = *val
+			foundAny = true
 		}
 		if val := p.extractSetInt(line, "vbat_warning_cell_voltage"); val != nil {
 			misc.VBatWarningCellVoltage = *val
+			foundAny = true
 		}
 	}
 
-	result.ParsedTuning.Misc = misc
+	// Only set Misc if we found at least one misc setting
+	if foundAny {
+		result.ParsedTuning.Misc = misc
+	}
 }
 
 // extractSetInt extracts an integer value from a set command
