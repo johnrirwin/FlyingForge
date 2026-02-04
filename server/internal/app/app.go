@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"time"
 
 	"github.com/johnrirwin/flyingforge/internal/aggregator"
 	"github.com/johnrirwin/flyingforge/internal/aircraft"
@@ -44,6 +45,7 @@ type App struct {
 	orderStore     *database.OrderStore
 	fcConfigStore  *database.FCConfigStore
 	inventoryStore *database.InventoryStore
+	refreshLimiter ratelimit.RateLimiter
 }
 
 // New creates and initializes a new App instance
@@ -129,11 +131,16 @@ func (a *App) initCache() cache.Cache {
 		}, a.Config.Cache.TTL)
 		if err != nil {
 			a.Logger.Error("Failed to connect to Redis, falling back to memory cache", logging.WithField("error", err.Error()))
+			a.refreshLimiter = ratelimit.New(2 * time.Minute)
 			return cache.NewMemory(a.Config.Cache.TTL)
 		}
+		// Use Redis for distributed rate limiting when available
+		a.refreshLimiter = ratelimit.NewRedis(redisCache.Client(), "ratelimit:refresh:", 2*time.Minute)
+		a.Logger.Info("Using Redis for distributed rate limiting")
 		return redisCache
 	default:
 		a.Logger.Info("Using in-memory cache backend")
+		a.refreshLimiter = ratelimit.New(2 * time.Minute)
 		return cache.NewMemory(a.Config.Cache.TTL)
 	}
 }
@@ -224,7 +231,7 @@ func (a *App) initDatabaseServices() {
 
 func (a *App) initServers() {
 	// Initialize HTTP server with auth, aircraft, radio, battery, orders, fc-config, and profile/pilot support
-	a.HTTPServer = httpapi.New(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.AircraftSvc, a.RadioSvc, a.BatterySvc, a.AuthService, a.AuthMiddleware, a.userStore, a.aircraftStore, a.orderStore, a.fcConfigStore, a.inventoryStore, a.Logger)
+	a.HTTPServer = httpapi.New(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.AircraftSvc, a.RadioSvc, a.BatterySvc, a.AuthService, a.AuthMiddleware, a.userStore, a.aircraftStore, a.orderStore, a.fcConfigStore, a.inventoryStore, a.refreshLimiter, a.Logger)
 
 	// Initialize MCP server
 	mcpHandler := mcp.NewHandler(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.Logger)

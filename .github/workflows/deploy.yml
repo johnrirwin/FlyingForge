@@ -132,11 +132,12 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
+          VITE_API_URL: ${{ github.event.inputs.environment == 'staging' && 'https://staging.flyingforge.com' || 'https://flyingforge.com' }}
         run: |
           docker build \
             --build-arg NGINX_CONFIG=nginx.ecs.conf \
             --build-arg VITE_GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }} \
-            --build-arg VITE_API_URL=https://flyingforge.com \
+            --build-arg VITE_API_URL=$VITE_API_URL \
             -t $ECR_REGISTRY/$ECR_WEB_REPOSITORY:$IMAGE_TAG \
             -t $ECR_REGISTRY/$ECR_WEB_REPOSITORY:latest \
             -f Dockerfile.web .

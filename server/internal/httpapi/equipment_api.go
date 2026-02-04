@@ -35,7 +35,8 @@ func NewEquipmentAPI(equipmentSvc *equipment.Service, inventorySvc inventory.Inv
 // RegisterRoutes registers equipment and inventory routes on the given mux
 func (api *EquipmentAPI) RegisterRoutes(mux *http.ServeMux, corsMiddleware func(http.HandlerFunc) http.HandlerFunc) {
 	if api.authMiddleware == nil {
-		return // Auth middleware required for all equipment routes
+		api.logger.Error("Equipment API routes not registered: authMiddleware is nil")
+		return
 	}
 
 	// Equipment routes (require authentication)

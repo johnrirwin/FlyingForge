@@ -37,10 +37,10 @@ type Server struct {
 	inventoryStore *database.InventoryStore
 	logger         *logging.Logger
 	server         *http.Server
-	refreshLimiter *ratelimit.Limiter
+	refreshLimiter ratelimit.RateLimiter
 }
 
-func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, radioSvc *radio.Service, batterySvc *battery.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, userStore *database.UserStore, aircraftStore *database.AircraftStore, orderStore *database.OrderStore, fcConfigStore *database.FCConfigStore, inventoryStore *database.InventoryStore, logger *logging.Logger) *Server {
+func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, radioSvc *radio.Service, batterySvc *battery.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, userStore *database.UserStore, aircraftStore *database.AircraftStore, orderStore *database.OrderStore, fcConfigStore *database.FCConfigStore, inventoryStore *database.InventoryStore, refreshLimiter ratelimit.RateLimiter, logger *logging.Logger) *Server {
 	return &Server{
 		agg:            agg,
 		equipmentSvc:   equipmentSvc,
@@ -56,7 +56,7 @@ func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventoryS
 		fcConfigStore:  fcConfigStore,
 		inventoryStore: inventoryStore,
 		logger:         logger,
-		refreshLimiter: ratelimit.New(2 * time.Minute), // Rate limit refresh to once per 2 minutes per IP
+		refreshLimiter: refreshLimiter,
 	}
 }
 
