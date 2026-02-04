@@ -359,9 +359,12 @@ function App() {
         filters.sources.length > 0 ? filters.sources : undefined
       );
       
+      // Reset infinite scroll state
+      setCurrentOffset(0);
+      
       // Then re-fetch items with current filters
       const params: FilterParams = {
-        limit: 50,
+        limit: ITEMS_PER_PAGE,
         sort: filters.sort,
       };
 
@@ -380,6 +383,7 @@ function App() {
       const response = await getItems(params);
       setItems(response.items || []);
       setTotalCount(response.totalCount || 0);
+      setCurrentOffset(ITEMS_PER_PAGE);
     } catch (err) {
       if (err instanceof RateLimitError) {
         // Start 2 minute cooldown
@@ -572,6 +576,10 @@ function App() {
     // Navigation to news is handled by the auth state change effect
   }, [logout]);
 
+  // Memoized callbacks for Sidebar to prevent re-renders
+  const handleOpenLogin = useCallback(() => setAuthModal('login'), []);
+  const handleCloseMobileMenu = useCallback(() => setIsMobileMenuOpen(false), []);
+
   // Handle OAuth callback - must be after all hooks are called
   if (isAuthCallback) {
     return <AuthCallback />;
@@ -606,10 +614,10 @@ function App() {
         isAuthenticated={isAuthenticated}
         user={user}
         authLoading={authLoading}
-        onSignIn={() => setAuthModal('login')}
+        onSignIn={handleOpenLogin}
         onSignOut={handleLogout}
         isMobileMenuOpen={isMobileMenuOpen}
-        onMobileMenuClose={() => setIsMobileMenuOpen(false)}
+        onMobileMenuClose={handleCloseMobileMenu}
       />
 
       {/* Main Content */}
