@@ -1,5 +1,7 @@
 package database
 
+// Package database provides database storage implementations.
+
 import (
 	"context"
 	"database/sql"
