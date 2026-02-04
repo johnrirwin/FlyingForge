@@ -447,13 +447,13 @@ func (s *FCConfigStore) ListTuningSnapshots(ctx context.Context, aircraftID stri
 // GetAircraftByFC finds an aircraft that has the given FC (inventory item) assigned
 func (s *FCConfigStore) GetAircraftByFC(ctx context.Context, userID string, inventoryItemID string) (*models.Aircraft, error) {
 	query := `
-		SELECT a.id, a.user_id, a.name, a.nickname, a.type, 
+		SELECT a.id, a.user_id, a.name, a.nickname, a.type,
 			   (a.image_data IS NOT NULL) as has_image, a.description,
 			   a.created_at, a.updated_at
 		FROM aircraft a
 		INNER JOIN aircraft_components ac ON ac.aircraft_id = a.id
-		WHERE a.user_id = $1 
-		  AND ac.inventory_item_id = $2 
+		WHERE a.user_id = $1
+		  AND ac.inventory_item_id = $2
 		  AND ac.category = 'fc'
 		LIMIT 1
 	`
