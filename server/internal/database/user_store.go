@@ -762,7 +762,7 @@ func (s *UserStore) IsFollowing(ctx context.Context, followerUserID, followedUse
 // GetFollowerCount returns the number of followers for a user
 // Only counts users with callsigns set (for privacy consistency with GetFollowers)
 func (s *UserStore) GetFollowerCount(ctx context.Context, userID string) (int, error) {
-	query := `SELECT COUNT(*) FROM follows f JOIN users u ON u.id = f.follower_user_id WHERE f.followed_user_id = $1 AND u.call_sign IS NOT NULL AND u.call_sign != ''`
+	query := `SELECT COUNT(*) FROM follows f JOIN users follower ON follower.id = f.follower_user_id WHERE f.followed_user_id = $1 AND follower.call_sign IS NOT NULL AND follower.call_sign != ''`
 	var count int
 	err := s.db.QueryRowContext(ctx, query, userID).Scan(&count)
 	return count, err
@@ -771,7 +771,7 @@ func (s *UserStore) GetFollowerCount(ctx context.Context, userID string) (int, e
 // GetFollowingCount returns the number of users a user is following
 // Only counts users with callsigns set (for privacy consistency with GetFollowing)
 func (s *UserStore) GetFollowingCount(ctx context.Context, userID string) (int, error) {
-	query := `SELECT COUNT(*) FROM follows f JOIN users u ON u.id = f.followed_user_id WHERE f.follower_user_id = $1 AND u.call_sign IS NOT NULL AND u.call_sign != ''`
+	query := `SELECT COUNT(*) FROM follows f JOIN users followed ON followed.id = f.followed_user_id WHERE f.follower_user_id = $1 AND followed.call_sign IS NOT NULL AND followed.call_sign != ''`
 	var count int
 	err := s.db.QueryRowContext(ctx, query, userID).Scan(&count)
 	return count, err
@@ -787,7 +787,7 @@ func (s *UserStore) GetFollowers(ctx context.Context, userID string, limit, offs
 	}
 
 	// Get total count - only count users with callsigns
-	countQuery := `SELECT COUNT(*) FROM follows f JOIN users u ON u.id = f.follower_user_id WHERE f.followed_user_id = $1 AND u.call_sign IS NOT NULL AND u.call_sign != ''`
+	countQuery := `SELECT COUNT(*) FROM follows f JOIN users follower ON follower.id = f.follower_user_id WHERE f.followed_user_id = $1 AND follower.call_sign IS NOT NULL AND follower.call_sign != ''`
 	var totalCount int
 	if err := s.db.QueryRowContext(ctx, countQuery, userID).Scan(&totalCount); err != nil {
 		return nil, err
@@ -795,11 +795,11 @@ func (s *UserStore) GetFollowers(ctx context.Context, userID string, limit, offs
 
 	// Get follower user details - only users with callsigns for privacy
 	query := `
-		SELECT u.id, u.call_sign, u.display_name, u.avatar_url, u.google_avatar_url, u.avatar_type, u.custom_avatar_url
+		SELECT follower.id, follower.call_sign, follower.display_name, follower.avatar_url, follower.google_avatar_url, follower.avatar_type, follower.custom_avatar_url
 		FROM follows f
-		JOIN users u ON u.id = f.follower_user_id
+		JOIN users follower ON follower.id = f.follower_user_id
 		WHERE f.followed_user_id = $1
-		  AND u.call_sign IS NOT NULL AND u.call_sign != ''
+		  AND follower.call_sign IS NOT NULL AND follower.call_sign != ''
 		ORDER BY f.created_at DESC
 		LIMIT $2 OFFSET $3
 	`
@@ -857,7 +857,7 @@ func (s *UserStore) GetFollowing(ctx context.Context, userID string, limit, offs
 	}
 
 	// Get total count - only count users with callsigns
-	countQuery := `SELECT COUNT(*) FROM follows f JOIN users u ON u.id = f.followed_user_id WHERE f.follower_user_id = $1 AND u.call_sign IS NOT NULL AND u.call_sign != ''`
+	countQuery := `SELECT COUNT(*) FROM follows f JOIN users followed ON followed.id = f.followed_user_id WHERE f.follower_user_id = $1 AND followed.call_sign IS NOT NULL AND followed.call_sign != ''`
 	var totalCount int
 	if err := s.db.QueryRowContext(ctx, countQuery, userID).Scan(&totalCount); err != nil {
 		return nil, err
@@ -865,11 +865,11 @@ func (s *UserStore) GetFollowing(ctx context.Context, userID string, limit, offs
 
 	// Get following user details - only users with callsigns for privacy
 	query := `
-		SELECT u.id, u.call_sign, u.display_name, u.avatar_url, u.google_avatar_url, u.avatar_type, u.custom_avatar_url
+		SELECT followed.id, followed.call_sign, followed.display_name, followed.avatar_url, followed.google_avatar_url, followed.avatar_type, followed.custom_avatar_url
 		FROM follows f
-		JOIN users u ON u.id = f.followed_user_id
+		JOIN users followed ON followed.id = f.followed_user_id
 		WHERE f.follower_user_id = $1
-		  AND u.call_sign IS NOT NULL AND u.call_sign != ''
+		  AND followed.call_sign IS NOT NULL AND followed.call_sign != ''
 		ORDER BY f.created_at DESC
 		LIMIT $2 OFFSET $3
 	`
