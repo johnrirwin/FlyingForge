@@ -8,6 +8,7 @@ import type {
   User,
 } from '../authTypes';
 import * as authApi from '../authApi';
+import { trackEvent } from '../hooks/useGoogleAnalytics';
 
 // Initial state
 const initialState: AuthState = {
@@ -118,6 +119,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         type: 'AUTH_SUCCESS',
         payload: { user: response.user, tokens: response.tokens },
       });
+      // Track login/signup for GA4 conversions
+      // Note: response.isNewUser would distinguish signup from login if available
+      trackEvent('login', { method: 'google' });
     } catch (error) {
       dispatch({ type: 'AUTH_ERROR', payload: error as AuthError });
       throw error;

@@ -22,6 +22,11 @@ import { useLocation } from 'react-router-dom';
  * - Consider adding a cookie consent banner for GDPR/CCPA compliance
  * - Review Google's data processing terms: https://business.safety.google/adsprocessorterms/
  *
+ * DATA PROTECTION:
+ * - Only page paths are tracked, NOT query parameters (to avoid capturing sensitive data)
+ * - No user-specific data (bind phrases, UIDs, etc.) is sent to GA
+ * - trackEvent is exported but not used - any future use should avoid sensitive data
+ *
  * SUBRESOURCE INTEGRITY (SRI):
  * SRI is not used because Google updates the gtag.js script without changing
  * the URL. This is standard for all GA implementations.
@@ -136,15 +141,16 @@ export function useGoogleAnalytics() {
   }, []);
 
   // Track page views on route changes
+  // Only track pathname, NOT query params, to avoid accidentally capturing sensitive data
   useEffect(() => {
     if (!GA_MEASUREMENT_ID) return;
 
     const timeoutId = setTimeout(() => {
-      trackPageView(location.pathname + location.search);
+      trackPageView(location.pathname);
     }, PAGE_TITLE_UPDATE_DELAY_MS);
 
     return () => clearTimeout(timeoutId);
-  }, [location.pathname, location.search]);
+  }, [location.pathname]);
 
   return { trackEvent, trackPageView };
 }

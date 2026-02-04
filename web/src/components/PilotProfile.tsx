@@ -6,6 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 import { PublicAircraftModal } from './PublicAircraftModal';
 import { FollowListModal } from './FollowListModal';
 import { AircraftImage } from './AircraftImage';
+import { trackEvent } from '../hooks/useGoogleAnalytics';
 
 type FollowListType = 'followers' | 'following' | null;
 
@@ -56,12 +57,16 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
         if (profile) {
           setProfile({ ...profile, followerCount: profile.followerCount - 1 });
         }
+        // Track unfollow action
+        trackEvent('social_unfollow');
       } else {
         await followPilot(pilotId);
         setIsFollowing(true);
         if (profile) {
           setProfile({ ...profile, followerCount: profile.followerCount + 1 });
         }
+        // Track follow action
+        trackEvent('social_follow');
       }
     } catch (err) {
       console.error('Failed to toggle follow:', err);
