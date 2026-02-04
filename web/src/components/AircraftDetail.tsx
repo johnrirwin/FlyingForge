@@ -12,6 +12,7 @@ import { getInventory } from '../equipmentApi';
 import { getAircraftImageUrl } from '../aircraftApi';
 import { getAircraftTuning, createTuningSnapshot } from '../fcConfigApi';
 import type { AircraftTuningResponse, PIDProfile, RateProfile, FilterSettings } from '../fcConfigTypes';
+import { trackEvent } from '../hooks/useGoogleAnalytics';
 
 interface AircraftDetailProps {
   details: AircraftDetailsResponse;
@@ -113,6 +114,8 @@ export function AircraftDetail({
       setDiffBackup('');
       setShowCliUpload(false);
       setUploadMode('dump');
+      // Track FC config upload for GA4 conversions
+      trackEvent('fc_config_uploaded', { mode: uploadMode });
       // Reload tuning data
       const data = await getAircraftTuning(aircraft.id);
       setTuningData(data);

@@ -7,7 +7,7 @@ import { getInventory, addInventoryItem, updateInventoryItem, deleteInventoryIte
 import { listAircraft, createAircraft, updateAircraft, deleteAircraft, getAircraftDetails, setAircraftComponent, setReceiverSettings } from './aircraftApi';
 import { useFilters, useDebounce } from './hooks';
 import { useAuth } from './hooks/useAuth';
-import { useGoogleAnalytics } from './hooks/useGoogleAnalytics';
+import { useGoogleAnalytics, trackEvent } from './hooks/useGoogleAnalytics';
 import type { FeedItem, SourceInfo, FilterParams } from './types';
 import type { EquipmentItem, InventoryItem, EquipmentSearchParams, EquipmentCategory, ItemCondition, AddInventoryParams, InventorySummary, AppSection } from './equipmentTypes';
 import type { Aircraft, AircraftDetailsResponse, CreateAircraftParams, UpdateAircraftParams, SetComponentParams, ReceiverConfig } from './aircraftTypes';
@@ -479,10 +479,14 @@ function App() {
         params.notes
       );
       setInventoryItems(prev => [...prev, newItem]);
+      // Track gear addition for GA4 conversions
+      trackEvent('gear_added', { category: selectedEquipmentForInventory.category, method: 'from_shop' });
     } else {
       // Add new manual item
       const newItem = await addInventoryItem(params);
       setInventoryItems(prev => [...prev, newItem]);
+      // Track gear addition for GA4 conversions
+      trackEvent('gear_added', { category: params.category, method: 'manual' });
     }
     
     const summaryResponse = await getInventorySummary();
@@ -493,6 +497,8 @@ function App() {
   const handleCreateAircraft = useCallback(async (params: CreateAircraftParams): Promise<Aircraft> => {
     const newAircraft = await createAircraft(params);
     setAircraftItems(prev => [...prev, newAircraft]);
+    // Track aircraft creation for GA4 conversions
+    trackEvent('aircraft_created', { aircraft_type: params.type });
     return newAircraft;
   }, []);
 
