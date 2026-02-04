@@ -43,6 +43,7 @@ type App struct {
 	aircraftStore  *database.AircraftStore
 	orderStore     *database.OrderStore
 	fcConfigStore  *database.FCConfigStore
+	inventoryStore *database.InventoryStore
 }
 
 // New creates and initializes a new App instance
@@ -192,8 +193,8 @@ func (a *App) initDatabaseServices() {
 	}
 
 	// Initialize inventory
-	inventoryStore := database.NewInventoryStore(db)
-	a.InventorySvc = inventory.NewService(inventoryStore, a.Logger)
+	a.inventoryStore = database.NewInventoryStore(db)
+	a.InventorySvc = inventory.NewService(a.inventoryStore, a.Logger)
 
 	// Initialize aircraft (with encryption support)
 	a.aircraftStore = database.NewAircraftStore(db, encryptor)
@@ -223,7 +224,7 @@ func (a *App) initDatabaseServices() {
 
 func (a *App) initServers() {
 	// Initialize HTTP server with auth, aircraft, radio, battery, orders, fc-config, and profile/pilot support
-	a.HTTPServer = httpapi.New(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.AircraftSvc, a.RadioSvc, a.BatterySvc, a.AuthService, a.AuthMiddleware, a.userStore, a.aircraftStore, a.orderStore, a.fcConfigStore, a.Logger)
+	a.HTTPServer = httpapi.New(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.AircraftSvc, a.RadioSvc, a.BatterySvc, a.AuthService, a.AuthMiddleware, a.userStore, a.aircraftStore, a.orderStore, a.fcConfigStore, a.inventoryStore, a.Logger)
 
 	// Initialize MCP server
 	mcpHandler := mcp.NewHandler(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.Logger)

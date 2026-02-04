@@ -18,15 +18,17 @@ import (
 // FCConfigAPI handles HTTP API requests for flight controller configs
 type FCConfigAPI struct {
 	fcConfigStore  *database.FCConfigStore
+	inventoryStore *database.InventoryStore
 	parser         *betaflight.Parser
 	authMiddleware *auth.Middleware
 	logger         *logging.Logger
 }
 
 // NewFCConfigAPI creates a new FC config API handler
-func NewFCConfigAPI(fcConfigStore *database.FCConfigStore, authMiddleware *auth.Middleware, logger *logging.Logger) *FCConfigAPI {
+func NewFCConfigAPI(fcConfigStore *database.FCConfigStore, inventoryStore *database.InventoryStore, authMiddleware *auth.Middleware, logger *logging.Logger) *FCConfigAPI {
 	return &FCConfigAPI{
 		fcConfigStore:  fcConfigStore,
+		inventoryStore: inventoryStore,
 		parser:         betaflight.NewParser(),
 		authMiddleware: authMiddleware,
 		logger:         logger,
@@ -123,8 +125,30 @@ func (api *FCConfigAPI) createFCConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate required fields
+	if req.InventoryItemID == "" {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Inventory item ID is required"})
+		return
+	}
+
 	if req.RawCLIDump == "" {
 		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "CLI dump is required"})
+		return
+	}
+
+	// Verify the inventory item exists and belongs to the authenticated user
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	inventoryItem, err := api.inventoryStore.Get(ctx, req.InventoryItemID, userID)
+	if err != nil {
+		api.logger.Error("Failed to verify inventory item", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to verify inventory item"})
+		return
+	}
+
+	if inventoryItem == nil {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Inventory item not found or access denied"})
 		return
 	}
 
@@ -150,9 +174,6 @@ func (api *FCConfigAPI) createFCConfig(w http.ResponseWriter, r *http.Request) {
 		ParseWarnings:   result.ParseWarnings,
 		ParsedTuning:    result.ParsedTuning,
 	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
-	defer cancel()
 
 	if err := api.fcConfigStore.SaveConfig(ctx, userID, config); err != nil {
 		api.logger.Error("Failed to save FC config", logging.WithField("error", err.Error()))

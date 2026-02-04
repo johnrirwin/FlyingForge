@@ -33,11 +33,12 @@ type Server struct {
 	aircraftStore  *database.AircraftStore
 	orderStore     *database.OrderStore
 	fcConfigStore  *database.FCConfigStore
+	inventoryStore *database.InventoryStore
 	logger         *logging.Logger
 	server         *http.Server
 }
 
-func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, radioSvc *radio.Service, batterySvc *battery.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, userStore *database.UserStore, aircraftStore *database.AircraftStore, orderStore *database.OrderStore, fcConfigStore *database.FCConfigStore, logger *logging.Logger) *Server {
+func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, radioSvc *radio.Service, batterySvc *battery.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, userStore *database.UserStore, aircraftStore *database.AircraftStore, orderStore *database.OrderStore, fcConfigStore *database.FCConfigStore, inventoryStore *database.InventoryStore, logger *logging.Logger) *Server {
 	return &Server{
 		agg:            agg,
 		equipmentSvc:   equipmentSvc,
@@ -51,6 +52,7 @@ func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventoryS
 		aircraftStore:  aircraftStore,
 		orderStore:     orderStore,
 		fcConfigStore:  fcConfigStore,
+		inventoryStore: inventoryStore,
 		logger:         logger,
 	}
 }
@@ -117,7 +119,7 @@ func (s *Server) Start(addr string) error {
 
 	// FC Config routes (flight controller tuning)
 	if s.fcConfigStore != nil && s.authMiddleware != nil {
-		fcConfigAPI := NewFCConfigAPI(s.fcConfigStore, s.authMiddleware, s.logger)
+		fcConfigAPI := NewFCConfigAPI(s.fcConfigStore, s.inventoryStore, s.authMiddleware, s.logger)
 		fcConfigAPI.RegisterRoutes(mux, s.corsMiddleware)
 	}
 
