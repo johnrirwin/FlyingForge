@@ -11,7 +11,7 @@ function createFeedItem(overrides: Partial<FeedItem> = {}): FeedItem {
     title: 'Test Feed Item Title',
     url: 'https://example.com/article',
     source: 'test-source',
-    sourceType: 'news',
+    sourceType: 'rss',
     tags: ['fpv', 'drone'],
     ...overrides,
   }
@@ -22,7 +22,7 @@ function createSourceInfo(overrides: Partial<SourceInfo> = {}): SourceInfo {
     id: 'source-1',
     name: 'Test Source',
     url: 'https://example.com',
-    sourceType: 'news',
+    sourceType: 'rss',
     description: 'Test source description',
     feedType: 'rss',
     enabled: true,
@@ -126,8 +126,8 @@ describe('FeedCard', () => {
     expect(onClick).toHaveBeenCalledTimes(1)
   })
 
-  it('renders news source with blue badge styling', () => {
-    const item = createFeedItem({ sourceType: 'news' })
+  it('renders rss source with blue badge styling', () => {
+    const item = createFeedItem({ sourceType: 'rss' })
     const onClick = vi.fn()
 
     render(<FeedCard item={item} onClick={onClick} />)
@@ -136,14 +136,14 @@ describe('FeedCard', () => {
     expect(badge).toHaveClass('bg-blue-500/20', 'text-blue-400')
   })
 
-  it('renders community source with green badge styling', () => {
-    const item = createFeedItem({ sourceType: 'community' })
+  it('renders youtube source with red badge styling', () => {
+    const item = createFeedItem({ sourceType: 'youtube' })
     const onClick = vi.fn()
 
     render(<FeedCard item={item} onClick={onClick} />)
 
     const badge = screen.getByText('test-source')
-    expect(badge).toHaveClass('bg-green-500/20', 'text-green-400')
+    expect(badge).toHaveClass('bg-red-500/20', 'text-red-400')
   })
 
   it('renders image when media is provided', () => {

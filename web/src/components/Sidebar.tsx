@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, memo } from 'react';
 import type { EquipmentCategory, EquipmentSearchParams, InventorySummary } from '../equipmentTypes';
 import { EQUIPMENT_CATEGORIES, ITEM_CONDITIONS } from '../equipmentTypes';
 import type { AppSection } from '../equipmentTypes';
@@ -24,7 +24,7 @@ interface SidebarProps {
   onMobileMenuClose: () => void;
 }
 
-export function Sidebar({
+export const Sidebar = memo(function Sidebar({
   activeSection,
   onSectionChange,
   searchParams,
@@ -414,4 +414,4 @@ export function Sidebar({
     </aside>
     </>
   );
-}
+});

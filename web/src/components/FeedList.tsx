@@ -1,4 +1,5 @@
 import type { FeedItem, SourceInfo } from '../types';
+import { useInfiniteScroll } from '../hooks';
 
 interface FeedListProps {
   items: FeedItem[];
@@ -6,10 +7,17 @@ interface FeedListProps {
   isLoading: boolean;
   error: string | null;
   onItemClick: (item: FeedItem) => void;
+  hasMore?: boolean;
+  onLoadMore?: () => void;
 }
 
-export function FeedList({ items, sources, isLoading, error, onItemClick }: FeedListProps) {
+export function FeedList({ items, sources, isLoading, error, onItemClick, hasMore = false, onLoadMore }: FeedListProps) {
   const sourceMap = new Map(sources.map(s => [s.id, s]));
+
+  const { setLoadMoreRef } = useInfiniteScroll(
+    () => onLoadMore?.(),
+    { hasMore, isLoading }
+  );
 
   if (error) {
     return (
@@ -80,12 +88,26 @@ export function FeedList({ items, sources, isLoading, error, onItemClick }: Feed
             onClick={() => onItemClick(item)}
           />
         ))}
+        
+        {/* Infinite scroll trigger */}
+        {hasMore && (
+          <div ref={setLoadMoreRef} className="h-4" />
+        )}
+        
+        {/* Loading indicator for infinite scroll */}
+        {isLoading && items.length > 0 && (
+          <div className="flex items-center justify-center py-8">
+            <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+        
+        {/* End of list indicator */}
+        {!hasMore && items.length > 0 && (
+          <div className="text-center py-6 text-slate-500 text-sm">
+            You've reached the end • {items.length} items loaded
+          </div>
+        )}
       </div>
-      {isLoading && (
-        <div className="flex items-center justify-center py-8">
-          <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
-        </div>
-      )}
     </div>
   );
 }

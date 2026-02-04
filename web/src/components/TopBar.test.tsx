@@ -13,6 +13,8 @@ describe('TopBar', () => {
     onToDateChange: vi.fn(),
     sort: 'newest' as const,
     onSortChange: vi.fn(),
+    sourceType: 'all' as const,
+    onSourceTypeChange: vi.fn(),
     onRefresh: vi.fn(),
     isRefreshing: false,
     refreshCooldown: 0,

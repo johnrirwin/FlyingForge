@@ -1,9 +1,12 @@
 // Shared types matching the Go server schema
 
-export type SourceType = 'news' | 'community';
+export type SourceType = 'rss' | 'youtube' | 'reddit';
 
 export interface Media {
-  imageUrl?: string;
+  type?: string;      // "video", "image"
+  imageUrl?: string;  // Thumbnail URL
+  videoUrl?: string;  // Video URL (for YouTube)
+  duration?: string;  // Video duration
 }
 
 export interface FeedItem {
@@ -48,6 +51,7 @@ export interface SourcesResponse {
 
 export interface FilterParams {
   limit?: number;
+  offset?: number;
   sources?: string[];
   sourceType?: SourceType;
   query?: string;

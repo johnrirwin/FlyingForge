@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { FiltersState } from './types';
 
 const STORAGE_KEY = 'flyingforge-filters';
@@ -76,4 +76,55 @@ export function useDebounce<T>(value: T, delay: number): T {
   }, [value, delay]);
 
   return debouncedValue;
+}
+
+export function useInfiniteScroll(
+  onLoadMore: () => void,
+  options: {
+    hasMore: boolean;
+    isLoading: boolean;
+    threshold?: number;
+  }
+) {
+  const { hasMore, isLoading, threshold = 200 } = options;
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+
+  const setLoadMoreRef = useCallback((node: HTMLDivElement | null) => {
+    // Cleanup previous observer
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+    }
+
+    if (!node || !hasMore || isLoading) {
+      loadMoreRef.current = null;
+      return;
+    }
+
+    loadMoreRef.current = node;
+
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasMore && !isLoading) {
+          onLoadMore();
+        }
+      },
+      {
+        rootMargin: `${threshold}px`,
+      }
+    );
+
+    observerRef.current.observe(node);
+  }, [hasMore, isLoading, onLoadMore, threshold]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
+  }, []);
+
+  return { setLoadMoreRef };
 }

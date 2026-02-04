@@ -37,6 +37,7 @@ export async function getItems(params?: FilterParams): Promise<AggregatedRespons
   const searchParams = new URLSearchParams();
   
   if (params?.limit) searchParams.set('limit', params.limit.toString());
+  if (params?.offset) searchParams.set('offset', params.offset.toString());
   if (params?.sources?.length) searchParams.set('sources', params.sources.join(','));
   if (params?.sourceType) searchParams.set('sourceType', params.sourceType);
   if (params?.query) searchParams.set('q', params.query);
@@ -57,10 +58,24 @@ export async function getSources(): Promise<SourcesResponse> {
 }
 
 export async function refreshFeeds(sources?: string[]): Promise<AggregatedResponse> {
-  return fetchAPI<AggregatedResponse>('/api/refresh', {
-    method: 'POST',
-    body: JSON.stringify({ sources }),
-  });
+  // Use AbortController for timeout - refresh can take a while in production
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
+  
+  try {
+    return await fetchAPI<AggregatedResponse>('/api/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ sources }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error('Refresh timed out - feeds may still be updating in the background');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 export async function checkHealth(): Promise<{ status: string; timestamp: string }> {

@@ -23,7 +23,9 @@ export function ItemDetail({ item, source, onClose }: ItemDetailProps) {
           <div className="flex items-center gap-2">
             <span
               className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                item.sourceType === 'news'
+                item.sourceType === 'youtube'
+                  ? 'bg-red-500/20 text-red-400'
+                  : item.sourceType === 'rss'
                   ? 'bg-blue-500/20 text-blue-400'
                   : 'bg-green-500/20 text-green-400'
               }`}

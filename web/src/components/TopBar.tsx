@@ -1,3 +1,5 @@
+import type { SourceType } from '../types';
+
 interface TopBarProps {
   query: string;
   onQueryChange: (query: string) => void;
@@ -7,6 +9,8 @@ interface TopBarProps {
   onToDateChange: (date: string) => void;
   sort: 'newest' | 'score';
   onSortChange: (sort: 'newest' | 'score') => void;
+  sourceType: SourceType | 'all';
+  onSourceTypeChange: (type: SourceType | 'all') => void;
   onRefresh: () => void;
   isRefreshing: boolean;
   refreshCooldown: number; // seconds remaining
@@ -22,6 +26,8 @@ export function TopBar({
   onToDateChange,
   sort,
   onSortChange,
+  sourceType,
+  onSourceTypeChange,
   onRefresh,
   isRefreshing,
   refreshCooldown,
@@ -114,6 +120,43 @@ export function TopBar({
               </svg>
             </button>
           )}
+        </div>
+
+        {/* Source Type Filter */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs md:text-sm text-slate-400 hidden sm:inline">Type:</span>
+          <div className="flex gap-1 bg-slate-900 rounded-lg p-1">
+            <button
+              onClick={() => onSourceTypeChange('all')}
+              className={`px-2 md:px-3 py-1 md:py-1.5 text-xs md:text-sm rounded-md transition-colors ${
+                sourceType === 'all'
+                  ? 'bg-primary-600 text-white'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => onSourceTypeChange('rss')}
+              className={`px-2 md:px-3 py-1 md:py-1.5 text-xs md:text-sm rounded-md transition-colors ${
+                sourceType === 'rss'
+                  ? 'bg-primary-600 text-white'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              News
+            </button>
+            <button
+              onClick={() => onSourceTypeChange('youtube')}
+              className={`px-2 md:px-3 py-1 md:py-1.5 text-xs md:text-sm rounded-md transition-colors ${
+                sourceType === 'youtube'
+                  ? 'bg-primary-600 text-white'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              YouTube
+            </button>
+          </div>
         </div>
 
         {/* Sort */}

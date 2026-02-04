@@ -1,0 +1,193 @@
+{
+  "sources": [
+    {
+      "name": "DroneDJ",
+      "url": "https://dronedj.com/feed/",
+      "type": "rss",
+      "category": "news",
+      "enabled": true
+    },
+    {
+      "name": "DroneLife",
+      "url": "https://dronelife.com/feed/",
+      "type": "rss",
+      "category": "news",
+      "enabled": true
+    },
+    {
+      "name": "sUAS News",
+      "url": "https://www.suasnews.com/feed/",
+      "type": "rss",
+      "category": "news",
+      "enabled": true
+    },
+    {
+      "name": "DroneBlog",
+      "url": "https://www.droneblog.com/feed/",
+      "type": "rss",
+      "category": "news",
+      "enabled": false,
+      "comment": "TLS certificate issue"
+    },
+    {
+      "name": "Haye's UAV",
+      "url": "https://www.yourdroneadvisor.com/feed/",
+      "type": "rss",
+      "category": "news",
+      "enabled": false,
+      "comment": "Domain not resolving"
+    },
+    {
+      "name": "Commercial UAV News",
+      "url": "https://www.commercialuavnews.com/feed",
+      "type": "rss",
+      "category": "news",
+      "enabled": false,
+      "comment": "Feed returns 404"
+    },
+    {
+      "name": "r/fpv",
+      "url": "https://www.reddit.com/r/fpv/.rss",
+      "type": "reddit",
+      "category": "community",
+      "enabled": false,
+      "comment": "Reddit rate limits in production - disabled"
+    },
+    {
+      "name": "r/Multicopter",
+      "url": "https://www.reddit.com/r/Multicopter/.rss",
+      "type": "reddit",
+      "category": "community",
+      "enabled": false,
+      "comment": "Reddit rate limits in production - disabled"
+    },
+    {
+      "name": "r/drones",
+      "url": "https://www.reddit.com/r/drones/.rss",
+      "type": "reddit",
+      "category": "community",
+      "enabled": false,
+      "comment": "Reddit rate limits in production - disabled"
+    },
+    {
+      "name": "r/djimavic",
+      "url": "https://www.reddit.com/r/djimavic/.rss",
+      "type": "reddit",
+      "category": "community",
+      "enabled": false,
+      "comment": "Reddit rate limits in production - disabled"
+    },
+    {
+      "name": "Joshua Bardwell",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCX3eufnI7A2I7IkKHZn8KSQ",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": true
+    },
+    {
+      "name": "Mads Tech",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCxpgzA0iO-7anEAyiLMDRmg",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": true
+    },
+    {
+      "name": "Mr Steele",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCQEqPV0AwJ6mQYLmSO0rcNA",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": true
+    },
+    {
+      "name": "Rotor Riot",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCemG3VoNCmjP8ucHR2YY7hw",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": true
+    },
+    {
+      "name": "Botgrinder",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UC1op0oMdMT3NklH9s7jnfVA",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": false,
+      "comment": "Channel ID needs verification"
+    },
+    {
+      "name": "Cricket FPV",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCG3FjqnfbXN7T0VZH7x0cVA",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": false,
+      "comment": "Channel ID needs verification"
+    },
+    {
+      "name": "Captain Vanover",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCHxiKnzTyzE9A8Pm3EPP-Iw",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": false,
+      "comment": "Channel ID needs verification"
+    },
+    {
+      "name": "BubbyFPV",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UC9Y3W6CrgZnGoxfQSX5_nVg",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": false,
+      "comment": "Channel ID needs verification"
+    },
+    {
+      "name": "FlytPath",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UC9PycnkleNM93xCRl_ZsIjA",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": true
+    },
+    {
+      "name": "Ken Heron",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCCN3j77kPMeQu41gfMNd13A",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": true
+    },
+    {
+      "name": "51 Drones",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCnwMiW_z4Cz_xP-YWXI1JkQ",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": false,
+      "comment": "Channel ID needs verification"
+    },
+    {
+      "name": "Ready Set Drone",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCpQUtTb7GDfaJ2EPYwxnhLQ",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": false,
+      "comment": "Channel ID needs verification"
+    },
+    {
+      "name": "Captain Drone",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UC_LDtFt-RADAdI8zIW_ecbg",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": true
+    },
+    {
+      "name": "Drone Camps RC",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCnESUCra9OFwE8vAcCvHzNg",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": true
+    },
+    {
+      "name": "Drone Valley",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCpOL0mFyUo5s3lU1pS5M7GQ",
+      "type": "youtube",
+      "category": "creator",
+      "enabled": false,
+      "comment": "Channel ID needs verification"
+    }
+  ]
+}

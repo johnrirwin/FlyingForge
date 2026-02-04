@@ -208,7 +208,8 @@ func (a *Aggregator) filterItems(items []models.FeedItem, params models.FilterPa
 			title := strings.ToLower(item.Title)
 			summary := strings.ToLower(item.Summary)
 			content := strings.ToLower(item.Content)
-			if !strings.Contains(title, search) && !strings.Contains(summary, search) && !strings.Contains(content, search) {
+			source := strings.ToLower(item.Source)
+			if !strings.Contains(title, search) && !strings.Contains(summary, search) && !strings.Contains(content, search) && !strings.Contains(source, search) {
 				continue
 			}
 		}
