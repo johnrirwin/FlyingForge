@@ -161,7 +161,7 @@ func (s *FCConfigStore) ListConfigs(ctx context.Context, userID string, params m
 
 	// Get total count
 	var totalCount int
-	err := s.db.QueryRowContext(ctx, countQuery, args[:len(args)]...).Scan(&totalCount)
+	err := s.db.QueryRowContext(ctx, countQuery, args...).Scan(&totalCount)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count FC configs: %w", err)
 	}
