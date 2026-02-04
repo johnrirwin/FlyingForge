@@ -15,20 +15,46 @@ const GA_MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID;
 // after route changes. This ensures we capture the correct page title.
 const PAGE_TITLE_UPDATE_DELAY_MS = 100;
 
+// Queue to hold events until GA is fully initialized
+// This prevents race conditions where trackPageView is called before gtag loads
+type QueuedEvent = { type: 'page_view' | 'event'; args: unknown[] };
+const eventQueue: QueuedEvent[] = [];
+let isGAReady = false;
+
+// Process queued events once GA is ready
+function flushEventQueue() {
+  if (!window.gtag) return;
+  
+  while (eventQueue.length > 0) {
+    const event = eventQueue.shift();
+    if (event) {
+      window.gtag(...event.args);
+    }
+  }
+}
+
 // Initialize Google Analytics
 function initGA() {
   if (!GA_MEASUREMENT_ID || typeof window === 'undefined') return;
 
   // Don't initialize if already done
-  if (typeof window.gtag === 'function') return;
+  if (isGAReady) return;
 
   // Add gtag.js script
   const script = document.createElement('script');
   script.async = true;
   script.src = `https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`;
+  
+  // Mark as ready and flush queue when script loads
+  script.onload = () => {
+    isGAReady = true;
+    flushEventQueue();
+  };
+  
   document.head.appendChild(script);
 
-  // Initialize dataLayer and gtag function
+  // Initialize dataLayer and gtag function immediately
+  // Events will be queued in dataLayer even before script loads
   window.dataLayer = window.dataLayer || [];
   window.gtag = function gtag(...args: unknown[]) {
     window.dataLayer.push(args);
@@ -42,12 +68,23 @@ function initGA() {
 
 // Track page view
 export function trackPageView(path: string, title?: string) {
-  if (!GA_MEASUREMENT_ID || !window.gtag) return;
+  if (!GA_MEASUREMENT_ID) return;
 
-  window.gtag('event', 'page_view', {
-    page_path: path,
-    page_title: title || document.title,
-  });
+  const eventArgs = [
+    'event',
+    'page_view',
+    {
+      page_path: path,
+      page_title: title || document.title,
+    },
+  ];
+
+  // If GA is ready, send immediately; otherwise queue
+  if (isGAReady && window.gtag) {
+    window.gtag(...eventArgs);
+  } else {
+    eventQueue.push({ type: 'page_view', args: eventArgs });
+  }
 }
 
 // Track custom events
@@ -55,9 +92,16 @@ export function trackEvent(
   eventName: string,
   params?: Record<string, string | number | boolean>
 ) {
-  if (!GA_MEASUREMENT_ID || !window.gtag) return;
+  if (!GA_MEASUREMENT_ID) return;
 
-  window.gtag('event', eventName, params);
+  const eventArgs = ['event', eventName, params];
+
+  // If GA is ready, send immediately; otherwise queue
+  if (isGAReady && window.gtag) {
+    window.gtag(...eventArgs);
+  } else {
+    eventQueue.push({ type: 'event', args: eventArgs });
+  }
 }
 
 // Hook to initialize GA and track page views on route changes
