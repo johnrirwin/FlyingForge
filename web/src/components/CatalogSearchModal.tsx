@@ -29,21 +29,22 @@ export function CatalogSearchModal({ isOpen, onClose, onSelectItem, initialGearT
     }
   }, [isOpen]);
 
-  // Load popular items on mount
-  useEffect(() => {
-    if (isOpen && !query) {
-      loadPopularItems();
-    }
-  }, [isOpen, gearType]);
-
-  const loadPopularItems = async () => {
+  // Load popular items
+  const loadPopularItems = useCallback(async () => {
     try {
       const { items } = await getPopularGear(gearType || undefined, 10);
       setPopularItems(items);
     } catch (err) {
       console.error('Failed to load popular items:', err);
     }
-  };
+  }, [gearType]);
+
+  // Load popular items on mount
+  useEffect(() => {
+    if (isOpen && !query) {
+      loadPopularItems();
+    }
+  }, [isOpen, query, loadPopularItems]);
 
   // Debounced search
   const handleSearch = useCallback((searchQuery: string) => {
@@ -354,16 +355,8 @@ function CreateCatalogItemForm({ initialGearType, initialQuery, onSuccess, onCan
   const [imageUrl, setImageUrl] = useState('');
   const [description, setDescription] = useState('');
 
-  // Check for duplicates when brand/model change
-  useEffect(() => {
-    if (brand && model && gearType) {
-      checkForDuplicates();
-    } else {
-      setNearMatches([]);
-    }
-  }, [brand, model, gearType]);
-
-  const checkForDuplicates = async () => {
+  // Check for duplicates
+  const checkForDuplicates = useCallback(async () => {
     if (!brand || !model) return;
     
     setCheckingDuplicates(true);
@@ -380,7 +373,16 @@ function CreateCatalogItemForm({ initialGearType, initialQuery, onSuccess, onCan
     } finally {
       setCheckingDuplicates(false);
     }
-  };
+  }, [brand, model, gearType]);
+
+  // Check for duplicates when brand/model change
+  useEffect(() => {
+    if (brand && model && gearType) {
+      checkForDuplicates();
+    } else {
+      setNearMatches([]);
+    }
+  }, [brand, model, gearType, checkForDuplicates]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
