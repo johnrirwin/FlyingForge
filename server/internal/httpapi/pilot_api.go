@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/johnrirwin/flyingforge/internal/auth"
@@ -35,6 +36,8 @@ func NewPilotAPI(userStore *database.UserStore, aircraftStore *database.Aircraft
 func (api *PilotAPI) RegisterRoutes(mux *http.ServeMux, corsMiddleware func(http.HandlerFunc) http.HandlerFunc) {
 	// Search pilots - requires auth
 	mux.HandleFunc("/api/pilots/search", corsMiddleware(api.authMiddleware.RequireAuth(api.handleSearch)))
+	// Discover pilots - requires auth
+	mux.HandleFunc("/api/pilots/discover", corsMiddleware(api.authMiddleware.RequireAuth(api.handleDiscover)))
 	// Public aircraft image - requires auth but checks owner's visibility settings
 	mux.HandleFunc("/api/pilots/aircraft/", corsMiddleware(api.authMiddleware.RequireAuth(api.handleAircraftImage)))
 	// Get pilot profile - requires auth
@@ -82,6 +85,37 @@ func (api *PilotAPI) handleSearch(w http.ResponseWriter, r *http.Request) {
 		"pilots": pilots,
 		"total":  len(pilots),
 	})
+}
+
+// handleDiscover handles GET /api/pilots/discover - returns featured pilots for discovery
+func (api *PilotAPI) handleDiscover(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := auth.GetUserID(r.Context())
+
+	// Get limit from query param, default to 10
+	limit := 10
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 && parsed <= 50 {
+			limit = parsed
+		}
+	}
+
+	featured, err := api.userStore.GetFeaturedPilots(r.Context(), userID, limit)
+	if err != nil {
+		api.logger.Error("Failed to get featured pilots", logging.WithField("error", err.Error()))
+		api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to get featured pilots")
+		return
+	}
+
+	api.writeJSON(w, http.StatusOK, featured)
 }
 
 // handlePilotProfile handles GET /api/pilots/:id

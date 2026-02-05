@@ -916,3 +916,125 @@ func (s *UserStore) GetFollowing(ctx context.Context, userID string, limit, offs
 		TotalCount: totalCount,
 	}, nil
 }
+
+// FeaturedPilotsResponse contains the response for featured pilots discovery
+type FeaturedPilotsResponse struct {
+	Popular []models.PilotSummaryWithFollowers `json:"popular"`
+	Recent  []models.PilotSummary              `json:"recent"`
+}
+
+// GetFeaturedPilots returns pilots for discovery - most followed and recently joined
+func (s *UserStore) GetFeaturedPilots(ctx context.Context, excludeUserID string, limit int) (*FeaturedPilotsResponse, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+
+	// Get most followed pilots (with public profiles and callsigns)
+	popularQuery := `
+		SELECT u.id, u.call_sign, u.display_name, u.avatar_url, u.google_avatar_url, u.avatar_type, u.custom_avatar_url,
+			   COALESCE(follower_counts.cnt, 0) as follower_count
+		FROM users u
+		LEFT JOIN (
+			SELECT f.followed_user_id, COUNT(*) as cnt
+			FROM follows f
+			JOIN users follower ON follower.id = f.follower_user_id
+			WHERE follower.call_sign IS NOT NULL AND follower.call_sign != ''
+			GROUP BY f.followed_user_id
+		) follower_counts ON follower_counts.followed_user_id = u.id
+		WHERE u.call_sign IS NOT NULL AND u.call_sign != ''
+		  AND u.id != $1
+		ORDER BY follower_count DESC, u.created_at DESC
+		LIMIT $2
+	`
+
+	rows, err := s.db.QueryContext(ctx, popularQuery, excludeUserID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var popular []models.PilotSummaryWithFollowers
+	for rows.Next() {
+		var id string
+		var callSign, displayName, avatarURL, googleAvatarURL, avatarType, customAvatarURL sql.NullString
+		var followerCount int
+
+		if err := rows.Scan(&id, &callSign, &displayName, &avatarURL, &googleAvatarURL, &avatarType, &customAvatarURL, &followerCount); err != nil {
+			return nil, err
+		}
+
+		effectiveAvatarURL := ""
+		if avatarType.Valid && avatarType.String == string(models.AvatarTypeCustom) && customAvatarURL.Valid {
+			effectiveAvatarURL = customAvatarURL.String
+		} else if googleAvatarURL.Valid {
+			effectiveAvatarURL = googleAvatarURL.String
+		} else if avatarURL.Valid {
+			effectiveAvatarURL = avatarURL.String
+		}
+
+		popular = append(popular, models.PilotSummaryWithFollowers{
+			PilotSummary: models.PilotSummary{
+				ID:                 id,
+				CallSign:           callSign.String,
+				DisplayName:        displayName.String,
+				EffectiveAvatarURL: effectiveAvatarURL,
+			},
+			FollowerCount: followerCount,
+		})
+	}
+
+	if popular == nil {
+		popular = []models.PilotSummaryWithFollowers{}
+	}
+
+	// Get recently joined pilots (with callsigns)
+	recentQuery := `
+		SELECT u.id, u.call_sign, u.display_name, u.avatar_url, u.google_avatar_url, u.avatar_type, u.custom_avatar_url
+		FROM users u
+		WHERE u.call_sign IS NOT NULL AND u.call_sign != ''
+		  AND u.id != $1
+		ORDER BY u.created_at DESC
+		LIMIT $2
+	`
+
+	rows2, err := s.db.QueryContext(ctx, recentQuery, excludeUserID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows2.Close()
+
+	var recent []models.PilotSummary
+	for rows2.Next() {
+		var id string
+		var callSign, displayName, avatarURL, googleAvatarURL, avatarType, customAvatarURL sql.NullString
+
+		if err := rows2.Scan(&id, &callSign, &displayName, &avatarURL, &googleAvatarURL, &avatarType, &customAvatarURL); err != nil {
+			return nil, err
+		}
+
+		effectiveAvatarURL := ""
+		if avatarType.Valid && avatarType.String == string(models.AvatarTypeCustom) && customAvatarURL.Valid {
+			effectiveAvatarURL = customAvatarURL.String
+		} else if googleAvatarURL.Valid {
+			effectiveAvatarURL = googleAvatarURL.String
+		} else if avatarURL.Valid {
+			effectiveAvatarURL = avatarURL.String
+		}
+
+		recent = append(recent, models.PilotSummary{
+			ID:                 id,
+			CallSign:           callSign.String,
+			DisplayName:        displayName.String,
+			EffectiveAvatarURL: effectiveAvatarURL,
+		})
+	}
+
+	if recent == nil {
+		recent = []models.PilotSummary{}
+	}
+
+	return &FeaturedPilotsResponse{
+		Popular: popular,
+		Recent:  recent,
+	}, nil
+}

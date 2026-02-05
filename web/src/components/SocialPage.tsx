@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { searchPilots, getPilotProfile } from '../pilotApi';
+import { searchPilots, getPilotProfile, discoverPilots } from '../pilotApi';
 import { getFollowing, getFollowers } from '../socialApi';
 import { updateProfile, validateCallSign } from '../profileApi';
-import type { PilotSearchResult, PilotSummary, PilotProfile } from '../socialTypes';
+import type { PilotSearchResult, PilotSummary, PilotProfile, PilotSummaryWithFollowers } from '../socialTypes';
 import { useDebounce } from '../hooks';
 import { useAuth } from '../hooks/useAuth';
 import { trackEvent } from '../hooks/useGoogleAnalytics';
@@ -149,6 +149,12 @@ export function SocialPage({ onSelectPilot }: SocialPageProps) {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
 
+  // Discovery state (featured pilots)
+  const [popularPilots, setPopularPilots] = useState<PilotSummaryWithFollowers[]>([]);
+  const [recentPilots, setRecentPilots] = useState<PilotSummary[]>([]);
+  const [isLoadingDiscovery, setIsLoadingDiscovery] = useState(false);
+  const [discoveryError, setDiscoveryError] = useState<string | null>(null);
+
   // Filter state for following/followers lists
   const [filterQuery, setFilterQuery] = useState('');
 
@@ -224,6 +230,31 @@ export function SocialPage({ onSelectPilot }: SocialPageProps) {
       }
     }
   }, [debouncedQuery, handleSearch, activeTab]);
+
+  // Load discovery data (popular and recent pilots)
+  const loadDiscovery = useCallback(async () => {
+    if (!isAuthenticated) return;
+    
+    try {
+      setIsLoadingDiscovery(true);
+      setDiscoveryError(null);
+      const response = await discoverPilots(10);
+      setPopularPilots(response.popular);
+      setRecentPilots(response.recent);
+      trackEvent('social_view_discover');
+    } catch (err) {
+      setDiscoveryError(err instanceof Error ? err.message : 'Failed to load pilots');
+    } finally {
+      setIsLoadingDiscovery(false);
+    }
+  }, [isAuthenticated]);
+
+  // Load discovery on mount
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadDiscovery();
+    }
+  }, [isAuthenticated, loadDiscovery]);
 
   // Load following list
   const loadFollowing = useCallback(async () => {
@@ -616,17 +647,130 @@ export function SocialPage({ onSelectPilot }: SocialPageProps) {
               </div>
             )}
 
-            {/* Initial state */}
+            {/* Initial state - show discovery */}
             {!hasSearched && !isSearching && (
-              <EmptyState
-                icon={
-                  <svg className="w-16 h-16 mx-auto mb-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                }
-                title="Search for pilots"
-                subtitle="Find other FPV enthusiasts by their callsign"
-              />
+              <div className="space-y-8">
+                {/* Loading state */}
+                {isLoadingDiscovery && (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary-500"></div>
+                  </div>
+                )}
+
+                {/* Error state */}
+                {discoveryError && (
+                  <div className="max-w-xl mx-auto mb-4 p-4 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400">
+                    {discoveryError}
+                  </div>
+                )}
+
+                {/* Discovery content */}
+                {!isLoadingDiscovery && !discoveryError && (
+                  <>
+                    {/* Popular Pilots */}
+                    {popularPilots.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-4">
+                          <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                          </svg>
+                          <h3 className="text-lg font-semibold text-white">Popular Pilots</h3>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                          {popularPilots.map((pilot) => (
+                            <div
+                              key={pilot.id}
+                              onClick={() => onSelectPilot(pilot.id)}
+                              className="bg-slate-800 rounded-lg p-4 hover:bg-slate-700/80 transition-colors cursor-pointer border border-slate-700"
+                            >
+                              <div className="flex items-center gap-3">
+                                {pilot.effectiveAvatarUrl ? (
+                                  <img 
+                                    src={pilot.effectiveAvatarUrl} 
+                                    alt={pilot.callSign || 'Avatar'} 
+                                    className="w-12 h-12 rounded-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-12 h-12 rounded-full bg-slate-600 flex items-center justify-center">
+                                    <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                    </svg>
+                                  </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-white truncate">{pilot.callSign || 'Unknown'}</p>
+                                  {pilot.displayName && pilot.displayName !== pilot.callSign && (
+                                    <p className="text-sm text-slate-400 truncate">{pilot.displayName}</p>
+                                  )}
+                                  <p className="text-xs text-slate-500 mt-1">
+                                    {pilot.followerCount} follower{pilot.followerCount !== 1 ? 's' : ''}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Recently Joined */}
+                    {recentPilots.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-4">
+                          <svg className="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                          </svg>
+                          <h3 className="text-lg font-semibold text-white">Recently Joined</h3>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                          {recentPilots.map((pilot) => (
+                            <div
+                              key={pilot.id}
+                              onClick={() => onSelectPilot(pilot.id)}
+                              className="bg-slate-800 rounded-lg p-4 hover:bg-slate-700/80 transition-colors cursor-pointer border border-slate-700"
+                            >
+                              <div className="flex items-center gap-3">
+                                {pilot.effectiveAvatarUrl ? (
+                                  <img 
+                                    src={pilot.effectiveAvatarUrl} 
+                                    alt={pilot.callSign || 'Avatar'} 
+                                    className="w-12 h-12 rounded-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-12 h-12 rounded-full bg-slate-600 flex items-center justify-center">
+                                    <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                    </svg>
+                                  </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-white truncate">{pilot.callSign || 'Unknown'}</p>
+                                  {pilot.displayName && pilot.displayName !== pilot.callSign && (
+                                    <p className="text-sm text-slate-400 truncate">{pilot.displayName}</p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Fallback empty state if no pilots */}
+                    {popularPilots.length === 0 && recentPilots.length === 0 && (
+                      <EmptyState
+                        icon={
+                          <svg className="w-16 h-16 mx-auto mb-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                          </svg>
+                        }
+                        title="Search for pilots"
+                        subtitle="Find other FPV enthusiasts by their callsign"
+                      />
+                    )}
+                  </>
+                )}
+              </div>
             )}
           </>
         )}

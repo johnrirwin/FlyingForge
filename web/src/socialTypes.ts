@@ -145,6 +145,17 @@ export interface PilotSummary {
   effectiveAvatarUrl: string;
 }
 
+// Pilot summary with follower count (for discovery)
+export interface PilotSummaryWithFollowers extends PilotSummary {
+  followerCount: number;
+}
+
+// Featured pilots response (from /api/pilots/discover)
+export interface FeaturedPilotsResponse {
+  popular: PilotSummaryWithFollowers[];
+  recent: PilotSummary[];
+}
+
 // Follow list response
 export interface FollowListResponse {
   pilots: PilotSummary[];

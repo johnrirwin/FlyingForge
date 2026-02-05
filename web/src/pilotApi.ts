@@ -1,4 +1,4 @@
-import type { PilotSearchResponse, PilotProfile } from './socialTypes';
+import type { PilotSearchResponse, PilotProfile, FeaturedPilotsResponse } from './socialTypes';
 import { getStoredTokens } from './authApi';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
@@ -12,6 +12,32 @@ function getAuthHeader(): Record<string, string> {
   return {
     Authorization: `Bearer ${tokens.accessToken}`,
   };
+}
+
+// Discover pilots - returns featured/popular pilots
+export async function discoverPilots(limit?: number): Promise<FeaturedPilotsResponse> {
+  const params = new URLSearchParams();
+  if (limit) {
+    params.set('limit', limit.toString());
+  }
+  
+  const url = params.toString() 
+    ? `${API_BASE}/api/pilots/discover?${params}` 
+    : `${API_BASE}/api/pilots/discover`;
+  
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      ...getAuthHeader(),
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Failed to discover pilots' }));
+    throw new Error(error.message || 'Failed to discover pilots');
+  }
+
+  return response.json();
 }
 
 // Search pilots by callsign or name
