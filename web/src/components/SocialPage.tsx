@@ -130,6 +130,49 @@ export function CallSignPromptModal({
   );
 }
 
+// Reusable card component for discovery pilot lists
+interface DiscoveryPilotCardProps {
+  pilot: PilotSummary;
+  onClick: () => void;
+  followerCount?: number;
+}
+
+function DiscoveryPilotCard({ pilot, onClick, followerCount }: DiscoveryPilotCardProps) {
+  return (
+    <div
+      onClick={onClick}
+      className="bg-slate-800 rounded-lg p-4 hover:bg-slate-700/80 transition-colors cursor-pointer border border-slate-700"
+    >
+      <div className="flex items-center gap-3">
+        {pilot.effectiveAvatarUrl ? (
+          <img 
+            src={pilot.effectiveAvatarUrl} 
+            alt={pilot.callSign || 'Avatar'} 
+            className="w-12 h-12 rounded-full object-cover"
+          />
+        ) : (
+          <div className="w-12 h-12 rounded-full bg-slate-600 flex items-center justify-center">
+            <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <p className="font-medium text-white truncate">{pilot.callSign || 'Unknown'}</p>
+          {pilot.displayName && pilot.displayName !== pilot.callSign && (
+            <p className="text-sm text-slate-400 truncate">{pilot.displayName}</p>
+          )}
+          {followerCount !== undefined && (
+            <p className="text-xs text-slate-500 mt-1">
+              {followerCount} follower{followerCount !== 1 ? 's' : ''}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SocialPage({ onSelectPilot }: SocialPageProps) {
   const { user, isAuthenticated, updateUser } = useAuth();
   const [activeTab, setActiveTab] = useState<SocialTab>('search');
@@ -678,36 +721,12 @@ export function SocialPage({ onSelectPilot }: SocialPageProps) {
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                           {popularPilots.map((pilot) => (
-                            <div
+                            <DiscoveryPilotCard
                               key={pilot.id}
+                              pilot={pilot}
                               onClick={() => onSelectPilot(pilot.id)}
-                              className="bg-slate-800 rounded-lg p-4 hover:bg-slate-700/80 transition-colors cursor-pointer border border-slate-700"
-                            >
-                              <div className="flex items-center gap-3">
-                                {pilot.effectiveAvatarUrl ? (
-                                  <img 
-                                    src={pilot.effectiveAvatarUrl} 
-                                    alt={pilot.callSign || 'Avatar'} 
-                                    className="w-12 h-12 rounded-full object-cover"
-                                  />
-                                ) : (
-                                  <div className="w-12 h-12 rounded-full bg-slate-600 flex items-center justify-center">
-                                    <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                    </svg>
-                                  </div>
-                                )}
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-medium text-white truncate">{pilot.callSign || 'Unknown'}</p>
-                                  {pilot.displayName && pilot.displayName !== pilot.callSign && (
-                                    <p className="text-sm text-slate-400 truncate">{pilot.displayName}</p>
-                                  )}
-                                  <p className="text-xs text-slate-500 mt-1">
-                                    {pilot.followerCount} follower{pilot.followerCount !== 1 ? 's' : ''}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
+                              followerCount={pilot.followerCount}
+                            />
                           ))}
                         </div>
                       </div>
@@ -724,33 +743,11 @@ export function SocialPage({ onSelectPilot }: SocialPageProps) {
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                           {recentPilots.map((pilot) => (
-                            <div
+                            <DiscoveryPilotCard
                               key={pilot.id}
+                              pilot={pilot}
                               onClick={() => onSelectPilot(pilot.id)}
-                              className="bg-slate-800 rounded-lg p-4 hover:bg-slate-700/80 transition-colors cursor-pointer border border-slate-700"
-                            >
-                              <div className="flex items-center gap-3">
-                                {pilot.effectiveAvatarUrl ? (
-                                  <img 
-                                    src={pilot.effectiveAvatarUrl} 
-                                    alt={pilot.callSign || 'Avatar'} 
-                                    className="w-12 h-12 rounded-full object-cover"
-                                  />
-                                ) : (
-                                  <div className="w-12 h-12 rounded-full bg-slate-600 flex items-center justify-center">
-                                    <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                    </svg>
-                                  </div>
-                                )}
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-medium text-white truncate">{pilot.callSign || 'Unknown'}</p>
-                                  {pilot.displayName && pilot.displayName !== pilot.callSign && (
-                                    <p className="text-sm text-slate-400 truncate">{pilot.displayName}</p>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
+                            />
                           ))}
                         </div>
                       </div>
