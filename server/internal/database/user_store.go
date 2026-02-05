@@ -930,6 +930,7 @@ func (s *UserStore) GetFeaturedPilots(ctx context.Context, excludeUserID string,
 	}
 
 	// Get most followed pilots (with public profiles and callsigns)
+	// Respect privacy settings: only show active users who allow search
 	popularQuery := `
 		SELECT u.id, u.call_sign, u.display_name, u.avatar_url, u.google_avatar_url, u.avatar_type, u.custom_avatar_url,
 			   COALESCE(follower_counts.cnt, 0) as follower_count
@@ -942,6 +943,8 @@ func (s *UserStore) GetFeaturedPilots(ctx context.Context, excludeUserID string,
 			GROUP BY f.followed_user_id
 		) follower_counts ON follower_counts.followed_user_id = u.id
 		WHERE u.call_sign IS NOT NULL AND u.call_sign != ''
+		  AND u.status = 'active'
+		  AND (u.allow_search IS NULL OR u.allow_search = true)
 		  AND u.id != $1
 		ORDER BY follower_count DESC, u.created_at DESC
 		LIMIT $2
@@ -988,10 +991,13 @@ func (s *UserStore) GetFeaturedPilots(ctx context.Context, excludeUserID string,
 	}
 
 	// Get recently joined pilots (with callsigns)
+	// Respect privacy settings: only show active users who allow search
 	recentQuery := `
 		SELECT u.id, u.call_sign, u.display_name, u.avatar_url, u.google_avatar_url, u.avatar_type, u.custom_avatar_url
 		FROM users u
 		WHERE u.call_sign IS NOT NULL AND u.call_sign != ''
+		  AND u.status = 'active'
+		  AND (u.allow_search IS NULL OR u.allow_search = true)
 		  AND u.id != $1
 		ORDER BY u.created_at DESC
 		LIMIT $2
