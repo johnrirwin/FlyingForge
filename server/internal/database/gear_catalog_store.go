@@ -234,7 +234,7 @@ func (s *GearCatalogStore) Search(ctx context.Context, params models.GearCatalog
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM gear_catalog WHERE %s", whereClause)
 	var totalCount int
 	// Use only the non-orderBy args for count
-	countArgs := args[:len(args)]
+	countArgs := args[:]
 	if params.Query != "" {
 		countArgs = args[:len(args)-1] // Exclude the last orderBy arg
 	}
