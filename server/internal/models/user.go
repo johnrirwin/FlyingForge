@@ -242,6 +242,12 @@ type PilotSummary struct {
 	EffectiveAvatarURL string `json:"effectiveAvatarUrl"`
 }
 
+// PilotSummaryWithFollowers extends PilotSummary with follower count for discovery
+type PilotSummaryWithFollowers struct {
+	PilotSummary
+	FollowerCount int `json:"followerCount"`
+}
+
 // Follow represents a follow relationship between two users
 type Follow struct {
 	ID             string    `json:"id"`
