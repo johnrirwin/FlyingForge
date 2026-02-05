@@ -519,7 +519,7 @@ func (s *GearCatalogStore) MigrateInventoryItem(ctx context.Context, inventoryIt
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Convert category to gear type
 	gearType := models.GearTypeFromEquipmentCategory(category)
