@@ -42,7 +42,6 @@ type App struct {
 	db             *database.DB
 	userStore      *database.UserStore
 	aircraftStore  *database.AircraftStore
-	orderStore     *database.OrderStore
 	fcConfigStore  *database.FCConfigStore
 	inventoryStore *database.InventoryStore
 	refreshLimiter ratelimit.RateLimiter
@@ -240,9 +239,6 @@ func (a *App) initDatabaseServices() {
 	a.AuthService = auth.NewService(a.userStore, a.Config.Auth, a.Logger)
 	a.AuthMiddleware = auth.NewMiddleware(a.AuthService)
 
-	// Initialize order store
-	a.orderStore = database.NewOrderStore(db)
-
 	// Initialize FC config store
 	a.fcConfigStore = database.NewFCConfigStore(db)
 
@@ -250,8 +246,8 @@ func (a *App) initDatabaseServices() {
 }
 
 func (a *App) initServers() {
-	// Initialize HTTP server with auth, aircraft, radio, battery, orders, fc-config, and profile/pilot support
-	a.HTTPServer = httpapi.New(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.AircraftSvc, a.RadioSvc, a.BatterySvc, a.AuthService, a.AuthMiddleware, a.userStore, a.aircraftStore, a.orderStore, a.fcConfigStore, a.inventoryStore, a.refreshLimiter, a.Logger)
+	// Initialize HTTP server with auth, aircraft, radio, battery, fc-config, and profile/pilot support
+	a.HTTPServer = httpapi.New(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.AircraftSvc, a.RadioSvc, a.BatterySvc, a.AuthService, a.AuthMiddleware, a.userStore, a.aircraftStore, a.fcConfigStore, a.inventoryStore, a.refreshLimiter, a.Logger)
 
 	// Initialize MCP server
 	mcpHandler := mcp.NewHandler(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.Logger)

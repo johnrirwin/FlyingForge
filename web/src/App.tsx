@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, Sidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, Homepage, GettingStarted, RadioSection, BatterySection, MyProfile, SocialPage, PilotProfile, OrdersPage } from './components';
+import { TopBar, FeedList, ItemDetail, InventoryList, AddInventoryModal, Sidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, Homepage, GettingStarted, RadioSection, BatterySection, MyProfile, SocialPage, PilotProfile } from './components';
 import { LoginPage } from './components/LoginPage';
 import { getItems, getSources, refreshFeeds, RateLimitError } from './api';
 import { getInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem, getInventorySummary, addEquipmentToInventory } from './equipmentApi';
@@ -24,7 +24,6 @@ const pathToSection: Record<string, AppSection> = {
   '/shop': 'equipment',
   '/inventory': 'inventory',
   '/aircraft': 'aircraft',
-  '/orders': 'orders',
   '/radio': 'radio',
   '/batteries': 'batteries',
   '/social': 'social',
@@ -39,7 +38,6 @@ const sectionToPath: Record<AppSection, string> = {
   'equipment': '/shop',
   'inventory': '/inventory',
   'aircraft': '/aircraft',
-  'orders': '/orders',
   'radio': '/radio',
   'batteries': '/batteries',
   'social': '/social',
@@ -124,7 +122,7 @@ function App() {
     if (authLoading) return;
     
     // Protected paths that require authentication
-    const protectedPaths = ['/dashboard', '/inventory', '/aircraft', '/radio', '/batteries', '/orders', '/profile', '/social'];
+    const protectedPaths = ['/dashboard', '/inventory', '/aircraft', '/radio', '/batteries', '/profile', '/social'];
     const isProtectedPath = protectedPaths.some(p => location.pathname.startsWith(p));
     
     // On initial load after auth check completes
@@ -582,7 +580,7 @@ function App() {
       return;
     }
     // Protected sections that require authentication
-    const protectedSections = ['dashboard', 'inventory', 'aircraft', 'radio', 'batteries', 'orders', 'profile', 'social'];
+    const protectedSections = ['dashboard', 'inventory', 'aircraft', 'radio', 'batteries', 'profile', 'social'];
     if (protectedSections.includes(section) && !isAuthenticated) {
       setAuthModal('login');
       return;
@@ -667,7 +665,7 @@ function App() {
             isNewsLoading={isLoading}
             onViewAllNews={() => navigate('/news')}
             onViewAllAircraft={() => navigate('/aircraft')}
-            onViewAllOrders={() => navigate('/orders')}
+            onViewAllGear={() => navigate('/inventory')}
             onSelectAircraft={handleSelectAircraft}
             onSelectNewsItem={setSelectedItem}
             onSelectPilot={(pilotId) => {
@@ -688,7 +686,7 @@ function App() {
             isNewsLoading={isLoading}
             onViewAllNews={() => navigate('/news')}
             onViewAllAircraft={() => navigate('/aircraft')}
-            onViewAllOrders={() => navigate('/orders')}
+            onViewAllGear={() => navigate('/inventory')}
             onSelectAircraft={handleSelectAircraft}
             onSelectNewsItem={setSelectedItem}
             onSelectPilot={(pilotId) => {
@@ -806,11 +804,6 @@ function App() {
               onDelete={handleDeleteAircraft}
             />
           </>
-        )}
-
-        {/* Orders Section */}
-        {activeSection === 'orders' && (
-          <OrdersPage />
         )}
 
         {/* Radio Section */}

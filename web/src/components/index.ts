@@ -27,9 +27,6 @@ export { Dashboard } from './Dashboard';
 export { Homepage } from './Homepage';
 export { GettingStarted } from './GettingStarted';
 
-// Orders
-export { OrdersPage } from './OrdersPage';
-
 // Auth components
 export { AuthCallback } from './AuthCallback';
 
