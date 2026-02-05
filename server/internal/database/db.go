@@ -109,6 +109,7 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationPgTrgm,               // Adds trigram search for gear_catalog
 		migrationInventoryCatalogLink, // Adds FK to gear_catalog (depends on migrationGearCatalog)
 		migrationGearCatalogBestFor,   // Adds best_for column for drone type
+		migrationGearCatalogMSRP,      // Adds msrp column for price
 	}
 
 	for i, migration := range migrations {
@@ -605,4 +606,10 @@ ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS best_for TEXT[] DEFAULT '{}';
 
 -- Index for filtering by drone type
 CREATE INDEX IF NOT EXISTS idx_gear_catalog_best_for ON gear_catalog USING gin(best_for);
+`
+
+// Migration to add msrp column to gear_catalog
+const migrationGearCatalogMSRP = `
+-- Add msrp column for manufacturer suggested retail price
+ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS msrp DECIMAL(10,2);
 `

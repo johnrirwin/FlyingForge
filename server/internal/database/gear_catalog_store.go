@@ -48,9 +48,9 @@ func (s *GearCatalogStore) Create(ctx context.Context, userID string, params mod
 
 	query := `
 		INSERT INTO gear_catalog (
-			gear_type, brand, model, variant, specs, best_for, source,
+			gear_type, brand, model, variant, specs, best_for, msrp, source,
 			created_by_user_id, status, canonical_key, image_url, description
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING id, created_at, updated_at
 	`
 
@@ -61,6 +61,7 @@ func (s *GearCatalogStore) Create(ctx context.Context, userID string, params mod
 		Variant:         strings.TrimSpace(params.Variant),
 		Specs:           specs,
 		BestFor:         params.BestFor,
+		MSRP:            params.MSRP,
 		Source:          models.CatalogSourceUserSubmitted,
 		CreatedByUserID: userID,
 		Status:          models.CatalogStatusActive,
@@ -76,7 +77,7 @@ func (s *GearCatalogStore) Create(ctx context.Context, userID string, params mod
 
 	err = s.db.QueryRowContext(ctx, query,
 		item.GearType, item.Brand, item.Model, nullString(item.Variant),
-		item.Specs, pq.Array(item.BestFor), item.Source, createdByUserIDPtr, item.Status,
+		item.Specs, pq.Array(item.BestFor), item.MSRP, item.Source, createdByUserIDPtr, item.Status,
 		item.CanonicalKey, nullString(item.ImageURL), nullString(item.Description),
 	).Scan(&item.ID, &item.CreatedAt, &item.UpdatedAt)
 
@@ -103,7 +104,7 @@ func (s *GearCatalogStore) Create(ctx context.Context, userID string, params mod
 // Get retrieves a catalog item by ID
 func (s *GearCatalogStore) Get(ctx context.Context, id string) (*models.GearCatalogItem, error) {
 	query := `
-		SELECT id, gear_type, brand, model, variant, specs, best_for, source,
+		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key, image_url, description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count
@@ -113,10 +114,11 @@ func (s *GearCatalogStore) Get(ctx context.Context, id string) (*models.GearCata
 
 	item := &models.GearCatalogItem{}
 	var variant, imageURL, description, createdByUserID sql.NullString
+	var msrp sql.NullFloat64
 
 	err := s.db.QueryRowContext(ctx, query, id).Scan(
 		&item.ID, &item.GearType, &item.Brand, &item.Model, &variant,
-		&item.Specs, pq.Array(&item.BestFor), &item.Source, &createdByUserID, &item.Status,
+		&item.Specs, pq.Array(&item.BestFor), &msrp, &item.Source, &createdByUserID, &item.Status,
 		&item.CanonicalKey, &imageURL, &description,
 		&item.CreatedAt, &item.UpdatedAt, &item.UsageCount,
 	)
@@ -132,6 +134,9 @@ func (s *GearCatalogStore) Get(ctx context.Context, id string) (*models.GearCata
 	item.ImageURL = imageURL.String
 	item.Description = description.String
 	item.CreatedByUserID = createdByUserID.String
+	if msrp.Valid {
+		item.MSRP = &msrp.Float64
+	}
 
 	return item, nil
 }
@@ -139,7 +144,7 @@ func (s *GearCatalogStore) Get(ctx context.Context, id string) (*models.GearCata
 // GetByCanonicalKey retrieves a catalog item by its canonical key
 func (s *GearCatalogStore) GetByCanonicalKey(ctx context.Context, canonicalKey string) (*models.GearCatalogItem, error) {
 	query := `
-		SELECT id, gear_type, brand, model, variant, specs, best_for, source,
+		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key, image_url, description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count
@@ -149,10 +154,11 @@ func (s *GearCatalogStore) GetByCanonicalKey(ctx context.Context, canonicalKey s
 
 	item := &models.GearCatalogItem{}
 	var variant, imageURL, description, createdByUserID sql.NullString
+	var msrp sql.NullFloat64
 
 	err := s.db.QueryRowContext(ctx, query, canonicalKey).Scan(
 		&item.ID, &item.GearType, &item.Brand, &item.Model, &variant,
-		&item.Specs, pq.Array(&item.BestFor), &item.Source, &createdByUserID, &item.Status,
+		&item.Specs, pq.Array(&item.BestFor), &msrp, &item.Source, &createdByUserID, &item.Status,
 		&item.CanonicalKey, &imageURL, &description,
 		&item.CreatedAt, &item.UpdatedAt, &item.UsageCount,
 	)
@@ -168,6 +174,9 @@ func (s *GearCatalogStore) GetByCanonicalKey(ctx context.Context, canonicalKey s
 	item.ImageURL = imageURL.String
 	item.Description = description.String
 	item.CreatedByUserID = createdByUserID.String
+	if msrp.Valid {
+		item.MSRP = &msrp.Float64
+	}
 
 	return item, nil
 }
@@ -247,7 +256,7 @@ func (s *GearCatalogStore) Search(ctx context.Context, params models.GearCatalog
 
 	// Main query
 	query := fmt.Sprintf(`
-		SELECT id, gear_type, brand, model, variant, specs, best_for, source,
+		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key, image_url, description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count
@@ -269,10 +278,11 @@ func (s *GearCatalogStore) Search(ctx context.Context, params models.GearCatalog
 	for rows.Next() {
 		var item models.GearCatalogItem
 		var variant, imageURL, description, createdByUserID sql.NullString
+		var msrp sql.NullFloat64
 
 		if err := rows.Scan(
 			&item.ID, &item.GearType, &item.Brand, &item.Model, &variant,
-			&item.Specs, pq.Array(&item.BestFor), &item.Source, &createdByUserID, &item.Status,
+			&item.Specs, pq.Array(&item.BestFor), &msrp, &item.Source, &createdByUserID, &item.Status,
 			&item.CanonicalKey, &imageURL, &description,
 			&item.CreatedAt, &item.UpdatedAt, &item.UsageCount,
 		); err != nil {
@@ -283,6 +293,9 @@ func (s *GearCatalogStore) Search(ctx context.Context, params models.GearCatalog
 		item.ImageURL = imageURL.String
 		item.Description = description.String
 		item.CreatedByUserID = createdByUserID.String
+		if msrp.Valid {
+			item.MSRP = &msrp.Float64
+		}
 
 		items = append(items, item)
 	}
@@ -446,7 +459,7 @@ func (s *GearCatalogStore) GetPopular(ctx context.Context, gearType models.GearT
 	}
 
 	query := `
-		SELECT id, gear_type, brand, model, variant, specs, best_for, source,
+		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key, image_url, description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count
@@ -472,10 +485,11 @@ func (s *GearCatalogStore) GetPopular(ctx context.Context, gearType models.GearT
 	for rows.Next() {
 		var item models.GearCatalogItem
 		var variant, imageURL, description, createdByUserID sql.NullString
+		var msrp sql.NullFloat64
 
 		if err := rows.Scan(
 			&item.ID, &item.GearType, &item.Brand, &item.Model, &variant,
-			&item.Specs, pq.Array(&item.BestFor), &item.Source, &createdByUserID, &item.Status,
+			&item.Specs, pq.Array(&item.BestFor), &msrp, &item.Source, &createdByUserID, &item.Status,
 			&item.CanonicalKey, &imageURL, &description,
 			&item.CreatedAt, &item.UpdatedAt, &item.UsageCount,
 		); err != nil {
@@ -486,6 +500,9 @@ func (s *GearCatalogStore) GetPopular(ctx context.Context, gearType models.GearT
 		item.ImageURL = imageURL.String
 		item.Description = description.String
 		item.CreatedByUserID = createdByUserID.String
+		if msrp.Valid {
+			item.MSRP = &msrp.Float64
+		}
 
 		items = append(items, item)
 	}

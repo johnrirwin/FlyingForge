@@ -73,6 +73,7 @@ export interface GearCatalogItem {
   variant?: string;
   specs?: Record<string, unknown>;
   bestFor?: DroneType[]; // What drone types this gear is best suited for
+  msrp?: number; // Manufacturer suggested retail price
   source: CatalogItemSource;
   createdByUserId?: string;
   status: CatalogItemStatus;
@@ -92,6 +93,7 @@ export interface CreateGearCatalogParams {
   variant?: string;
   specs?: Record<string, unknown>;
   bestFor?: DroneType[]; // What drone types this gear is best suited for
+  msrp?: number; // Manufacturer suggested retail price
   imageUrl?: string;
   description?: string;
 }

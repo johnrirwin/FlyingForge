@@ -139,6 +139,7 @@ type GearCatalogItem struct {
 	Variant         string            `json:"variant,omitempty"`
 	Specs           json.RawMessage   `json:"specs,omitempty"`
 	BestFor         []string          `json:"bestFor,omitempty"` // Drone types: freestyle, long-range, cinematic, etc.
+	MSRP            *float64          `json:"msrp,omitempty"`    // Manufacturer suggested retail price
 	Source          CatalogItemSource `json:"source"`
 	CreatedByUserID string            `json:"createdByUserId,omitempty"`
 	Status          CatalogItemStatus `json:"status"`
@@ -167,6 +168,7 @@ type CreateGearCatalogParams struct {
 	Variant     string          `json:"variant,omitempty"`
 	Specs       json.RawMessage `json:"specs,omitempty"`
 	BestFor     []string        `json:"bestFor,omitempty"` // Drone types this gear is best suited for
+	MSRP        *float64        `json:"msrp,omitempty"`    // Manufacturer suggested retail price
 	ImageURL    string          `json:"imageUrl,omitempty"`
 	Description string          `json:"description,omitempty"`
 }

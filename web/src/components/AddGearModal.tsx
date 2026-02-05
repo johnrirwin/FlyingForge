@@ -1,11 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { EquipmentItem, InventoryItem, EquipmentCategory, ItemCondition, AddInventoryParams } from '../equipmentTypes';
 import { EQUIPMENT_CATEGORIES, ITEM_CONDITIONS } from '../equipmentTypes';
 import type { GearCatalogItem } from '../gearCatalogTypes';
 import { getCatalogItemDisplayName, gearTypeToEquipmentCategory } from '../gearCatalogTypes';
 import { CatalogSearchModal } from './CatalogSearchModal';
-
-type AddGearStep = 'search' | 'details';
 
 interface AddGearModalProps {
   isOpen: boolean;
@@ -17,18 +15,19 @@ interface AddGearModalProps {
 }
 
 export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalogItem, editItem }: AddGearModalProps) {
-  // Determine if we should show catalog search or go straight to details
+  // Only show details form for editing existing items or when coming from shop
   const isEditing = !!editItem;
   const hasEquipmentItem = !!equipmentItem;
   const hasPreselectedCatalogItem = !!catalogItem;
   
-  const [step, setStep] = useState<AddGearStep>(isEditing || hasEquipmentItem || hasPreselectedCatalogItem ? 'details' : 'search');
-  const [selectedCatalogItem, setSelectedCatalogItem] = useState<GearCatalogItem | null>(catalogItem || null);
+  // If we have a pre-selected catalog item, auto-add it
+  const showDetailsForm = isEditing || hasEquipmentItem;
+  const showCatalogSearch = !showDetailsForm && !hasPreselectedCatalogItem;
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Form state
+  // Form state (for editing/equipment items)
   const [name, setName] = useState('');
   const [category, setCategory] = useState<EquipmentCategory>('accessories');
   const [manufacturer, setManufacturer] = useState('');
@@ -41,30 +40,51 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
   const [buildId, setBuildId] = useState('');
   const [imageUrl, setImageUrl] = useState('');
 
-  // Reset step when modal opens/closes
-  useEffect(() => {
-    if (isOpen) {
-      setStep(isEditing || hasEquipmentItem || hasPreselectedCatalogItem ? 'details' : 'search');
-      setSelectedCatalogItem(catalogItem || null);
-    }
-  }, [isOpen, isEditing, hasEquipmentItem, hasPreselectedCatalogItem, catalogItem]);
+  // Auto-add pre-selected catalog item to inventory
+  const autoAddCatalogItem = useCallback(async (item: GearCatalogItem) => {
+    setIsSubmitting(true);
+    setError(null);
+    
+    try {
+      const params: AddInventoryParams = {
+        name: getCatalogItemDisplayName(item),
+        category: gearTypeToEquipmentCategory(item.gearType),
+        manufacturer: item.brand,
+        quantity: 1,
+        condition: 'new',
+        purchasePrice: item.msrp,
+        imageUrl: item.imageUrl,
+        catalogId: item.id,
+      };
 
-  // Pre-fill from various sources
+      console.log('[AddGearModal] Auto-adding catalog item:', params);
+      await onSubmit(params);
+      console.log('[AddGearModal] Auto-add successful');
+      onClose();
+    } catch (err) {
+      console.error('[AddGearModal] Auto-add failed:', err);
+      setError(err instanceof Error ? err.message : 'Failed to add item');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [onSubmit, onClose]);
+
+  // Auto-add pre-selected catalog item when modal opens
   useEffect(() => {
-    if (selectedCatalogItem) {
-      // Fill from selected catalog item
-      setName(getCatalogItemDisplayName(selectedCatalogItem));
-      setCategory(gearTypeToEquipmentCategory(selectedCatalogItem.gearType));
-      setManufacturer(selectedCatalogItem.brand);
-      setImageUrl(selectedCatalogItem.imageUrl || '');
-      setQuantity(1);
-      setCondition('new');
-      setNotes('');
-      setBuildId('');
-      setPurchaseDate('');
-      setPurchasePrice('');
-      setPurchaseSeller('');
-    } else if (equipmentItem) {
+    if (isOpen && hasPreselectedCatalogItem && catalogItem && !isEditing) {
+      autoAddCatalogItem(catalogItem);
+    }
+  }, [isOpen, hasPreselectedCatalogItem, catalogItem, isEditing, autoAddCatalogItem]);
+
+  // Handler when catalog item is selected from search
+  const handleCatalogSelect = useCallback((item: GearCatalogItem) => {
+    // Auto-add to inventory immediately
+    autoAddCatalogItem(item);
+  }, [autoAddCatalogItem]);
+
+  // Pre-fill form from equipment item or edit item
+  useEffect(() => {
+    if (equipmentItem) {
       setName(equipmentItem.name);
       setCategory(equipmentItem.category);
       setManufacturer(equipmentItem.manufacturer || '');
@@ -88,8 +108,8 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
       setNotes(editItem.notes || '');
       setBuildId(editItem.buildId || '');
       setImageUrl(editItem.imageUrl || '');
-    } else if (!selectedCatalogItem && !equipmentItem && !editItem) {
-      // Reset form for completely new entry
+    } else {
+      // Reset form
       setName('');
       setCategory('accessories');
       setManufacturer('');
@@ -103,12 +123,7 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
       setImageUrl('');
     }
     setError(null);
-  }, [selectedCatalogItem, equipmentItem, editItem, isOpen]);
-
-  const handleCatalogSelect = (item: GearCatalogItem) => {
-    setSelectedCatalogItem(item);
-    setStep('details');
-  };
+  }, [equipmentItem, editItem, isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,7 +144,6 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
         buildId: buildId.trim() || undefined,
         imageUrl: imageUrl.trim() || undefined,
         sourceEquipmentId: equipmentItem?.id,
-        catalogId: selectedCatalogItem?.id,
       };
 
       console.log('[AddGearModal] Submitting inventory params:', params);
@@ -146,8 +160,39 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
 
   if (!isOpen) return null;
 
-  // Show catalog search step
-  if (step === 'search') {
+  // Show loading state when auto-adding
+  if (isSubmitting && hasPreselectedCatalogItem) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+        <div className="relative bg-slate-800 border border-slate-700 rounded-2xl p-8 flex flex-col items-center gap-4">
+          <div className="w-8 h-8 border-2 border-primary-400 border-t-transparent rounded-full animate-spin" />
+          <p className="text-white">Adding to inventory...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error if auto-add failed
+  if (error && hasPreselectedCatalogItem) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+        <div className="relative bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-sm">
+          <p className="text-red-400 mb-4">{error}</p>
+          <button
+            onClick={onClose}
+            className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show catalog search
+  if (showCatalogSearch) {
     return (
       <CatalogSearchModal
         isOpen={true}
@@ -157,14 +202,10 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
     );
   }
 
-  // Show details form
+  // Show details form (only for editing or adding from equipment shop)
   const title = editItem 
     ? 'Edit Inventory Item' 
-    : selectedCatalogItem 
-      ? 'Add to My Inventory' 
-      : equipmentItem 
-        ? 'Add to My Inventory' 
-        : 'Add New Item';
+    : 'Add to My Inventory';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -178,22 +219,7 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
       <div className="relative bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700">
-          <div className="flex items-center gap-3">
-            {!editItem && !hasEquipmentItem && (
-              <button
-                onClick={() => {
-                  setSelectedCatalogItem(null);
-                  setStep('search');
-                }}
-                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-            )}
-            <h2 className="text-lg font-semibold text-white">{title}</h2>
-          </div>
+          <h2 className="text-lg font-semibold text-white">{title}</h2>
           <button
             onClick={onClose}
             className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
@@ -203,38 +229,6 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
             </svg>
           </button>
         </div>
-
-        {/* Selected catalog item banner */}
-        {selectedCatalogItem && (
-          <div className="px-6 py-3 bg-primary-600/10 border-b border-slate-700">
-            <div className="flex items-center gap-3">
-              {selectedCatalogItem.imageUrl ? (
-                <img 
-                  src={selectedCatalogItem.imageUrl} 
-                  alt="" 
-                  className="w-10 h-10 rounded-lg object-cover"
-                />
-              ) : (
-                <div className="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center">
-                  <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                  </svg>
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">
-                  {getCatalogItemDisplayName(selectedCatalogItem)}
-                </p>
-                <p className="text-xs text-slate-400">
-                  From community catalog • {selectedCatalogItem.usageCount} users
-                </p>
-              </div>
-              <span className="px-2 py-0.5 bg-primary-600/20 text-primary-400 text-xs rounded-full">
-                Linked
-              </span>
-            </div>
-          </div>
-        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
@@ -246,43 +240,39 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
               </div>
             )}
 
-            {/* Name - hidden if catalog item selected */}
-            {!selectedCatalogItem && (
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
-                  Name <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
-                  placeholder="Item name"
-                />
-              </div>
-            )}
+            {/* Name */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">
+                Name <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
+                placeholder="Item name"
+              />
+            </div>
 
             {/* Category & Condition */}
             <div className="grid grid-cols-2 gap-4">
-              {!selectedCatalogItem && (
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
-                    Category <span className="text-red-400">*</span>
-                  </label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value as EquipmentCategory)}
-                    required
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
-                  >
-                    {EQUIPMENT_CATEGORIES.map(cat => (
-                      <option key={cat.value} value={cat.value}>{cat.label}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <div className={selectedCatalogItem ? 'col-span-2' : ''}>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  Category <span className="text-red-400">*</span>
+                </label>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value as EquipmentCategory)}
+                  required
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
+                >
+                  {EQUIPMENT_CATEGORIES.map(cat => (
+                    <option key={cat.value} value={cat.value}>{cat.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">
                   Condition <span className="text-red-400">*</span>
                 </label>
@@ -301,21 +291,19 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
 
             {/* Manufacturer & Quantity */}
             <div className="grid grid-cols-2 gap-4">
-              {!selectedCatalogItem && (
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
-                    Manufacturer
-                  </label>
-                  <input
-                    type="text"
-                    value={manufacturer}
-                    onChange={(e) => setManufacturer(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
-                    placeholder="Brand"
-                  />
-                </div>
-              )}
-              <div className={selectedCatalogItem ? 'col-span-2' : ''}>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  Manufacturer
+                </label>
+                <input
+                  type="text"
+                  value={manufacturer}
+                  onChange={(e) => setManufacturer(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
+                  placeholder="Brand"
+                />
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">
                   Quantity
                 </label>
@@ -388,21 +376,19 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
               </div>
             </div>
 
-            {/* Image URL - only if no catalog item */}
-            {!selectedCatalogItem && (
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
-                  Image URL
-                </label>
-                <input
-                  type="url"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
-                  placeholder="https://..."
-                />
-              </div>
-            )}
+            {/* Image URL */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">
+                Image URL
+              </label>
+              <input
+                type="url"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
+                placeholder="https://..."
+              />
+            </div>
 
             {/* Notes */}
             <div>
@@ -430,7 +416,7 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || (!selectedCatalogItem && !name.trim())}
+              disabled={isSubmitting || !name.trim()}
               className="px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors flex items-center gap-2"
             >
               {isSubmitting && (

@@ -354,6 +354,7 @@ function CreateCatalogItemForm({ initialGearType, initialQuery, onSuccess, onCan
   const [model, setModel] = useState(initialModel);
   const [variant, setVariant] = useState('');
   const [bestFor, setBestFor] = useState<DroneType[]>([]);
+  const [msrp, setMsrp] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [description, setDescription] = useState('');
 
@@ -398,6 +399,7 @@ function CreateCatalogItemForm({ initialGearType, initialQuery, onSuccess, onCan
         model: model.trim(),
         variant: variant.trim() || undefined,
         bestFor: bestFor.length > 0 ? bestFor : undefined,
+        msrp: msrp ? parseFloat(msrp) : undefined,
         imageUrl: imageUrl.trim() || undefined,
         description: description.trim() || undefined,
       };
@@ -540,6 +542,28 @@ function CreateCatalogItemForm({ initialGearType, initialQuery, onSuccess, onCan
           </div>
           <p className="text-xs text-slate-500 mt-1">
             Select what drone types this gear is best suited for
+          </p>
+        </div>
+
+        {/* MSRP */}
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-1">
+            MSRP (optional)
+          </label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={msrp}
+              onChange={(e) => setMsrp(e.target.value)}
+              placeholder="0.00"
+              className="w-full pl-7 pr-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
+            />
+          </div>
+          <p className="text-xs text-slate-500 mt-1">
+            Manufacturer's suggested retail price
           </p>
         </div>
 
