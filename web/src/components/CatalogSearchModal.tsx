@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { GearCatalogItem, GearType, CreateGearCatalogParams } from '../gearCatalogTypes';
-import { GEAR_TYPES, getCatalogItemDisplayName } from '../gearCatalogTypes';
+import type { GearCatalogItem, GearType, CreateGearCatalogParams, DroneType } from '../gearCatalogTypes';
+import { GEAR_TYPES, DRONE_TYPES, getCatalogItemDisplayName } from '../gearCatalogTypes';
 import { searchGearCatalog, createGearCatalogItem, findNearMatches, getPopularGear } from '../gearCatalogApi';
 
 interface CatalogSearchModalProps {
@@ -352,6 +352,7 @@ function CreateCatalogItemForm({ initialGearType, initialQuery, onSuccess, onCan
   const [brand, setBrand] = useState(initialBrand);
   const [model, setModel] = useState(initialModel);
   const [variant, setVariant] = useState('');
+  const [bestFor, setBestFor] = useState<DroneType[]>([]);
   const [imageUrl, setImageUrl] = useState('');
   const [description, setDescription] = useState('');
 
@@ -395,6 +396,7 @@ function CreateCatalogItemForm({ initialGearType, initialQuery, onSuccess, onCan
         brand: brand.trim(),
         model: model.trim(),
         variant: variant.trim() || undefined,
+        bestFor: bestFor.length > 0 ? bestFor : undefined,
         imageUrl: imageUrl.trim() || undefined,
         description: description.trim() || undefined,
       };
@@ -505,6 +507,38 @@ function CreateCatalogItemForm({ initialGearType, initialQuery, onSuccess, onCan
           />
           <p className="text-xs text-slate-500 mt-1">
             Specify KV rating, version, or other distinguishing features
+          </p>
+        </div>
+
+        {/* Best For - Drone Types */}
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-1">
+            Best For (optional)
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {DRONE_TYPES.map(type => (
+              <button
+                key={type.value}
+                type="button"
+                onClick={() => {
+                  setBestFor(prev => 
+                    prev.includes(type.value)
+                      ? prev.filter(t => t !== type.value)
+                      : [...prev, type.value]
+                  );
+                }}
+                className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                  bestFor.includes(type.value)
+                    ? 'bg-primary-600 border-primary-500 text-white'
+                    : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-slate-500'
+                }`}
+              >
+                {type.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-slate-500 mt-1">
+            Select what drone types this gear is best suited for
           </p>
         </div>
 

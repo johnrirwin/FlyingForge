@@ -108,6 +108,7 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationGearCatalog,              // Creates gear_catalog table
 		migrationPgTrgm,                   // Adds trigram search for gear_catalog
 		migrationInventoryCatalogLink,     // Adds FK to gear_catalog (depends on migrationGearCatalog)
+		migrationGearCatalogBestFor,       // Adds best_for column for drone type
 	}
 
 	for i, migration := range migrations {
@@ -594,4 +595,14 @@ ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS catalog_id UUID REFERENCES 
 
 -- Index for looking up inventory items by catalog item
 CREATE INDEX IF NOT EXISTS idx_inventory_catalog ON inventory_items(catalog_id);
+`
+
+// Migration to add best_for column to gear_catalog
+// Stores array of drone types this gear is best suited for (freestyle, long-range, cinematic, etc.)
+const migrationGearCatalogBestFor = `
+-- Add best_for column as a text array for drone types
+ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS best_for TEXT[] DEFAULT '{}';
+
+-- Index for filtering by drone type
+CREATE INDEX IF NOT EXISTS idx_gear_catalog_best_for ON gear_catalog USING gin(best_for);
 `

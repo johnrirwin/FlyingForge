@@ -38,6 +38,32 @@ export type CatalogItemStatus = 'active' | 'pending' | 'flagged' | 'rejected';
 // Catalog item source
 export type CatalogItemSource = 'user-submitted' | 'admin' | 'import' | 'migration';
 
+// Drone types for "Best For" field
+export type DroneType = 
+  | 'freestyle'
+  | 'long-range'
+  | 'cinematic'
+  | 'racing'
+  | 'tiny-whoop'
+  | 'cinewhoop'
+  | 'micro'
+  | 'toothpick'
+  | 'x-class'
+  | 'other';
+
+export const DRONE_TYPES: { value: DroneType; label: string }[] = [
+  { value: 'freestyle', label: 'Freestyle' },
+  { value: 'long-range', label: 'Long Range' },
+  { value: 'cinematic', label: 'Cinematic' },
+  { value: 'racing', label: 'Racing' },
+  { value: 'tiny-whoop', label: 'Tiny Whoop' },
+  { value: 'cinewhoop', label: 'Cinewhoop' },
+  { value: 'micro', label: 'Micro (2-3")' },
+  { value: 'toothpick', label: 'Toothpick' },
+  { value: 'x-class', label: 'X-Class' },
+  { value: 'other', label: 'Other' },
+];
+
 // Gear catalog item - canonical gear definition
 export interface GearCatalogItem {
   id: string;
@@ -46,6 +72,7 @@ export interface GearCatalogItem {
   model: string;
   variant?: string;
   specs?: Record<string, unknown>;
+  bestFor?: DroneType[]; // What drone types this gear is best suited for
   source: CatalogItemSource;
   createdByUserId?: string;
   status: CatalogItemStatus;
@@ -64,6 +91,7 @@ export interface CreateGearCatalogParams {
   model: string;
   variant?: string;
   specs?: Record<string, unknown>;
+  bestFor?: DroneType[]; // What drone types this gear is best suited for
   imageUrl?: string;
   description?: string;
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { searchGearCatalog, getPopularGear } from '../gearCatalogApi';
 import type { GearCatalogItem, GearType } from '../gearCatalogTypes';
-import { GEAR_TYPES, getCatalogItemDisplayName } from '../gearCatalogTypes';
+import { GEAR_TYPES, DRONE_TYPES, getCatalogItemDisplayName } from '../gearCatalogTypes';
 import { useAuth } from '../hooks/useAuth';
 
 interface GearCatalogPageProps {
@@ -81,6 +81,23 @@ function GearCard({
             <p className="text-sm text-slate-500 mt-2 line-clamp-2">
               {item.description}
             </p>
+          )}
+
+          {/* Best For badges */}
+          {item.bestFor && item.bestFor.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {item.bestFor.map(droneType => {
+                const label = DRONE_TYPES.find(t => t.value === droneType)?.label || droneType;
+                return (
+                  <span 
+                    key={droneType}
+                    className="px-2 py-0.5 bg-primary-600/20 text-primary-400 text-xs rounded-full"
+                  >
+                    {label}
+                  </span>
+                );
+              })}
+            </div>
           )}
 
           {/* Stats & Actions */}
