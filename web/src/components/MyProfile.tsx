@@ -231,8 +231,9 @@ export function MyProfile() {
   const effectiveAvatarUrl = pendingAvatar?.previewUrl || profile?.effectiveAvatarUrl || profile?.avatarUrl;
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
-      <h1 className="text-2xl font-bold text-white mb-6">My Profile</h1>
+    <div className="flex-1 overflow-y-auto">
+      <div className="max-w-2xl mx-auto p-6 pb-24">
+        <h1 className="text-2xl font-bold text-white mb-6">My Profile</h1>
 
       {error && (
         <div className="mb-4 p-4 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400">
@@ -457,6 +458,7 @@ export function MyProfile() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
