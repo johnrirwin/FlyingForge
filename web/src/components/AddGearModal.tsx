@@ -132,9 +132,12 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
         catalogId: selectedCatalogItem?.id,
       };
 
+      console.log('[AddGearModal] Submitting inventory params:', params);
       await onSubmit(params);
+      console.log('[AddGearModal] Submit successful');
       onClose();
     } catch (err) {
+      console.error('[AddGearModal] Submit failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to save item');
     } finally {
       setIsSubmitting(false);

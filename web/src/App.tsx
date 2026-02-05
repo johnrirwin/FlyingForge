@@ -460,12 +460,18 @@ function App() {
 
   // Submit inventory modal handler
   const handleInventorySubmit = useCallback(async (params: AddInventoryParams) => {
+    console.log('[App] handleInventorySubmit called with params:', params);
+    console.log('[App] editingInventoryItem:', editingInventoryItem);
+    console.log('[App] selectedEquipmentForInventory:', selectedEquipmentForInventory);
+    
     if (editingInventoryItem) {
       // Update existing item
+      console.log('[App] Updating existing inventory item');
       const updated = await updateInventoryItem(editingInventoryItem.id, params);
       setInventoryItems(prev => prev.map(i => i.id === editingInventoryItem.id ? updated : i));
     } else if (selectedEquipmentForInventory) {
       // Add from equipment
+      console.log('[App] Adding from equipment shop');
       const newItem = await addEquipmentToInventory(
         selectedEquipmentForInventory.id,
         selectedEquipmentForInventory.name,
@@ -485,12 +491,15 @@ function App() {
       trackEvent('gear_added', { category: selectedEquipmentForInventory.category, method: 'from_shop' });
     } else {
       // Add new manual item
+      console.log('[App] Adding new manual/catalog item');
       const newItem = await addInventoryItem(params);
+      console.log('[App] New item created:', newItem);
       setInventoryItems(prev => [...prev, newItem]);
       // Track gear addition for GA4 conversions
       trackEvent('gear_added', { category: params.category, method: 'manual' });
     }
     
+    console.log('[App] Refreshing inventory summary');
     const summaryResponse = await getInventorySummary();
     setInventorySummary(summaryResponse);
   }, [editingInventoryItem, selectedEquipmentForInventory]);
