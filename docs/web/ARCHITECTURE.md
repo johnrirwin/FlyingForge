@@ -119,8 +119,7 @@ web/src/
     ├── index.ts             # Component exports
     │
     ├── Dashboard.tsx        # Logged-in homepage
-    ├── Sidebar.tsx          # News source filters
-    ├── EquipmentSidebar.tsx # Main navigation sidebar
+    ├── Sidebar.tsx          # Main navigation sidebar
     ├── TopBar.tsx           # Search and filter controls
     │
     ├── FeedCard.tsx         # News item card
@@ -220,7 +219,7 @@ export function useAuth()        // Access auth context
 | **List** | Renders collections | FeedList, AircraftList |
 | **Card** | Single item display | FeedCard, AircraftCard |
 | **Modal** | Overlay dialogs | ItemDetail, AircraftForm |
-| **Layout** | Structure | EquipmentSidebar, TopBar |
+| **Layout** | Structure | Sidebar, TopBar |
 | **Form** | User input | LoginPage, AddInventoryModal |
 
 ### Component Patterns
@@ -404,7 +403,7 @@ Instead of URL routing, we use section state:
 type AppSection = 'dashboard' | 'news' | 'equipment' | 'inventory' | 'aircraft';
 
 // Sidebar triggers section changes
-<EquipmentSidebar
+<Sidebar
   activeSection={activeSection}
   onSectionChange={handleSectionChange}
   // ...

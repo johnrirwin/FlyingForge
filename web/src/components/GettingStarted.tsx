@@ -714,11 +714,11 @@ export function GettingStarted({ onSignIn }: GettingStartedProps) {
         </div>
       </section>
 
-      {/* Rules & Safety */}
+      {/* Regulations and Safety */}
       <section className="px-6 py-16 border-b border-slate-800">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-10">
-            <h2 className="text-2xl md:text-3xl font-bold text-white mb-3">Rules & safety</h2>
+            <h2 className="text-2xl md:text-3xl font-bold text-white mb-3">Regulations and Safety</h2>
             <p className="text-slate-400 max-w-xl mx-auto">
               Flying is fun—but do it responsibly. These basics apply almost everywhere.
             </p>
@@ -736,9 +736,22 @@ export function GettingStarted({ onSignIn }: GettingStartedProps) {
               </div>
             ))}
           </div>
-          <p className="text-center text-slate-500 text-sm mt-6">
-            This is general guidance—always check your local regulations before flying.
-          </p>
+          <div className="text-center mt-8">
+            <p className="text-slate-500 text-sm mb-4">
+              This is general guidance—always check your local regulations before flying.
+            </p>
+            <a
+              href="https://www.faa.gov/uas"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-sm text-slate-300 hover:text-white transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+              FAA Drone Regulations (US)
+            </a>
+          </div>
         </div>
       </section>
 
