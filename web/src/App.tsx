@@ -412,18 +412,6 @@ function App() {
     }
   }, [filters.sources, filters.sourceType, filters.sort, filters.fromDate, filters.toDate, debouncedQuery, startCooldown]);
 
-  // Handle feed scroll - dismiss keyboard on mobile when scrolling
-  const lastScrollTop = useRef(0);
-  const handleFeedScroll = useCallback((scrollTop: number) => {
-    // Blur active element when scrolling down to dismiss keyboard on mobile
-    if (scrollTop > lastScrollTop.current && scrollTop > 10) {
-      if (document.activeElement instanceof HTMLElement) {
-        document.activeElement.blur();
-      }
-    }
-    lastScrollTop.current = scrollTop;
-  }, []);
-
   // Equipment search handler
   const handleEquipmentSearchChange = useCallback((params: Partial<EquipmentSearchParams>) => {
     setEquipmentSearchParams(prev => ({ ...prev, ...params }));
@@ -724,9 +712,9 @@ function App() {
 
         {/* News Section */}
         {activeSection === 'news' && (
-          <div className="flex-1 flex flex-col min-h-0 relative">
-            {/* Fixed TopBar within news section */}
-            <div className="flex-shrink-0 z-10 bg-slate-900">
+          <>
+            {/* TopBar - fixed on mobile, normal flow on desktop */}
+            <div className="fixed md:relative top-14 md:top-0 left-0 right-0 md:left-auto md:right-auto z-20 md:z-10 bg-slate-900">
               <TopBar
                 query={filters.query}
                 onQueryChange={q => updateFilter('query', q)}
@@ -745,10 +733,15 @@ function App() {
                 isCollapsed={false}
               />
             </div>
-            {/* Scrollable feed list */}
+            {/* Scrollable feed list - extra top padding on mobile to account for fixed TopBar (~180px) */}
             <div 
-              className="flex-1 overflow-y-auto min-h-0"
-              onScroll={(e) => handleFeedScroll((e.target as HTMLDivElement).scrollTop)}
+              className="flex-1 overflow-y-auto pt-[180px] md:pt-0"
+              onScroll={() => {
+                // Dismiss keyboard on scroll for mobile
+                if (document.activeElement instanceof HTMLElement) {
+                  document.activeElement.blur();
+                }
+              }}
             >
               <FeedList
                 items={items}
@@ -760,7 +753,7 @@ function App() {
                 onLoadMore={loadMoreItems}
               />
             </div>
-          </div>
+          </>
         )}
 
         {/* Shop Section */}
