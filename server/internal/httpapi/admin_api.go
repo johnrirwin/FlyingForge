@@ -106,10 +106,18 @@ func (api *AdminAPI) handleAdminGear(w http.ResponseWriter, r *http.Request) {
 	api.writeJSON(w, http.StatusOK, response)
 }
 
-// handleAdminGearByID handles GET/PUT /api/admin/gear/{id}
+// handleAdminGearByID handles GET/PUT /api/admin/gear/{id} and /api/admin/gear/{id}/image
 func (api *AdminAPI) handleAdminGearByID(w http.ResponseWriter, r *http.Request) {
 	// Extract ID from path
 	path := strings.TrimPrefix(r.URL.Path, "/api/admin/gear/")
+
+	// Check if this is an image request
+	if strings.HasSuffix(path, "/image") {
+		id := strings.TrimSuffix(path, "/image")
+		api.handleGearImage(w, r, id)
+		return
+	}
+
 	id := strings.TrimSuffix(path, "/")
 	if id == "" {
 		http.Error(w, "gear ID required", http.StatusBadRequest)
@@ -223,4 +231,171 @@ func parseIntQuery(s string, defaultVal int) int {
 		return defaultVal
 	}
 	return val
+}
+
+// handleGearImage handles POST /api/admin/gear/{id}/image for image upload
+// and GET for serving the image
+func (api *AdminAPI) handleGearImage(w http.ResponseWriter, r *http.Request, id string) {
+	switch r.Method {
+	case http.MethodPost:
+		api.uploadGearImage(w, r, id)
+	case http.MethodGet:
+		api.getGearImage(w, r, id)
+	case http.MethodDelete:
+		api.deleteGearImage(w, r, id)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// uploadGearImage handles POST /api/admin/gear/{id}/image
+// Max file size: 1MB, accepts JPEG/PNG only
+func (api *AdminAPI) uploadGearImage(w http.ResponseWriter, r *http.Request, id string) {
+	userID := auth.GetUserID(r.Context())
+
+	// Limit request body to 1.5MB (slightly more than 1MB limit to account for multipart overhead)
+	maxSize := int64(1.5 * 1024 * 1024)
+	r.Body = http.MaxBytesReader(w, r.Body, maxSize)
+
+	// Parse multipart form
+	if err := r.ParseMultipartForm(maxSize); err != nil {
+		api.logger.Error("Failed to parse multipart form", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "File too large. Maximum size is 1MB.",
+		})
+		return
+	}
+
+	file, header, err := r.FormFile("image")
+	if err != nil {
+		api.logger.Error("Failed to get image from form", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "Image file required",
+		})
+		return
+	}
+	defer file.Close()
+
+	// Validate file size (1MB max)
+	if header.Size > 1024*1024 {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "File too large. Maximum size is 1MB.",
+		})
+		return
+	}
+
+	// Validate content type
+	contentType := header.Header.Get("Content-Type")
+	if contentType != "image/jpeg" && contentType != "image/png" && contentType != "image/webp" {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "Image must be JPEG, PNG, or WebP",
+		})
+		return
+	}
+
+	// Read image data
+	imageData := make([]byte, header.Size)
+	if _, err := file.Read(imageData); err != nil {
+		api.logger.Error("Failed to read image data", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "Failed to read image",
+		})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	// Verify the gear item exists
+	existing, err := api.catalogStore.Get(ctx, id)
+	if err != nil {
+		api.logger.Error("Failed to verify gear item", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "Failed to verify gear item",
+		})
+		return
+	}
+	if existing == nil {
+		api.writeJSON(w, http.StatusNotFound, map[string]string{
+			"error": "Gear item not found",
+		})
+		return
+	}
+
+	// Store the image
+	if err := api.catalogStore.SetImage(ctx, id, userID, contentType, imageData); err != nil {
+		api.logger.Error("Failed to store gear image", logging.WithFields(map[string]interface{}{
+			"gearId": id,
+			"error":  err.Error(),
+		}))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "Failed to store image",
+		})
+		return
+	}
+
+	api.logger.Info("Admin uploaded gear image",
+		logging.WithField("gearId", id),
+		logging.WithField("adminId", userID),
+		logging.WithField("size", header.Size),
+	)
+
+	api.writeJSON(w, http.StatusOK, map[string]string{
+		"message": "Image uploaded successfully",
+	})
+}
+
+// getGearImage handles GET /api/admin/gear/{id}/image
+func (api *AdminAPI) getGearImage(w http.ResponseWriter, r *http.Request, id string) {
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	imageData, imageType, err := api.catalogStore.GetImage(ctx, id)
+	if err != nil {
+		api.logger.Error("Failed to get gear image", logging.WithFields(map[string]interface{}{
+			"gearId": id,
+			"error":  err.Error(),
+		}))
+		http.Error(w, "Failed to get image", http.StatusInternalServerError)
+		return
+	}
+
+	if imageData == nil {
+		http.Error(w, "No image for this gear item", http.StatusNotFound)
+		return
+	}
+
+	// Set caching headers (images can be cached for 1 hour)
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Header().Set("Content-Type", imageType)
+	w.Header().Set("Content-Length", strconv.Itoa(len(imageData)))
+	w.Write(imageData)
+}
+
+// deleteGearImage handles DELETE /api/admin/gear/{id}/image
+func (api *AdminAPI) deleteGearImage(w http.ResponseWriter, r *http.Request, id string) {
+	userID := auth.GetUserID(r.Context())
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	if err := api.catalogStore.DeleteImage(ctx, id); err != nil {
+		api.logger.Error("Failed to delete gear image", logging.WithFields(map[string]interface{}{
+			"gearId": id,
+			"error":  err.Error(),
+		}))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "Failed to delete image",
+		})
+		return
+	}
+
+	api.logger.Info("Admin deleted gear image",
+		logging.WithField("gearId", id),
+		logging.WithField("adminId", userID),
+	)
+
+	api.writeJSON(w, http.StatusOK, map[string]string{
+		"message": "Image deleted successfully",
+	})
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { GearCatalogItem, GearType, ImageStatus, AdminUpdateGearCatalogParams } from '../gearCatalogTypes';
 import { GEAR_TYPES } from '../gearCatalogTypes';
-import { adminSearchGear, adminUpdateGear } from '../adminApi';
+import { adminSearchGear, adminUpdateGear, adminUploadGearImage, adminDeleteGearImage, getGearImageUrl } from '../adminApi';
 
 interface AdminGearModerationProps {
   isAdmin: boolean;
@@ -134,100 +134,103 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <h1 className="text-2xl font-bold text-white mb-6">Gear Moderation</h1>
+    <>
+      {/* Fixed header on mobile - title, filters, count */}
+      <div className="fixed md:relative top-14 md:top-0 left-0 right-0 md:left-auto md:right-auto z-20 md:z-10 bg-slate-900 p-4 md:p-6 pb-2 md:pb-4">
+        <h1 className="text-xl md:text-2xl font-bold text-white mb-3 md:mb-4">Gear Moderation</h1>
 
-      {/* Filters */}
-      <form onSubmit={handleSearch} className="bg-slate-800 rounded-lg p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {/* Search query */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">
-              Search
-            </label>
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Brand or model..."
-              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
-            />
+        {/* Filters */}
+        <form onSubmit={handleSearch} className="bg-slate-800 rounded-lg p-3 md:p-4 mb-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
+            {/* Search query */}
+            <div className="col-span-2 md:col-span-1">
+              <label className="block text-xs md:text-sm font-medium text-slate-300 mb-1">
+                Search
+              </label>
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Brand or model..."
+                className="w-full px-3 py-1.5 md:py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm placeholder-slate-400 focus:outline-none focus:border-primary-500"
+              />
+            </div>
+
+            {/* Gear type filter */}
+            <div>
+              <label className="block text-xs md:text-sm font-medium text-slate-300 mb-1">
+                Gear Type
+              </label>
+              <select
+                value={gearType}
+                onChange={(e) => setGearType(e.target.value as GearType | '')}
+                className="w-full px-2 md:px-3 py-1.5 md:py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500"
+              >
+                <option value="">All Types</option>
+                {GEAR_TYPES.map((type) => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Image status filter */}
+            <div>
+              <label className="block text-xs md:text-sm font-medium text-slate-300 mb-1">
+                Image Status
+              </label>
+              <select
+                value={imageStatus}
+                onChange={(e) => setImageStatus(e.target.value as ImageStatus | '')}
+                className="w-full px-2 md:px-3 py-1.5 md:py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500"
+              >
+                <option value="">All</option>
+                <option value="missing">Needs Image</option>
+                <option value="approved">Has Image</option>
+              </select>
+            </div>
+
+            {/* Search button */}
+            <div className="col-span-2 md:col-span-1 flex items-end">
+              <button
+                type="submit"
+                className="w-full px-4 py-1.5 md:py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                Search
+              </button>
+            </div>
           </div>
+        </form>
 
-          {/* Gear type filter */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">
-              Gear Type
-            </label>
-            <select
-              value={gearType}
-              onChange={(e) => setGearType(e.target.value as GearType | '')}
-              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
-            >
-              <option value="">All Types</option>
-              {GEAR_TYPES.map((type) => (
-                <option key={type.value} value={type.value}>
-                  {type.label}
-                </option>
-              ))}
-            </select>
+        {/* Error message */}
+        {error && (
+          <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm mb-2">
+            {error}
           </div>
+        )}
 
-          {/* Image status filter */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">
-              Image Status
-            </label>
-            <select
-              value={imageStatus}
-              onChange={(e) => setImageStatus(e.target.value as ImageStatus | '')}
-              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
-            >
-              <option value="">All</option>
-              <option value="missing">Needs Image</option>
-              <option value="approved">Has Image</option>
-            </select>
-          </div>
-
-          {/* Search button */}
-          <div className="flex items-end">
-            <button
-              type="submit"
-              className="w-full px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors"
-            >
-              Search
-            </button>
-          </div>
-        </div>
-      </form>
-
-      {/* Error message */}
-      {error && (
-        <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 mb-6">
-          {error}
-        </div>
-      )}
-
-      {/* Results count */}
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-slate-400">
+        {/* Results count */}
+        <p className="text-slate-400 text-sm">
           {totalCount} item{totalCount !== 1 ? 's' : ''} found
         </p>
       </div>
 
-      {/* Items table */}
-      <div className="bg-slate-800 rounded-lg overflow-hidden">
-        {isLoading ? (
-          <div className="p-8 text-center">
-            <div className="w-8 h-8 border-2 border-primary-500/30 border-t-primary-500 rounded-full animate-spin mx-auto" />
-            <p className="text-slate-400 mt-4">Loading...</p>
-          </div>
-        ) : items.length === 0 ? (
-          <div className="p-8 text-center">
-            <p className="text-slate-400">No items found</p>
-          </div>
-        ) : (
-          <table className="w-full">
+      {/* Scrollable list - with padding for fixed header on mobile */}
+      <div className="flex-1 overflow-y-auto pt-[280px] md:pt-0 px-4 md:px-6 pb-20">
+        {/* Items table - desktop */}
+        <div className="hidden md:block bg-slate-800 rounded-lg overflow-hidden">
+          {isLoading ? (
+            <div className="p-8 text-center">
+              <div className="w-8 h-8 border-2 border-primary-500/30 border-t-primary-500 rounded-full animate-spin mx-auto" />
+              <p className="text-slate-400 mt-4">Loading...</p>
+            </div>
+          ) : items.length === 0 ? (
+            <div className="p-8 text-center">
+              <p className="text-slate-400">No items found</p>
+            </div>
+          ) : (
+            <table className="w-full">
             <thead className="bg-slate-700/50">
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">
@@ -299,6 +302,61 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
         )}
       </div>
 
+      {/* Items cards - mobile */}
+      <div className="md:hidden space-y-3">
+        {isLoading ? (
+          <div className="p-8 text-center bg-slate-800 rounded-lg">
+            <div className="w-8 h-8 border-2 border-primary-500/30 border-t-primary-500 rounded-full animate-spin mx-auto" />
+            <p className="text-slate-400 mt-4">Loading...</p>
+          </div>
+        ) : items.length === 0 ? (
+          <div className="p-8 text-center bg-slate-800 rounded-lg">
+            <p className="text-slate-400">No items found</p>
+          </div>
+        ) : (
+          items.map((item) => (
+            <div
+              key={item.id}
+              className="bg-slate-800 rounded-lg p-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="px-2 py-0.5 bg-slate-700 rounded text-xs text-slate-300">
+                      {item.gearType}
+                    </span>
+                    {item.imageStatus === 'approved' ? (
+                      <span className="px-2 py-0.5 bg-green-500/20 text-green-400 rounded text-xs">
+                        Has Image
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 rounded text-xs">
+                        No Image
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="text-white font-medium truncate">
+                    {item.brand} {item.model}
+                  </h3>
+                  {item.variant && (
+                    <p className="text-sm text-slate-400 truncate">{item.variant}</p>
+                  )}
+                  <p className="text-xs text-slate-500 mt-1">
+                    Added {new Date(item.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleEditClick(item)}
+                  className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded transition-colors flex-shrink-0"
+                >
+                  Edit
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
       {/* Infinite scroll loading indicator */}
       {hasMore && !isLoading && (
         <div ref={loadMoreRef} className="flex items-center justify-center py-6">
@@ -319,6 +377,7 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
           Showing all {items.length} of {totalCount} items
         </div>
       )}
+      </div>
 
       {/* Edit Modal */}
       {editingItem && (
@@ -328,7 +387,7 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
           onSave={handleEditSave}
         />
       )}
-    </div>
+    </>
   );
 }
 
@@ -345,9 +404,56 @@ function AdminGearEditModal({ item, onClose, onSave }: AdminGearEditModalProps) 
   const [variant, setVariant] = useState(item.variant || '');
   const [description, setDescription] = useState(item.description || '');
   const [msrp, setMsrp] = useState(item.msrp?.toString() || '');
-  const [imageUrl, setImageUrl] = useState(item.imageUrl || '');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [deleteImage, setDeleteImage] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Determine if item has an existing image (either URL or stored image)
+  const hasExistingImage = item.imageUrl || item.imageStatus === 'approved';
+  const existingImageUrl = item.imageUrl || (item.imageStatus === 'approved' ? getGearImageUrl(item.id) : null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) {
+      setImageFile(null);
+      setImagePreview(null);
+      return;
+    }
+    
+    // Validate file size (1MB max)
+    if (file.size > 1024 * 1024) {
+      setError('Image file is too large. Maximum size is 1MB.');
+      e.target.value = '';
+      return;
+    }
+    
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      setError('Invalid image type. Please use JPEG, PNG, or WebP.');
+      e.target.value = '';
+      return;
+    }
+    
+    setError(null);
+    setDeleteImage(false);
+    setImageFile(file);
+    
+    // Create preview
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setImagePreview(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleDeleteImage = () => {
+    setDeleteImage(true);
+    setImageFile(null);
+    setImagePreview(null);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -365,10 +471,22 @@ function AdminGearEditModal({ item, onClose, onSave }: AdminGearEditModalProps) 
       if (msrp !== (item.msrp?.toString() || '')) {
         params.msrp = msrp ? parseFloat(msrp) : undefined;
       }
-      if (imageUrl !== (item.imageUrl || '')) params.imageUrl = imageUrl;
+      
+      // Handle image: upload new, delete existing, or no change
+      if (imageFile) {
+        // Upload new image
+        await adminUploadGearImage(item.id, imageFile);
+      } else if (deleteImage && hasExistingImage) {
+        // Delete existing image
+        await adminDeleteGearImage(item.id);
+      }
+      
+      // Update other fields if changed
+      if (Object.keys(params).length > 0) {
+        await adminUpdateGear(item.id, params);
+      }
 
-      const updatedItem = await adminUpdateGear(item.id, params);
-      onSave(updatedItem);
+      onSave(item); // Signal that we're done, parent will refresh
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update gear item');
     } finally {
@@ -498,30 +616,51 @@ function AdminGearEditModal({ item, onClose, onSave }: AdminGearEditModalProps) 
             </div>
           </div>
 
-          {/* Image URL (Admin only) */}
+          {/* Image Upload (Admin only) */}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">
-              Image URL
-              <span className="ml-2 text-xs text-primary-400">(Admin only)</span>
+              Product Image
+              <span className="ml-2 text-xs text-primary-400">(Max 1MB, JPEG/PNG/WebP)</span>
             </label>
-            <input
-              type="url"
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-              placeholder="https://..."
-              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
-            />
-            {imageUrl && (
-              <div className="mt-2">
+            
+            {/* Show existing image or new preview */}
+            {!deleteImage && (imagePreview || existingImageUrl) && (
+              <div className="mb-3 relative inline-block">
                 <img
-                  src={imageUrl}
+                  src={imagePreview || existingImageUrl || ''}
                   alt="Preview"
-                  className="w-24 h-24 object-cover rounded-lg bg-slate-700"
+                  className="w-32 h-32 object-cover rounded-lg bg-slate-700"
                   onError={(e) => {
                     (e.target as HTMLImageElement).style.display = 'none';
                   }}
                 />
+                {(existingImageUrl || imagePreview) && (
+                  <button
+                    type="button"
+                    onClick={handleDeleteImage}
+                    className="absolute -top-2 -right-2 p-1 bg-red-600 hover:bg-red-700 text-white rounded-full transition-colors"
+                    title="Remove image"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
               </div>
+            )}
+            
+            {/* File input */}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleFileChange}
+              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-primary-600 file:text-white hover:file:bg-primary-700 file:cursor-pointer cursor-pointer"
+            />
+            
+            {deleteImage && hasExistingImage && (
+              <p className="mt-2 text-sm text-amber-400">
+                Image will be removed when you save.
+              </p>
             )}
           </div>
         </form>

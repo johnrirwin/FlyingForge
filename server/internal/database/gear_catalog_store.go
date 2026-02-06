@@ -853,3 +853,82 @@ func (s *GearCatalogStore) AdminUpdate(ctx context.Context, id string, adminUser
 
 	return s.Get(ctx, id)
 }
+
+// SetImage stores the binary image data for a gear catalog item (admin only)
+func (s *GearCatalogStore) SetImage(ctx context.Context, id string, adminUserID string, imageType string, imageData []byte) error {
+	query := `
+		UPDATE gear_catalog 
+		SET image_data = $1, 
+		    image_type = $2, 
+		    image_url = NULL,
+		    image_status = $3,
+		    image_curated_by_user_id = $4,
+		    image_curated_at = NOW(),
+		    updated_at = NOW()
+		WHERE id = $5
+	`
+	result, err := s.db.ExecContext(ctx, query, imageData, imageType, models.ImageStatusApproved, adminUserID, id)
+	if err != nil {
+		return fmt.Errorf("failed to set gear image: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("gear catalog item not found")
+	}
+
+	return nil
+}
+
+// GetImage retrieves the binary image data for a gear catalog item
+func (s *GearCatalogStore) GetImage(ctx context.Context, id string) ([]byte, string, error) {
+	query := `
+		SELECT image_data, image_type 
+		FROM gear_catalog 
+		WHERE id = $1 AND image_data IS NOT NULL
+	`
+	var imageData []byte
+	var imageType string
+	err := s.db.QueryRowContext(ctx, query, id).Scan(&imageData, &imageType)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, "", nil
+		}
+		return nil, "", fmt.Errorf("failed to get gear image: %w", err)
+	}
+
+	return imageData, imageType, nil
+}
+
+// HasImage checks if a gear catalog item has an uploaded image
+func (s *GearCatalogStore) HasImage(ctx context.Context, id string) (bool, error) {
+	query := `SELECT image_data IS NOT NULL FROM gear_catalog WHERE id = $1`
+	var hasImage bool
+	err := s.db.QueryRowContext(ctx, query, id).Scan(&hasImage)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to check for gear image: %w", err)
+	}
+	return hasImage, nil
+}
+
+// DeleteImage removes the image from a gear catalog item (admin only)
+func (s *GearCatalogStore) DeleteImage(ctx context.Context, id string) error {
+	query := `
+		UPDATE gear_catalog 
+		SET image_data = NULL, 
+		    image_type = NULL, 
+		    image_status = $1,
+		    image_curated_by_user_id = NULL,
+		    image_curated_at = NULL,
+		    updated_at = NOW()
+		WHERE id = $2
+	`
+	_, err := s.db.ExecContext(ctx, query, models.ImageStatusMissing, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete gear image: %w", err)
+	}
+	return nil
+}

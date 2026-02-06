@@ -112,6 +112,7 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationGearCatalogMSRP,      // Adds msrp column for price
 		migrationGearCatalogCuration,  // Adds image curation fields
 		migrationUserIsAdmin,          // Adds is_admin flag to users
+		migrationGearCatalogImageData, // Adds image_data binary storage for gear images
 	}
 
 	for i, migration := range migrations {
@@ -645,4 +646,14 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE;
 
 -- Index for finding admin users
 CREATE INDEX IF NOT EXISTS idx_users_is_admin ON users(is_admin) WHERE is_admin = TRUE;
+`
+
+// Migration to add binary image storage to gear_catalog
+const migrationGearCatalogImageData = `
+-- Add image_data column for storing actual image binary (max 1MB enforced by app)
+ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS image_data BYTEA;
+ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS image_type VARCHAR(50);
+
+-- When image_data is set, clear the old image_url field
+-- (we're moving away from URL-based images to uploaded images)
 `

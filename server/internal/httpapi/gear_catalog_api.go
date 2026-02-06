@@ -206,6 +206,17 @@ func (api *GearCatalogAPI) handleCatalogItem(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Handle image endpoint (public, no auth required)
+	if strings.HasSuffix(id, "/image") {
+		id = strings.TrimSuffix(id, "/image")
+		if r.Method == http.MethodGet {
+			api.getGearImage(w, r, id)
+			return
+		}
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	// Handle flag endpoint
 	if len(id) > 5 && id[len(id)-5:] == "/flag" {
 		id = id[:len(id)-5]
@@ -374,4 +385,32 @@ func validateImageURL(rawURL string) error {
 	}
 
 	return nil
+}
+
+// getGearImage serves the uploaded image for a gear catalog item
+// Public endpoint - no auth required
+func (api *GearCatalogAPI) getGearImage(w http.ResponseWriter, r *http.Request, id string) {
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	imageData, imageType, err := api.catalogStore.GetImage(ctx, id)
+	if err != nil {
+		api.logger.Error("Failed to get gear image", logging.WithFields(map[string]interface{}{
+			"gearId": id,
+			"error":  err.Error(),
+		}))
+		http.Error(w, "Failed to get image", http.StatusInternalServerError)
+		return
+	}
+
+	if imageData == nil {
+		http.Error(w, "No image for this gear item", http.StatusNotFound)
+		return
+	}
+
+	// Set caching headers (images can be cached for 24 hours)
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.Header().Set("Content-Type", imageType)
+	w.Header().Set("Content-Length", strconv.Itoa(len(imageData)))
+	w.Write(imageData)
 }
