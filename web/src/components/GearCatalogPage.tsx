@@ -202,6 +202,35 @@ export function GearCatalogPage({ onAddToInventory }: GearCatalogPageProps) {
     setItems([]);
   };
 
+  // Handle selecting "All Types" tab
+  const handleSelectAllTypes = useCallback(async () => {
+    setSelectedType(null);
+    // If there's a search query, search with no type filter
+    if (searchQuery.trim()) {
+      setIsLoading(true);
+      setError(null);
+      setHasSearched(true);
+      try {
+        const response = await searchGearCatalog({
+          query: searchQuery.trim(),
+          gearType: undefined,
+          limit: 50,
+        });
+        setItems(response.items);
+        setTotalCount(response.totalCount);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Search failed');
+        setItems([]);
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      // No search query, reset to show popular items
+      setHasSearched(false);
+      setItems([]);
+    }
+  }, [searchQuery]);
+
   const displayItems = hasSearched ? items : popularItems;
   const showingPopular = !hasSearched;
 
@@ -273,7 +302,7 @@ export function GearCatalogPage({ onAddToInventory }: GearCatalogPageProps) {
             <GearTypeTab
               label="All Types"
               isActive={selectedType === null}
-              onClick={() => setSelectedType(null)}
+              onClick={handleSelectAllTypes}
             />
             {GEAR_TYPES.map(type => (
               <GearTypeTab
