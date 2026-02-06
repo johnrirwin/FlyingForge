@@ -80,7 +80,7 @@ describe('Sidebar', () => {
       render(<Sidebar {...createDefaultProps()} />)
       
       expect(screen.getByText('Home')).toBeInTheDocument()
-      expect(screen.getByText('Getting Started')).toBeInTheDocument()
+      expect(screen.getByText('Taking Off')).toBeInTheDocument()
       expect(screen.getByText('News Feed')).toBeInTheDocument()
       expect(screen.getByText('Shop')).toBeInTheDocument()
       expect(screen.getByText('My Inventory')).toBeInTheDocument()
@@ -89,12 +89,12 @@ describe('Sidebar', () => {
       expect(screen.getByText('My Batteries')).toBeInTheDocument()
     })
 
-    it('renders Dashboard instead of Home/Getting Started for authenticated users', () => {
+    it('renders Dashboard instead of Home/Taking Off for authenticated users', () => {
       render(<Sidebar {...createDefaultProps({ isAuthenticated: true, user: mockUser })} />)
       
       expect(screen.getByText('Dashboard')).toBeInTheDocument()
       expect(screen.queryByText('Home')).not.toBeInTheDocument()
-      expect(screen.queryByText('Getting Started')).not.toBeInTheDocument()
+      expect(screen.queryByText('Taking Off')).not.toBeInTheDocument()
     })
 
     it('shows lock icons for auth-required sections when unauthenticated', () => {

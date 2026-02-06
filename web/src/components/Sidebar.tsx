@@ -152,12 +152,16 @@ export const Sidebar = memo(function Sidebar({
             />
           )}
 
-          {/* Getting Started - only shown when NOT authenticated */}
+          {/* Taking Off - only shown when NOT authenticated */}
           {!isAuthenticated && (
             <NavItem
               section="getting-started"
-              label="Getting Started"
-              icon={<span className="text-xl">🚀</span>}
+              label="Taking Off"
+              icon={
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              }
             />
           )}
 
@@ -228,7 +232,7 @@ export const Sidebar = memo(function Sidebar({
             requiresAuth
             icon={
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
               </svg>
             }
           />
