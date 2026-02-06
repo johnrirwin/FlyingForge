@@ -5,9 +5,10 @@ import { adminSearchGear, adminUpdateGear } from '../adminApi';
 
 interface AdminGearModerationProps {
   isAdmin: boolean;
+  authLoading?: boolean;
 }
 
-export function AdminGearModeration({ isAdmin }: AdminGearModerationProps) {
+export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModerationProps) {
   const [items, setItems] = useState<GearCatalogItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -17,27 +18,34 @@ export function AdminGearModeration({ isAdmin }: AdminGearModerationProps) {
   const [query, setQuery] = useState('');
   const [gearType, setGearType] = useState<GearType | ''>('');
   const [imageStatus, setImageStatus] = useState<ImageStatus | ''>(''); // Default to all items
-  const [page, setPage] = useState(0);
   const pageSize = 30;
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  
+  // Use refs to track current offset and prevent race conditions
+  const currentOffsetRef = useRef(0);
+  const isLoadingRef = useRef(false);
 
   // Edit modal state
   const [editingItem, setEditingItem] = useState<GearCatalogItem | null>(null);
 
   const loadItems = useCallback(async (reset = false) => {
     if (!isAdmin) return;
+    
+    // Prevent concurrent loads
+    if (isLoadingRef.current) return;
+    isLoadingRef.current = true;
 
     if (reset) {
       setIsLoading(true);
-      setPage(0);
+      currentOffsetRef.current = 0;
     } else {
       setIsLoadingMore(true);
     }
     setError(null);
 
-    const currentOffset = reset ? 0 : page * pageSize;
+    const offset = currentOffsetRef.current;
 
     try {
       const response = await adminSearchGear({
@@ -45,39 +53,38 @@ export function AdminGearModeration({ isAdmin }: AdminGearModerationProps) {
         gearType: gearType || undefined,
         imageStatus: imageStatus || undefined,
         limit: pageSize,
-        offset: currentOffset,
+        offset: offset,
       });
       
       if (reset) {
         setItems(response.items);
-        setPage(1);
       } else {
         setItems(prev => [...prev, ...response.items]);
-        setPage(prev => prev + 1);
       }
+      currentOffsetRef.current = offset + response.items.length;
       setTotalCount(response.totalCount);
-      setHasMore(response.items.length === pageSize && (currentOffset + response.items.length) < response.totalCount);
+      setHasMore(response.items.length === pageSize && currentOffsetRef.current < response.totalCount);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load gear items');
     } finally {
       setIsLoading(false);
       setIsLoadingMore(false);
+      isLoadingRef.current = false;
     }
-  }, [isAdmin, query, gearType, imageStatus, page]);
+  }, [isAdmin, query, gearType, imageStatus]);
 
   // Initial load
   useEffect(() => {
     loadItems(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin]);
+  }, [loadItems]);
 
   // Infinite scroll observer
   useEffect(() => {
-    if (!loadMoreRef.current || isLoading || isLoadingMore || !hasMore) return;
+    if (!loadMoreRef.current || !hasMore) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore && !isLoadingMore) {
+        if (entries[0].isIntersecting && hasMore && !isLoadingRef.current) {
           loadItems(false);
         }
       },
@@ -86,7 +93,7 @@ export function AdminGearModeration({ isAdmin }: AdminGearModerationProps) {
 
     observer.observe(loadMoreRef.current);
     return () => observer.disconnect();
-  }, [hasMore, isLoading, isLoadingMore, loadItems]);
+  }, [hasMore, loadItems]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,6 +113,16 @@ export function AdminGearModeration({ isAdmin }: AdminGearModerationProps) {
     setEditingItem(null);
     loadItems(true);
   };
+
+  // Show loading while auth state is being determined
+  if (authLoading) {
+    return (
+      <div className="p-8 text-center">
+        <div className="w-8 h-8 border-2 border-primary-500/30 border-t-primary-500 rounded-full animate-spin mx-auto" />
+        <p className="text-slate-400 mt-4">Loading...</p>
+      </div>
+    );
+  }
 
   if (!isAdmin) {
     return (

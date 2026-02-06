@@ -760,7 +760,7 @@ function App() {
 
         {/* Admin: Gear Moderation Section */}
         {activeSection === 'admin-gear' && (
-          <AdminGearModeration isAdmin={user?.isAdmin || false} />
+          <AdminGearModeration isAdmin={user?.isAdmin || false} authLoading={authLoading} />
         )}
 
         {/* Shop Section */}
