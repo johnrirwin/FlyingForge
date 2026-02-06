@@ -455,7 +455,8 @@ export function SocialPage({ onSelectPilot }: SocialPageProps) {
   };
 
   return (
-    <div className="w-full p-6 flex flex-col items-center">
+    <div className="flex-1 overflow-y-auto">
+      <div className="w-full p-6 pb-24 flex flex-col items-center">
       {/* Call Sign Prompt Modal */}
       {showCallSignPrompt && (
         <CallSignPromptModal
@@ -885,6 +886,7 @@ export function SocialPage({ onSelectPilot }: SocialPageProps) {
             )}
           </>
         )}
+      </div>
       </div>
     </div>
   );

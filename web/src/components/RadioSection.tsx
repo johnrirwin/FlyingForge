@@ -283,7 +283,7 @@ export function RadioSection({ onError }: RadioSectionProps) {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex-1 overflow-y-auto flex flex-col">
       {/* Radio header */}
       <div className="p-6 border-b border-slate-800">
         <div className="flex items-start justify-between">

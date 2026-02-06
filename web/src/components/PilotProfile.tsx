@@ -166,7 +166,8 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
   }
 
   return (
-    <div className="p-6">
+    <div className="flex-1 overflow-y-auto">
+      <div className="p-6 pb-24">
       {/* Back Button */}
       <button
         onClick={onBack}
@@ -361,6 +362,7 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
           initialCallSign={user?.callSign || ''}
         />
       )}
+      </div>
     </div>
   );
 }

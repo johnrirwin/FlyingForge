@@ -921,7 +921,7 @@ export function BatterySection({ onError }: BatterySectionProps) {
 
   // Main render
   return (
-    <div className="p-6">
+    <div className="flex-1 overflow-y-auto p-6 pb-24">
       {viewMode === 'list' && renderList()}
       {(viewMode === 'create' || viewMode === 'edit') && renderForm()}
       {viewMode === 'detail' && renderDetail()}
