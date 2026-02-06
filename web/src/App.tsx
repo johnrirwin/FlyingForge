@@ -652,7 +652,7 @@ function App() {
       />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 pt-14 md:pt-0 overflow-y-auto">
+      <div className="flex-1 flex flex-col min-w-0 pt-14 md:pt-0">
         {/* Homepage Section - for unauthenticated users */}
         {activeSection === 'home' && !isAuthenticated && (
           <Homepage
