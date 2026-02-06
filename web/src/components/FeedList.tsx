@@ -1,4 +1,3 @@
-import { useRef } from 'react';
 import type { FeedItem, SourceInfo } from '../types';
 import { useInfiniteScroll } from '../hooks';
 
@@ -10,33 +9,15 @@ interface FeedListProps {
   onItemClick: (item: FeedItem) => void;
   hasMore?: boolean;
   onLoadMore?: () => void;
-  onScroll?: (scrollTop: number) => void;
 }
 
-export function FeedList({ items, sources, isLoading, error, onItemClick, hasMore = false, onLoadMore, onScroll }: FeedListProps) {
+export function FeedList({ items, sources, isLoading, error, onItemClick, hasMore = false, onLoadMore }: FeedListProps) {
   const sourceMap = new Map(sources.map(s => [s.id, s]));
-  const lastScrollTop = useRef(0);
 
   const { setLoadMoreRef } = useInfiniteScroll(
     () => onLoadMore?.(),
     { hasMore, isLoading }
   );
-
-  // Handle scroll - blur active element immediately to dismiss keyboard on mobile
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const scrollTop = (e.target as HTMLDivElement).scrollTop;
-    
-    // Only blur when scrolling down (starting to scroll away from top)
-    if (scrollTop > lastScrollTop.current && scrollTop > 10) {
-      // Blur any focused element to dismiss keyboard immediately
-      if (document.activeElement instanceof HTMLElement) {
-        document.activeElement.blur();
-      }
-    }
-    
-    lastScrollTop.current = scrollTop;
-    onScroll?.(scrollTop);
-  };
 
   if (error) {
     return (
@@ -97,10 +78,7 @@ export function FeedList({ items, sources, isLoading, error, onItemClick, hasMor
 
   // Import FeedCard dynamically to avoid circular imports
   return (
-    <div 
-      className="flex-1 overflow-y-auto p-4 md:p-6"
-      onScroll={handleScroll}
-    >
+    <div className="flex-1 p-4 md:p-6">
       <div className="space-y-3 md:space-y-4 max-w-4xl mx-auto">
         {items.map(item => (
           <FeedCardWrapper

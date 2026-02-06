@@ -416,12 +416,22 @@ function App() {
   }, [filters.sources, filters.sourceType, filters.sort, filters.fromDate, filters.toDate, debouncedQuery, startCooldown]);
 
   // Handle feed scroll for collapsible TopBar on mobile
+  const lastScrollTop = useRef(0);
   const handleFeedScroll = useCallback((scrollTop: number) => {
     // Only track scroll state on mobile (md breakpoint is 768px)
     if (window.innerWidth >= 768) {
       setIsFeedScrolled(false);
       return;
     }
+    
+    // Blur active element when scrolling down to dismiss keyboard
+    if (scrollTop > lastScrollTop.current && scrollTop > 10) {
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+    }
+    lastScrollTop.current = scrollTop;
+    
     // Collapse after scrolling 50px, expand when near top
     setIsFeedScrolled(scrollTop > 50);
   }, []);
@@ -726,24 +736,29 @@ function App() {
 
         {/* News Section */}
         {activeSection === 'news' && (
-          <>
-            <TopBar
-              query={filters.query}
-              onQueryChange={q => updateFilter('query', q)}
-              fromDate={filters.fromDate}
-              toDate={filters.toDate}
-              onFromDateChange={d => updateFilter('fromDate', d)}
-              onToDateChange={d => updateFilter('toDate', d)}
-              sort={filters.sort}
-              onSortChange={s => updateFilter('sort', s)}
-              sourceType={filters.sourceType}
-              onSourceTypeChange={t => updateFilter('sourceType', t)}
-              onRefresh={handleRefresh}
-              isRefreshing={isRefreshing}
-              refreshCooldown={refreshCooldown}
-              totalCount={totalCount}
-              isCollapsed={isFeedScrolled}
-            />
+          <div 
+            className="flex-1 overflow-y-auto flex flex-col"
+            onScroll={(e) => handleFeedScroll((e.target as HTMLDivElement).scrollTop)}
+          >
+            <div className="sticky top-0 z-10">
+              <TopBar
+                query={filters.query}
+                onQueryChange={q => updateFilter('query', q)}
+                fromDate={filters.fromDate}
+                toDate={filters.toDate}
+                onFromDateChange={d => updateFilter('fromDate', d)}
+                onToDateChange={d => updateFilter('toDate', d)}
+                sort={filters.sort}
+                onSortChange={s => updateFilter('sort', s)}
+                sourceType={filters.sourceType}
+                onSourceTypeChange={t => updateFilter('sourceType', t)}
+                onRefresh={handleRefresh}
+                isRefreshing={isRefreshing}
+                refreshCooldown={refreshCooldown}
+                totalCount={totalCount}
+                isCollapsed={isFeedScrolled}
+              />
+            </div>
             <FeedList
               items={items}
               sources={sources}
@@ -752,9 +767,8 @@ function App() {
               onItemClick={setSelectedItem}
               hasMore={items.length < totalCount}
               onLoadMore={loadMoreItems}
-              onScroll={handleFeedScroll}
             />
-          </>
+          </div>
         )}
 
         {/* Shop Section */}
