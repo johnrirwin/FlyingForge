@@ -317,7 +317,7 @@ func (s *Service) validateGoogleIDToken(ctx context.Context, idToken string) (*m
 // exchangeGoogleCode exchanges an authorization code for tokens
 func (s *Service) exchangeGoogleCode(ctx context.Context, code, redirectURI string) (*models.GoogleClaims, error) {
 	if s.config.GoogleClientSecret == "" {
-		return nil, fmt.Errorf("Google client secret not configured")
+		return nil, fmt.Errorf("google client secret not configured")
 	}
 
 	if redirectURI == "" {

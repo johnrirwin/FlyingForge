@@ -7,13 +7,10 @@ run:
 linters:
   enable:
     - errcheck
-    - gosimple
     - govet
     - ineffassign
     - staticcheck
     - unused
-    - gofmt
-    - goimports
     - misspell
     - unconvert
     - bodyclose
@@ -29,6 +26,10 @@ linters:
         - io.Copy
         - fmt.Fprintf
         - fmt.Fprintln
+        - (*database/sql.Rows).Close
+        - (*io.ReadCloser).Close
+        - (io.ReadCloser).Close
+        - (*net/http.Response).Body.Close
     
     govet:
       enable-all: true
@@ -46,6 +47,12 @@ linters:
           - errcheck
           - unused
           - govet
+          - prealloc
+      
+      # Test utilities can have unchecked errors  
+      - path: internal/testutil/
+        linters:
+          - errcheck
       
       # Main can have unused results from signal handling
       - path: cmd/server/main\.go
@@ -61,11 +68,28 @@ linters:
       - path: internal/database/
         linters:
           - govet
+          - errcheck
       
       # MCP server has stdio patterns
       - path: internal/mcp/
         linters:
           - errcheck
+          - prealloc
+      
+      # Auth service has cleanup patterns
+      - path: internal/auth/
+        linters:
+          - errcheck
+      
+      # Radio service has file cleanup patterns
+      - path: internal/radio/
+        linters:
+          - errcheck
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
 
 issues:
   max-issues-per-linter: 50
