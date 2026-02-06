@@ -174,13 +174,7 @@ func (api *GearCatalogAPI) createCatalogItem(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Validate ImageURL if provided
-	if params.ImageURL != "" {
-		if err := validateImageURL(params.ImageURL); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-	}
+	// Note: imageUrl is no longer accepted from users - admin curation only
 
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()

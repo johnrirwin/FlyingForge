@@ -88,7 +88,7 @@ func (s *UserStore) GetByID(ctx context.Context, id string) (*models.User, error
 	query := `
 		SELECT id, email, display_name, avatar_url, status, created_at, updated_at, last_login_at,
 		       call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url,
-		       profile_visibility, show_aircraft, allow_search
+		       profile_visibility, show_aircraft, allow_search, COALESCE(is_admin, FALSE)
 		FROM users
 		WHERE id = $1
 	`
@@ -102,7 +102,7 @@ func (s *UserStore) GetByEmail(ctx context.Context, email string) (*models.User,
 	query := `
 		SELECT id, email, display_name, avatar_url, status, created_at, updated_at, last_login_at,
 		       call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url,
-		       profile_visibility, show_aircraft, allow_search
+		       profile_visibility, show_aircraft, allow_search, COALESCE(is_admin, FALSE)
 		FROM users
 		WHERE LOWER(email) = $1
 	`
@@ -116,7 +116,7 @@ func (s *UserStore) GetByCallSign(ctx context.Context, callSign string) (*models
 	query := `
 		SELECT id, email, display_name, avatar_url, status, created_at, updated_at, last_login_at,
 		       call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url,
-		       profile_visibility, show_aircraft, allow_search
+		       profile_visibility, show_aircraft, allow_search, COALESCE(is_admin, FALSE)
 		FROM users
 		WHERE LOWER(call_sign) = $1
 	`
@@ -183,7 +183,7 @@ func (s *UserStore) Update(ctx context.Context, id string, params models.UpdateU
 		WHERE id = $%d
 		RETURNING id, email, display_name, avatar_url, status, created_at, updated_at, last_login_at,
 		          call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url,
-		          profile_visibility, show_aircraft, allow_search
+		          profile_visibility, show_aircraft, allow_search, COALESCE(is_admin, FALSE)
 	`, strings.Join(sets, ", "), argIdx)
 
 	return s.scanUser(s.db.QueryRowContext(ctx, query, args...))
@@ -329,7 +329,7 @@ func (s *UserStore) List(ctx context.Context, params models.UserFilterParams) (*
 	query := fmt.Sprintf(`
 		SELECT id, email, display_name, avatar_url, status, created_at, updated_at, last_login_at,
 		       call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url,
-		       profile_visibility, show_aircraft, allow_search
+		       profile_visibility, show_aircraft, allow_search, COALESCE(is_admin, FALSE)
 		FROM users %s
 		ORDER BY created_at DESC
 		LIMIT $%d OFFSET $%d
@@ -366,12 +366,13 @@ func (s *UserStore) scanUser(row *sql.Row) (*models.User, error) {
 	var profileVisibility sql.NullString
 	var showAircraft, allowSearch sql.NullBool
 	var lastLoginAt sql.NullTime
+	var isAdmin bool
 
 	err := row.Scan(
 		&user.ID, &user.Email, &user.DisplayName, &avatarURL,
 		&user.Status, &user.CreatedAt, &user.UpdatedAt, &lastLoginAt,
 		&callSign, &googleName, &googleAvatarURL, &avatarType, &customAvatarURL,
-		&profileVisibility, &showAircraft, &allowSearch,
+		&profileVisibility, &showAircraft, &allowSearch, &isAdmin,
 	)
 
 	if err == sql.ErrNoRows {
@@ -381,6 +382,7 @@ func (s *UserStore) scanUser(row *sql.Row) (*models.User, error) {
 		return nil, err
 	}
 
+	user.IsAdmin = isAdmin
 	if avatarURL.Valid {
 		user.AvatarURL = avatarURL.String
 	}
@@ -424,18 +426,20 @@ func (s *UserStore) scanUserFromRows(rows *sql.Rows) (*models.User, error) {
 	var profileVisibility sql.NullString
 	var showAircraft, allowSearch sql.NullBool
 	var lastLoginAt sql.NullTime
+	var isAdmin bool
 
 	err := rows.Scan(
 		&user.ID, &user.Email, &user.DisplayName, &avatarURL,
 		&user.Status, &user.CreatedAt, &user.UpdatedAt, &lastLoginAt,
 		&callSign, &googleName, &googleAvatarURL, &avatarType, &customAvatarURL,
-		&profileVisibility, &showAircraft, &allowSearch,
+		&profileVisibility, &showAircraft, &allowSearch, &isAdmin,
 	)
 
 	if err != nil {
 		return nil, err
 	}
 
+	user.IsAdmin = isAdmin
 	if avatarURL.Valid {
 		user.AvatarURL = avatarURL.String
 	}

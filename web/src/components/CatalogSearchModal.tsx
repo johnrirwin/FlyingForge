@@ -360,7 +360,6 @@ function CreateCatalogItemForm({ initialGearType, initialQuery, onSuccess, onCan
   const [variant, setVariant] = useState('');
   const [bestFor, setBestFor] = useState<DroneType[]>([]);
   const [msrp, setMsrp] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
   const [description, setDescription] = useState('');
 
   // Check for duplicates
@@ -405,7 +404,6 @@ function CreateCatalogItemForm({ initialGearType, initialQuery, onSuccess, onCan
         variant: variant.trim() || undefined,
         bestFor: bestFor.length > 0 ? bestFor : undefined,
         msrp: msrp ? parseFloat(msrp) : undefined,
-        imageUrl: imageUrl.trim() || undefined,
         description: description.trim() || undefined,
       };
 
@@ -570,20 +568,6 @@ function CreateCatalogItemForm({ initialGearType, initialQuery, onSuccess, onCan
           <p className="text-xs text-slate-500 mt-1">
             Manufacturer's suggested retail price
           </p>
-        </div>
-
-        {/* Image URL */}
-        <div>
-          <label className="block text-sm font-medium text-slate-300 mb-1">
-            Image URL (optional)
-          </label>
-          <input
-            type="url"
-            value={imageUrl}
-            onChange={(e) => setImageUrl(e.target.value)}
-            placeholder="https://..."
-            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
-          />
         </div>
 
         {/* Description */}

@@ -110,6 +110,8 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationInventoryCatalogLink, // Adds FK to gear_catalog (depends on migrationGearCatalog)
 		migrationGearCatalogBestFor,   // Adds best_for column for drone type
 		migrationGearCatalogMSRP,      // Adds msrp column for price
+		migrationGearCatalogCuration,  // Adds image curation fields
+		migrationUserIsAdmin,          // Adds is_admin flag to users
 	}
 
 	for i, migration := range migrations {
@@ -612,4 +614,35 @@ CREATE INDEX IF NOT EXISTS idx_gear_catalog_best_for ON gear_catalog USING gin(b
 const migrationGearCatalogMSRP = `
 -- Add msrp column for manufacturer suggested retail price
 ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS msrp DECIMAL(10,2);
+`
+
+// Migration to add image curation fields to gear_catalog
+const migrationGearCatalogCuration = `
+-- Add image curation status (missing = needs admin review, approved = has curated image)
+ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS image_status VARCHAR(20) DEFAULT 'missing';
+ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS image_curated_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS image_curated_at TIMESTAMPTZ;
+
+-- Add description curation status
+ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS description_status VARCHAR(20) DEFAULT 'missing';
+ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS description_curated_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS description_curated_at TIMESTAMPTZ;
+
+-- Index for filtering by image status (for admin moderation queue)
+CREATE INDEX IF NOT EXISTS idx_gear_catalog_image_status ON gear_catalog(image_status);
+
+-- Set existing items with images to 'approved', items without to 'missing'
+UPDATE gear_catalog SET image_status = 'approved' WHERE image_url IS NOT NULL AND image_url != '' AND image_status IS NULL;
+UPDATE gear_catalog SET image_status = 'missing' WHERE (image_url IS NULL OR image_url = '') AND image_status IS NULL;
+UPDATE gear_catalog SET description_status = 'approved' WHERE description IS NOT NULL AND description != '' AND description_status IS NULL;
+UPDATE gear_catalog SET description_status = 'missing' WHERE (description IS NULL OR description = '') AND description_status IS NULL;
+`
+
+// Migration to add is_admin flag to users
+const migrationUserIsAdmin = `
+-- Add is_admin flag (defaults to false)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE;
+
+-- Index for finding admin users
+CREATE INDEX IF NOT EXISTS idx_users_is_admin ON users(is_admin) WHERE is_admin = TRUE;
 `

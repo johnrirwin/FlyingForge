@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { TopBar, FeedList, ItemDetail, InventoryList, AddGearModal, Sidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, Homepage, GettingStarted, RadioSection, BatterySection, MyProfile, SocialPage, PilotProfile, GearCatalogPage } from './components';
+import { TopBar, FeedList, ItemDetail, InventoryList, AddGearModal, Sidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, Homepage, GettingStarted, RadioSection, BatterySection, MyProfile, SocialPage, PilotProfile, GearCatalogPage, AdminGearModeration } from './components';
 import { LoginPage } from './components/LoginPage';
 import { getItems, getSources, refreshFeeds, RateLimitError } from './api';
 import { getInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem, getInventorySummary, addEquipmentToInventory } from './equipmentApi';
@@ -30,6 +30,7 @@ const pathToSection: Record<string, AppSection> = {
   '/batteries': 'batteries',
   '/social': 'social',
   '/profile': 'profile',
+  '/admin/gear': 'admin-gear',
 };
 
 const sectionToPath: Record<AppSection, string> = {
@@ -46,6 +47,7 @@ const sectionToPath: Record<AppSection, string> = {
   'social': '/social',
   'profile': '/profile',
   'pilot-profile': '/social/pilots', // Dynamic - handled separately
+  'admin-gear': '/admin/gear',
 };
 
 // Pagination constant for news feed infinite scroll
@@ -754,6 +756,11 @@ function App() {
               />
             </div>
           </>
+        )}
+
+        {/* Admin: Gear Moderation Section */}
+        {activeSection === 'admin-gear' && (
+          <AdminGearModeration isAdmin={user?.isAdmin || false} />
         )}
 
         {/* Shop Section */}

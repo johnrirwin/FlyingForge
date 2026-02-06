@@ -13,6 +13,7 @@ const mockUser: User = {
   avatarUrl: 'https://example.com/avatar.jpg',
   status: 'active',
   emailVerified: true,
+  isAdmin: false,
   createdAt: '2025-01-01T00:00:00Z',
 }
 

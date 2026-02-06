@@ -9,6 +9,7 @@ export interface User {
   avatarUrl?: string;
   status: 'active' | 'suspended' | 'deleted';
   emailVerified: boolean;
+  isAdmin: boolean; // Admin users can moderate gear catalog
   createdAt: string;
   lastLoginAt?: string;
   // Profile fields

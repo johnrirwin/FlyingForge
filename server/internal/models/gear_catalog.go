@@ -120,6 +120,14 @@ const (
 	CatalogStatusRejected CatalogItemStatus = "rejected"
 )
 
+// ImageStatus represents the curation status of a gear item's image
+type ImageStatus string
+
+const (
+	ImageStatusMissing  ImageStatus = "missing"
+	ImageStatusApproved ImageStatus = "approved"
+)
+
 // CatalogItemSource represents how the item was added
 type CatalogItemSource string
 
@@ -149,6 +157,16 @@ type GearCatalogItem struct {
 	UsageCount      int               `json:"usageCount"` // How many users have this in inventory
 	CreatedAt       time.Time         `json:"createdAt"`
 	UpdatedAt       time.Time         `json:"updatedAt"`
+
+	// Image curation fields
+	ImageStatus         ImageStatus `json:"imageStatus"`
+	ImageCuratedByUserID string     `json:"imageCuratedByUserId,omitempty"`
+	ImageCuratedAt      *time.Time  `json:"imageCuratedAt,omitempty"`
+
+	// Description curation fields
+	DescriptionStatus         ImageStatus `json:"descriptionStatus"`
+	DescriptionCuratedByUserID string     `json:"descriptionCuratedByUserId,omitempty"`
+	DescriptionCuratedAt      *time.Time  `json:"descriptionCuratedAt,omitempty"`
 }
 
 // DisplayName returns a formatted display name for the catalog item
@@ -161,6 +179,7 @@ func (g *GearCatalogItem) DisplayName() string {
 }
 
 // CreateGearCatalogParams represents the parameters for creating a catalog item
+// Note: imageUrl is NOT included - images are added by admin only
 type CreateGearCatalogParams struct {
 	GearType    GearType        `json:"gearType"`
 	Brand       string          `json:"brand"`
@@ -169,8 +188,27 @@ type CreateGearCatalogParams struct {
 	Specs       json.RawMessage `json:"specs,omitempty"`
 	BestFor     []string        `json:"bestFor,omitempty"` // Drone types this gear is best suited for
 	MSRP        *float64        `json:"msrp,omitempty"`    // Manufacturer suggested retail price
-	ImageURL    string          `json:"imageUrl,omitempty"`
 	Description string          `json:"description,omitempty"`
+}
+
+// AdminUpdateGearCatalogParams represents admin-only update parameters
+type AdminUpdateGearCatalogParams struct {
+	Brand       *string  `json:"brand,omitempty"`
+	Model       *string  `json:"model,omitempty"`
+	Variant     *string  `json:"variant,omitempty"`
+	Description *string  `json:"description,omitempty"`
+	MSRP        *float64 `json:"msrp,omitempty"`
+	ImageURL    *string  `json:"imageUrl,omitempty"` // Admin can set image URL
+}
+
+// AdminGearSearchParams represents admin search parameters with curation filters
+type AdminGearSearchParams struct {
+	Query       string      `json:"query,omitempty"`
+	GearType    GearType    `json:"gearType,omitempty"`
+	Brand       string      `json:"brand,omitempty"`
+	ImageStatus ImageStatus `json:"imageStatus,omitempty"` // Filter by image status
+	Limit       int         `json:"limit,omitempty"`
+	Offset      int         `json:"offset,omitempty"`
 }
 
 // GearCatalogSearchParams represents search parameters for the catalog

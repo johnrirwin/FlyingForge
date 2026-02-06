@@ -126,6 +126,12 @@ func (s *Server) Start(addr string) error {
 		gearCatalogAPI.RegisterRoutes(mux, s.corsMiddleware)
 	}
 
+	// Admin routes (gear moderation, etc.)
+	if s.gearCatalogStore != nil && s.userStore != nil && s.authMiddleware != nil {
+		adminAPI := NewAdminAPI(s.gearCatalogStore, s.userStore, s.authMiddleware, s.logger)
+		adminAPI.RegisterRoutes(mux, s.corsMiddleware)
+	}
+
 	// Health check
 	mux.HandleFunc("/health", s.handleHealth)
 

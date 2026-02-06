@@ -191,9 +191,9 @@ export interface InventorySummary {
 }
 
 // App section navigation
-export type AppSection = 'home' | 'getting-started' | 'dashboard' | 'news' | 'equipment' | 'gear-catalog' | 'inventory' | 'aircraft' | 'radio' | 'batteries' | 'social' | 'profile' | 'pilot-profile';
+export type AppSection = 'home' | 'getting-started' | 'dashboard' | 'news' | 'equipment' | 'gear-catalog' | 'inventory' | 'aircraft' | 'radio' | 'batteries' | 'social' | 'profile' | 'pilot-profile' | 'admin-gear';
 
-export const APP_SECTIONS: { value: AppSection; label: string; icon: string; requiresAuth?: boolean }[] = [
+export const APP_SECTIONS: { value: AppSection; label: string; icon: string; requiresAuth?: boolean; requiresAdmin?: boolean }[] = [
   { value: 'home', label: 'Home', icon: '🏠' },
   { value: 'getting-started', label: 'Taking Off', icon: '→' },
   { value: 'dashboard', label: 'Dashboard', icon: '📊', requiresAuth: true },
@@ -204,4 +204,5 @@ export const APP_SECTIONS: { value: AppSection; label: string; icon: string; req
   { value: 'aircraft', label: 'My Aircraft', icon: '🚁', requiresAuth: true },
   { value: 'radio', label: 'My Radio', icon: '📻', requiresAuth: true },
   { value: 'batteries', label: 'Batteries', icon: '🔋', requiresAuth: true },
+  { value: 'admin-gear', label: 'Gear Moderation', icon: '⚙️', requiresAuth: true, requiresAdmin: true },
 ];

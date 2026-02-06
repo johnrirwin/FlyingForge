@@ -35,6 +35,9 @@ export const GEAR_TYPES: { value: GearType; label: string }[] = [
 // Catalog item status
 export type CatalogItemStatus = 'active' | 'pending' | 'flagged' | 'rejected';
 
+// Image/content curation status
+export type ImageStatus = 'missing' | 'approved';
+
 // Catalog item source
 export type CatalogItemSource = 'user-submitted' | 'admin' | 'import' | 'migration';
 
@@ -83,9 +86,18 @@ export interface GearCatalogItem {
   usageCount: number;
   createdAt: string;
   updatedAt: string;
+  // Image curation fields
+  imageStatus: ImageStatus;
+  imageCuratedByUserId?: string;
+  imageCuratedAt?: string;
+  // Description curation fields
+  descriptionStatus: ImageStatus;
+  descriptionCuratedByUserId?: string;
+  descriptionCuratedAt?: string;
 }
 
-// Parameters for creating a catalog item
+// Parameters for creating a catalog item (user-facing)
+// Note: imageUrl is NOT included - images are curated by admin only
 export interface CreateGearCatalogParams {
   gearType: GearType;
   brand: string;
@@ -94,8 +106,27 @@ export interface CreateGearCatalogParams {
   specs?: Record<string, unknown>;
   bestFor?: DroneType[]; // What drone types this gear is best suited for
   msrp?: number; // Manufacturer suggested retail price
-  imageUrl?: string;
   description?: string;
+}
+
+// Admin update parameters
+export interface AdminUpdateGearCatalogParams {
+  brand?: string;
+  model?: string;
+  variant?: string;
+  description?: string;
+  msrp?: number;
+  imageUrl?: string;
+}
+
+// Admin search parameters
+export interface AdminGearSearchParams {
+  query?: string;
+  gearType?: GearType;
+  brand?: string;
+  imageStatus?: ImageStatus;
+  limit?: number;
+  offset?: number;
 }
 
 // Search parameters for the catalog

@@ -61,6 +61,7 @@ type User struct {
 	DisplayName string     `json:"displayName"`
 	AvatarURL   string     `json:"avatarUrl,omitempty"` // Legacy field, kept for compatibility
 	Status      UserStatus `json:"status"`
+	IsAdmin     bool       `json:"isAdmin"` // Admin users can moderate gear catalog
 	CreatedAt   time.Time  `json:"createdAt"`
 	UpdatedAt   time.Time  `json:"updatedAt"`
 	LastLoginAt *time.Time `json:"lastLoginAt,omitempty"`

@@ -160,6 +160,7 @@ func (api *AuthAPI) handleGetMe(w http.ResponseWriter, r *http.Request) {
 		"status":      user.Status,
 		"createdAt":   user.CreatedAt,
 		"callSign":    user.CallSign,
+		"isAdmin":     user.IsAdmin,
 	}
 	if user.LastLoginAt != nil {
 		response["lastLoginAt"] = user.LastLoginAt
