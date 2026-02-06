@@ -195,7 +195,7 @@ export type AppSection = 'home' | 'getting-started' | 'dashboard' | 'news' | 'eq
 
 export const APP_SECTIONS: { value: AppSection; label: string; icon: string; requiresAuth?: boolean }[] = [
   { value: 'home', label: 'Home', icon: '🏠' },
-  { value: 'getting-started', label: 'Getting Started', icon: '🚀' },
+  { value: 'getting-started', label: 'Taking Off', icon: '→' },
   { value: 'dashboard', label: 'Dashboard', icon: '📊', requiresAuth: true },
   { value: 'news', label: 'News', icon: '📰' },
   { value: 'equipment', label: 'Equipment', icon: '🛒' },

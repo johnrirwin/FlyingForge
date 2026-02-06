@@ -559,7 +559,7 @@ export function GettingStarted({ onSignIn }: GettingStartedProps) {
         <div className="absolute inset-0 bg-gradient-to-br from-primary-900/10 via-slate-900 to-slate-900" />
         <div className="relative max-w-4xl mx-auto text-center">
           <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
-            Getting Started
+            Taking Off
           </h1>
           <p className="text-xl text-slate-300 max-w-2xl mx-auto">
             Everything you need to begin flying drones or fixed-wing—without wasting money.
@@ -766,7 +766,7 @@ export function GettingStarted({ onSignIn }: GettingStartedProps) {
       {/* Footer */}
       <footer className="px-6 py-8 border-t border-slate-800 bg-slate-900">
         <div className="max-w-6xl mx-auto text-center text-sm text-slate-500">
-          <p>FlyingForge — Build it. Fly it. Refine it.</p>
+          <p>FlyingForge — Build it. Fly it. Share it.</p>
         </div>
       </footer>
     </div>

@@ -112,12 +112,17 @@ export function EquipmentSidebar({
             />
           )}
 
-          {/* Getting Started - only shown when NOT authenticated */}
+          {/* Taking Off - only shown when NOT authenticated */}
           {!isAuthenticated && (
             <NavItem
               section="getting-started"
-              label="Getting Started"
-              icon={<span className="text-xl">🚀</span>}
+              label="Taking Off"
+              icon={
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2 20h20" />
+                </svg>
+              }
             />
           )}
 

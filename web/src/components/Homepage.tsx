@@ -58,11 +58,16 @@ export function Homepage({ onSignIn, onExploreNews }: HomepageProps) {
           {/* Logo */}
           <div className="flex items-center justify-center gap-3 mb-8">
             <div className="w-14 h-14 bg-primary-600 rounded-xl flex items-center justify-center shadow-lg shadow-primary-600/30">
-              <svg className="w-8 h-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <circle cx="12" cy="12" r="3"/>
-                <path d="M12 1v4M12 19v4M1 12h4M19 12h4"/>
-                <path d="M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83"/>
-                <path d="M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+              <svg className="w-8 h-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="2.5"/>
+                <line x1="10" y1="10" x2="5.5" y2="5.5"/>
+                <line x1="14" y1="10" x2="18.5" y2="5.5"/>
+                <line x1="10" y1="14" x2="5.5" y2="18.5"/>
+                <line x1="14" y1="14" x2="18.5" y2="18.5"/>
+                <circle cx="4" cy="4" r="2.5"/>
+                <circle cx="20" cy="4" r="2.5"/>
+                <circle cx="4" cy="20" r="2.5"/>
+                <circle cx="20" cy="20" r="2.5"/>
               </svg>
             </div>
             <span className="text-3xl font-bold text-white">FlyingForge</span>
@@ -71,7 +76,7 @@ export function Homepage({ onSignIn, onExploreNews }: HomepageProps) {
           {/* Headline */}
           <h1 className="text-4xl md:text-6xl font-bold text-white mb-6 leading-tight">
             Build it. Fly it.<br />
-            <span className="text-primary-400">Refine it.</span>
+            <span className="text-primary-400">Share it.</span>
           </h1>
 
           {/* Subheadline */}
@@ -280,16 +285,21 @@ export function Homepage({ onSignIn, onExploreNews }: HomepageProps) {
             {/* Logo & tagline */}
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center">
-                <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                  <circle cx="12" cy="12" r="3"/>
-                  <path d="M12 1v4M12 19v4M1 12h4M19 12h4"/>
-                  <path d="M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83"/>
-                  <path d="M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+                <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="2.5"/>
+                  <line x1="10" y1="10" x2="5.5" y2="5.5"/>
+                  <line x1="14" y1="10" x2="18.5" y2="5.5"/>
+                  <line x1="10" y1="14" x2="5.5" y2="18.5"/>
+                  <line x1="14" y1="14" x2="18.5" y2="18.5"/>
+                  <circle cx="4" cy="4" r="2.5"/>
+                  <circle cx="20" cy="4" r="2.5"/>
+                  <circle cx="4" cy="20" r="2.5"/>
+                  <circle cx="20" cy="20" r="2.5"/>
                 </svg>
               </div>
               <div>
                 <div className="text-lg font-semibold text-white">FlyingForge</div>
-                <div className="text-xs text-slate-500">Build it. Fly it. Refine it.</div>
+                <div className="text-xs text-slate-500">Build it. Fly it. Share it.</div>
               </div>
             </div>
 
