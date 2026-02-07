@@ -624,7 +624,7 @@ function App() {
   }
 
   return (
-    <div className="flex h-screen bg-slate-900 text-white overflow-hidden">
+    <div className="flex h-screen h-[100dvh] bg-slate-900 text-white overflow-hidden">
       {/* Mobile Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-30 bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between">
         <button
@@ -659,7 +659,7 @@ function App() {
       />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 pt-14 md:pt-0">
+      <div className="flex-1 flex flex-col min-h-0 min-w-0 pt-14 md:pt-0">
         {/* Homepage Section - for unauthenticated users */}
         {activeSection === 'home' && !isAuthenticated && (
           <Homepage
