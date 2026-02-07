@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { getProfile, updateProfile, uploadAvatar, validateCallSign } from '../profileApi';
+import { getProfile, updateProfile, uploadAvatar, validateCallSign, deleteAccount } from '../profileApi';
 import type { UserProfile, UpdateProfileParams } from '../authTypes';
 
 interface ProfileFormData {
@@ -14,7 +14,7 @@ interface PendingAvatar {
 }
 
 export function MyProfile() {
-  const { updateUser } = useAuth();
+  const { updateUser, logout } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -28,6 +28,9 @@ export function MyProfile() {
   const [pendingAvatar, setPendingAvatar] = useState<PendingAvatar | null>(null);
   const [showClearCallSignModal, setShowClearCallSignModal] = useState(false);
   const [confirmText, setConfirmText] = useState('');
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -220,6 +223,27 @@ export function MyProfile() {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    try {
+      setIsDeleting(true);
+      setError(null);
+      await deleteAccount();
+      // Account deleted - clear auth state and redirect to home
+      await logout();
+      window.location.href = '/';
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete account');
+      setIsDeleting(false);
+      setShowDeleteAccountModal(false);
+      setDeleteConfirmText('');
+    }
+  };
+
+  const handleCancelDeleteAccount = () => {
+    setShowDeleteAccountModal(false);
+    setDeleteConfirmText('');
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -395,6 +419,21 @@ export function MyProfile() {
         </div>
       </div>
 
+      {/* Danger Zone */}
+      <div className="mt-8 p-4 bg-red-900/20 border border-red-500/30 rounded-lg">
+        <h3 className="text-sm font-semibold text-red-400 mb-2">Danger Zone</h3>
+        <p className="text-xs text-slate-400 mb-4">
+          Once you delete your account, there is no going back. All your data will be permanently removed.
+        </p>
+        <button
+          type="button"
+          onClick={() => setShowDeleteAccountModal(true)}
+          className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/50 rounded-lg text-sm font-medium transition-colors"
+        >
+          Delete Account
+        </button>
+      </div>
+
       {/* Clear Call Sign Confirmation Modal */}
       {showClearCallSignModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -453,6 +492,80 @@ export function MyProfile() {
                 className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Remove Call Sign
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Account Confirmation Modal */}
+      {showDeleteAccountModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full shadow-2xl border border-red-500/50">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-white">Delete Account?</h3>
+            </div>
+            
+            <div className="mb-4">
+              <p className="text-slate-300 mb-3">
+                <strong className="text-red-400">This action cannot be undone.</strong> Deleting your account will permanently remove:
+              </p>
+              <ul className="text-sm text-slate-400 space-y-2 mb-4">
+                <li className="flex items-start gap-2">
+                  <span className="text-red-400 mt-0.5">•</span>
+                  <span>Your profile and account information</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-red-400 mt-0.5">•</span>
+                  <span>All your aircraft and configurations</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-red-400 mt-0.5">•</span>
+                  <span>Your inventory items</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-red-400 mt-0.5">•</span>
+                  <span>Battery logs and radio backups</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-red-400 mt-0.5">•</span>
+                  <span>All followers and following relationships</span>
+                </li>
+              </ul>
+              <p className="text-sm text-slate-400">
+                Type <span className="font-mono text-red-400 bg-red-400/10 px-1.5 py-0.5 rounded">delete my account</span> to confirm:
+              </p>
+            </div>
+            
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="Type 'delete my account' to confirm"
+              className="w-full px-4 py-2 bg-slate-700 border border-red-500/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent mb-4"
+              autoFocus
+              disabled={isDeleting}
+            />
+            
+            <div className="flex gap-3">
+              <button
+                onClick={handleCancelDeleteAccount}
+                disabled={isDeleting}
+                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleteConfirmText.toLowerCase() !== 'delete my account' || isDeleting}
+                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isDeleting ? 'Deleting...' : 'Delete Account'}
               </button>
             </div>
           </div>

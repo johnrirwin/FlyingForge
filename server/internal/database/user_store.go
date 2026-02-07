@@ -1048,3 +1048,28 @@ func (s *UserStore) GetFeaturedPilots(ctx context.Context, excludeUserID string,
 		Recent:  recent,
 	}, nil
 }
+
+// HardDelete permanently removes a user and all associated data.
+// Related data in other tables is handled by database CASCADE constraints:
+//   - user_identities, refresh_tokens, inventory_items, aircraft, radios,
+//     batteries, battery_logs, follows, orders, fc_configs: CASCADE delete
+//   - gear_catalog.created_by_user_id: SET NULL (preserves catalog items)
+func (s *UserStore) HardDelete(ctx context.Context, userID string) error {
+	query := `DELETE FROM users WHERE id = $1`
+
+	result, err := s.db.ExecContext(ctx, query, userID)
+	if err != nil {
+		return fmt.Errorf("failed to delete user: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check delete result: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("user not found")
+	}
+
+	return nil
+}
