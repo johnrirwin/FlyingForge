@@ -105,14 +105,15 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationAircraftTuningSnapshots,
 		migrationTuningSnapshotDiffBackup,
 		migrationDropPasswordHash,
-		migrationGearCatalog,          // Creates gear_catalog table
-		migrationPgTrgm,               // Adds trigram search for gear_catalog
-		migrationInventoryCatalogLink, // Adds FK to gear_catalog (depends on migrationGearCatalog)
-		migrationGearCatalogBestFor,   // Adds best_for column for drone type
-		migrationGearCatalogMSRP,      // Adds msrp column for price
-		migrationGearCatalogCuration,  // Adds image curation fields
-		migrationUserIsAdmin,          // Adds is_admin flag to users
-		migrationGearCatalogImageData, // Adds image_data binary storage for gear images
+		migrationGearCatalog,            // Creates gear_catalog table
+		migrationPgTrgm,                 // Adds trigram search for gear_catalog
+		migrationInventoryCatalogLink,   // Adds FK to gear_catalog (depends on migrationGearCatalog)
+		migrationGearCatalogBestFor,     // Adds best_for column for drone type
+		migrationGearCatalogMSRP,        // Adds msrp column for price
+		migrationGearCatalogCuration,    // Adds image curation fields
+		migrationUserIsAdmin,            // Adds is_admin flag to users
+		migrationGearCatalogImageData,   // Adds image_data binary storage for gear images
+		migrationInventoryCatalogUnique, // Adds unique constraint on (user_id, catalog_id)
 	}
 
 	for i, migration := range migrations {
@@ -661,4 +662,36 @@ ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS image_type VARCHAR(50);
 
 -- When image_data is set, clear the old image_url field
 -- (we're moving away from URL-based images to uploaded images)
+`
+
+// Migration to add unique constraint on (user_id, catalog_id) for inventory items
+// This prevents duplicate entries for the same catalog item per user and enables UPSERT
+const migrationInventoryCatalogUnique = `
+-- First, consolidate any existing duplicates by keeping the oldest and summing quantities
+WITH duplicates AS (
+    SELECT user_id, catalog_id, MIN(id) as keep_id, SUM(quantity) as total_quantity
+    FROM inventory_items
+    WHERE catalog_id IS NOT NULL
+    GROUP BY user_id, catalog_id
+    HAVING COUNT(*) > 1
+),
+updated AS (
+    UPDATE inventory_items i
+    SET quantity = d.total_quantity
+    FROM duplicates d
+    WHERE i.id = d.keep_id
+    RETURNING i.id
+)
+DELETE FROM inventory_items
+WHERE catalog_id IS NOT NULL
+  AND (user_id, catalog_id, id) IN (
+    SELECT i.user_id, i.catalog_id, i.id
+    FROM inventory_items i
+    JOIN duplicates d ON i.user_id = d.user_id AND i.catalog_id = d.catalog_id
+    WHERE i.id != d.keep_id
+  );
+
+-- Create unique partial index (only for non-null catalog_id)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_user_catalog_unique 
+    ON inventory_items(user_id, catalog_id) WHERE catalog_id IS NOT NULL;
 `

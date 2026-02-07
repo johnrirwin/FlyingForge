@@ -51,25 +51,26 @@ func (s *Service) AddItem(ctx context.Context, userID string, params models.AddI
 		return nil, &ServiceError{Message: "invalid condition: " + string(params.Condition)}
 	}
 
-	// Check if an item with the same catalog_id already exists for this user
+	// Use atomic UPSERT when catalog_id is provided to prevent duplicates from race conditions
 	if params.CatalogID != "" {
-		existingItem, err := s.store.GetByCatalogID(ctx, userID, params.CatalogID)
+		s.logger.Debug("Adding inventory item from catalog (using UPSERT)", logging.WithFields(map[string]interface{}{
+			"name":       params.Name,
+			"category":   params.Category,
+			"user_id":    userID,
+			"catalog_id": params.CatalogID,
+		}))
+
+		item, err := s.store.AddOrIncrement(ctx, userID, params)
 		if err != nil {
-			s.logger.Error("Failed to check for existing catalog item", logging.WithField("error", err.Error()))
-			// Continue with adding new item if check fails
-		} else if existingItem != nil {
-			// Item exists, increment quantity
-			quantity := params.Quantity
-			if quantity <= 0 {
-				quantity = 1
-			}
-			s.logger.Info("Found existing inventory item with catalog_id, incrementing quantity", logging.WithFields(map[string]interface{}{
-				"id":         existingItem.ID,
-				"catalog_id": params.CatalogID,
-				"increment":  quantity,
-			}))
-			return s.store.IncrementQuantity(ctx, existingItem.ID, userID, quantity)
+			s.logger.Error("Failed to add/increment inventory item", logging.WithField("error", err.Error()))
+			return nil, err
 		}
+
+		s.logger.Info("Added/incremented inventory item", logging.WithFields(map[string]interface{}{
+			"id":       item.ID,
+			"quantity": item.Quantity,
+		}))
+		return item, nil
 	}
 
 	s.logger.Debug("Adding inventory item", logging.WithFields(map[string]interface{}{
