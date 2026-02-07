@@ -473,7 +473,6 @@ function AdminGearEditModal({ itemId, onClose, onSave }: AdminGearEditModalProps
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    console.log('[GearEdit] handleFileChange:', file?.name, file?.size);
     if (!file) {
       setImageFile(null);
       setImagePreview(null);
@@ -518,8 +517,6 @@ function AdminGearEditModal({ itemId, onClose, onSave }: AdminGearEditModalProps
     setIsSaving(true);
     setError(null);
 
-    console.log('[GearEdit] handleSubmit called', { imageFile: imageFile?.name, deleteImage, hasExistingImage });
-
     if (!item) return;
 
     try {
@@ -542,9 +539,7 @@ function AdminGearEditModal({ itemId, onClose, onSave }: AdminGearEditModalProps
       // Handle image: upload new, delete existing, or no change
       if (imageFile) {
         // Upload new image
-        console.log('[GearEdit] Uploading new image:', imageFile.name, imageFile.size);
         await adminUploadGearImage(item.id, imageFile);
-        console.log('[GearEdit] Image upload complete');
       } else if (deleteImage && hasExistingImage) {
         // Delete existing image
         await adminDeleteGearImage(item.id);
