@@ -408,8 +408,8 @@ func (api *GearCatalogAPI) getGearImage(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	// Set caching headers (images can be cached for 24 hours)
-	w.Header().Set("Cache-Control", "public, max-age=86400")
+	// Set caching headers (images cached for 60 seconds - allows quick refresh after admin updates)
+	w.Header().Set("Cache-Control", "public, max-age=60")
 	w.Header().Set("Content-Type", imageType)
 	w.Header().Set("Content-Length", strconv.Itoa(len(imageData)))
 	w.Write(imageData)

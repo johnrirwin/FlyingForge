@@ -218,6 +218,8 @@ func (api *AdminAPI) handleUpdateGear(w http.ResponseWriter, r *http.Request, id
 // writeJSON writes a JSON response
 func (api *AdminAPI) writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
+	// Prevent browser caching of admin API responses to ensure fresh data after edits
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)
 }
@@ -366,8 +368,8 @@ func (api *AdminAPI) getGearImage(w http.ResponseWriter, r *http.Request, id str
 		return
 	}
 
-	// Set caching headers (images can be cached for 1 hour)
-	w.Header().Set("Cache-Control", "public, max-age=3600")
+	// No caching for admin endpoint - admins need to see latest image
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	w.Header().Set("Content-Type", imageType)
 	w.Header().Set("Content-Length", strconv.Itoa(len(imageData)))
 	w.Write(imageData)

@@ -36,7 +36,8 @@ export const GEAR_TYPES: { value: GearType; label: string }[] = [
 export type CatalogItemStatus = 'active' | 'pending' | 'flagged' | 'rejected';
 
 // Image/content curation status
-export type ImageStatus = 'missing' | 'approved';
+// Note: 'recently-curated' is a special filter value (not stored in DB)
+export type ImageStatus = 'missing' | 'approved' | 'recently-curated';
 
 // Catalog item source
 export type CatalogItemSource = 'user-submitted' | 'admin' | 'import' | 'migration';

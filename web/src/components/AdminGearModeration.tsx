@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, type FormEvent, type ChangeEvent } from 'react';
 import type { GearCatalogItem, GearType, ImageStatus, AdminUpdateGearCatalogParams } from '../gearCatalogTypes';
 import { GEAR_TYPES } from '../gearCatalogTypes';
-import { adminSearchGear, adminUpdateGear, adminUploadGearImage, adminDeleteGearImage, getGearImageUrl } from '../adminApi';
+import { adminSearchGear, adminUpdateGear, adminUploadGearImage, adminDeleteGearImage, adminGetGear, getAdminGearImageUrl } from '../adminApi';
 import { useDebounce } from '../hooks';
 
 interface AdminGearModerationProps {
@@ -33,8 +33,9 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
   const currentOffsetRef = useRef(0);
   const isLoadingRef = useRef(false);
 
-  // Edit modal state
-  const [editingItem, setEditingItem] = useState<GearCatalogItem | null>(null);
+  // Edit modal state - modalKey forces remount to fetch fresh data
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [modalKey, setModalKey] = useState(0);
 
   const loadItems = useCallback(async (reset = false) => {
     if (!isAdmin) return;
@@ -107,16 +108,17 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
   }, [hasMore, loadItems]);
 
   const handleEditClick = (item: GearCatalogItem) => {
-    setEditingItem(item);
+    setModalKey(k => k + 1); // Force modal remount to fetch fresh data
+    setEditingItemId(item.id);
   };
 
   const handleEditClose = () => {
-    setEditingItem(null);
+    setEditingItemId(null);
   };
 
-  const handleEditSave = async () => {
+  const handleEditSave = () => {
     // Refresh the list after saving
-    setEditingItem(null);
+    setEditingItemId(null);
     loadItems(true);
   };
 
@@ -207,9 +209,10 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
                 onChange={(e) => setImageStatus(e.target.value as ImageStatus | '')}
                 className="flex-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
-                <option value="">All Images</option>
+                <option value="">Needs Work</option>
                 <option value="missing">Needs Image</option>
                 <option value="approved">Has Image</option>
+                <option value="recently-curated">Recently Updated (24h)</option>
               </select>
             </div>
 
@@ -401,9 +404,10 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
       </div>
 
       {/* Edit Modal */}
-      {editingItem && (
+      {editingItemId && (
         <AdminGearEditModal
-          item={editingItem}
+          key={modalKey}
+          itemId={editingItemId}
           onClose={handleEditClose}
           onSave={handleEditSave}
         />
@@ -414,26 +418,58 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
 
 // Edit Modal Component
 interface AdminGearEditModalProps {
-  item: GearCatalogItem;
+  itemId: string;
   onClose: () => void;
-  onSave: (item: GearCatalogItem) => void;
+  onSave: () => void;
 }
 
-function AdminGearEditModal({ item, onClose, onSave }: AdminGearEditModalProps) {
-  const [brand, setBrand] = useState(item.brand);
-  const [model, setModel] = useState(item.model);
-  const [variant, setVariant] = useState(item.variant || '');
-  const [description, setDescription] = useState(item.description || '');
-  const [msrp, setMsrp] = useState(item.msrp?.toString() || '');
+function AdminGearEditModal({ itemId, onClose, onSave }: AdminGearEditModalProps) {
+  const [item, setItem] = useState<GearCatalogItem | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [brand, setBrand] = useState('');
+  const [model, setModel] = useState('');
+  const [variant, setVariant] = useState('');
+  const [description, setDescription] = useState('');
+  const [msrp, setMsrp] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [deleteImage, setDeleteImage] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
+  // Fetch fresh item data when modal opens
+  useEffect(() => {
+    let cancelled = false;
+    
+    async function fetchItem() {
+      try {
+        const freshItem = await adminGetGear(itemId);
+        if (cancelled) return;
+        
+        setItem(freshItem);
+        setBrand(freshItem.brand);
+        setModel(freshItem.model);
+        setVariant(freshItem.variant || '');
+        setDescription(freshItem.description || '');
+        setMsrp(freshItem.msrp?.toString() || '');
+      } catch (err) {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : 'Failed to load item');
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+    
+    fetchItem();
+    return () => { cancelled = true; };
+  }, [itemId]);
+  
+  // Cache-buster timestamp to force browser to fetch fresh images
+  const [imageCacheBuster] = useState(() => Date.now());
+  
   // Determine if item has an existing image (either URL or stored image)
-  const hasExistingImage = item.imageUrl || item.imageStatus === 'approved';
-  const existingImageUrl = item.imageUrl || (item.imageStatus === 'approved' ? getGearImageUrl(item.id) : null);
+  const hasExistingImage = item ? (item.imageUrl || item.imageStatus === 'approved') : false;
+  const existingImageUrl = item ? (item.imageUrl || (item.imageStatus === 'approved' ? getAdminGearImageUrl(item.id, imageCacheBuster) : null)) : null;
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -481,6 +517,8 @@ function AdminGearEditModal({ item, onClose, onSave }: AdminGearEditModalProps) 
     setIsSaving(true);
     setError(null);
 
+    if (!item) return;
+
     try {
       const params: AdminUpdateGearCatalogParams = {};
 
@@ -512,13 +550,40 @@ function AdminGearEditModal({ item, onClose, onSave }: AdminGearEditModalProps) 
         await adminUpdateGear(item.id, params);
       }
 
-      onSave(item); // Signal that we're done, parent will refresh
+      onSave(); // Signal that we're done, parent will refresh
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update gear item');
     } finally {
       setIsSaving(false);
     }
   };
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+        <div className="relative bg-slate-800 rounded-xl shadow-2xl max-w-2xl w-full p-8">
+          <div className="flex items-center justify-center">
+            <div className="w-8 h-8 border-2 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" />
+            <span className="ml-3 text-slate-400">Loading...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!item) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+        <div className="relative bg-slate-800 rounded-xl shadow-2xl max-w-2xl w-full p-8">
+          <div className="text-center text-red-400">{error || 'Item not found'}</div>
+          <button onClick={onClose} className="mt-4 px-4 py-2 bg-slate-700 rounded text-white">Close</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

@@ -126,6 +126,9 @@ type ImageStatus string
 const (
 	ImageStatusMissing  ImageStatus = "missing"
 	ImageStatusApproved ImageStatus = "approved"
+	// ImageStatusRecentlyCurated is a special filter value (not stored in DB)
+	// Used by admin to find items curated within last 24 hours
+	ImageStatusRecentlyCurated ImageStatus = "recently-curated"
 )
 
 // CatalogItemSource represents how the item was added

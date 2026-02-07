@@ -116,7 +116,9 @@ func (s *GearCatalogStore) Create(ctx context.Context, userID string, params mod
 func (s *GearCatalogStore) Get(ctx context.Context, id string) (*models.GearCatalogItem, error) {
 	query := `
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
-			   created_by_user_id, status, canonical_key, image_url, description,
+			   created_by_user_id, status, canonical_key,
+			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
 			   COALESCE(image_status, 'missing'), image_curated_by_user_id, image_curated_at,
@@ -174,7 +176,9 @@ func (s *GearCatalogStore) Get(ctx context.Context, id string) (*models.GearCata
 func (s *GearCatalogStore) GetByCanonicalKey(ctx context.Context, canonicalKey string) (*models.GearCatalogItem, error) {
 	query := `
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
-			   created_by_user_id, status, canonical_key, image_url, description,
+			   created_by_user_id, status, canonical_key,
+			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
 			   COALESCE(image_status, 'missing'), image_curated_by_user_id, image_curated_at,
@@ -304,7 +308,9 @@ func (s *GearCatalogStore) Search(ctx context.Context, params models.GearCatalog
 	// Main query
 	query := fmt.Sprintf(`
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
-			   created_by_user_id, status, canonical_key, image_url, description,
+			   created_by_user_id, status, canonical_key,
+			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
 			   COALESCE(image_status, 'missing'), image_curated_by_user_id, image_curated_at,
@@ -381,7 +387,9 @@ func (s *GearCatalogStore) FindNearMatches(ctx context.Context, gearType models.
 	// Try to use pg_trgm similarity if available, fall back to ILIKE
 	query := `
 		SELECT id, gear_type, brand, model, variant, specs, source,
-			   created_by_user_id, status, canonical_key, image_url, description,
+			   created_by_user_id, status, canonical_key,
+			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM updated_at)*1000)::bigint ELSE NULL END as image_url,
+			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
 			   COALESCE(similarity(LOWER(brand || ' ' || model), LOWER($2 || ' ' || $3)), 0) as sim_score
@@ -440,7 +448,9 @@ func (s *GearCatalogStore) FindNearMatches(ctx context.Context, gearType models.
 func (s *GearCatalogStore) findNearMatchesFallback(ctx context.Context, gearType models.GearType, brand, model string) ([]models.NearMatch, error) {
 	query := `
 		SELECT id, gear_type, brand, model, variant, specs, source,
-			   created_by_user_id, status, canonical_key, image_url, description,
+			   created_by_user_id, status, canonical_key,
+			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count
 		FROM gear_catalog
@@ -525,7 +535,9 @@ func (s *GearCatalogStore) GetPopular(ctx context.Context, gearType models.GearT
 
 	query := `
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
-			   created_by_user_id, status, canonical_key, image_url, description,
+			   created_by_user_id, status, canonical_key,
+			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
 			   COALESCE(image_status, 'missing'), image_curated_by_user_id, image_curated_at,
@@ -683,9 +695,18 @@ func (s *GearCatalogStore) AdminSearch(ctx context.Context, params models.AdminG
 	}
 
 	if params.ImageStatus != "" {
-		whereClauses = append(whereClauses, fmt.Sprintf("COALESCE(image_status, 'missing') = $%d", argIdx))
-		args = append(args, params.ImageStatus)
-		argIdx++
+		if params.ImageStatus == models.ImageStatusRecentlyCurated {
+			// Special filter: items curated within last 24 hours
+			whereClauses = append(whereClauses, "image_curated_at >= NOW() - INTERVAL '24 hours'")
+		} else {
+			whereClauses = append(whereClauses, fmt.Sprintf("COALESCE(image_status, 'missing') = $%d", argIdx))
+			args = append(args, params.ImageStatus)
+			argIdx++
+		}
+	} else {
+		// Default "Needs Work" view: items missing image OR description
+		// An item is complete when both image_status='approved' AND description_status='approved'
+		whereClauses = append(whereClauses, "(COALESCE(image_status, 'missing') = 'missing' OR COALESCE(description_status, 'missing') = 'missing')")
 	}
 
 	// Text search
@@ -707,19 +728,27 @@ func (s *GearCatalogStore) AdminSearch(ctx context.Context, params models.AdminG
 		return nil, fmt.Errorf("failed to count catalog items: %w", err)
 	}
 
+	// Order by: recently curated sorts by curation time, otherwise by creation time
+	orderBy := "created_at DESC"
+	if params.ImageStatus == models.ImageStatusRecentlyCurated {
+		orderBy = "image_curated_at DESC"
+	}
+
 	// Main query - order by most recent first for admin review
 	query := fmt.Sprintf(`
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
-			   created_by_user_id, status, canonical_key, image_url, description,
+			   created_by_user_id, status, canonical_key,
+			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
 			   COALESCE(image_status, 'missing'), image_curated_by_user_id, image_curated_at,
 			   COALESCE(description_status, 'missing'), description_curated_by_user_id, description_curated_at
 		FROM gear_catalog
 		WHERE %s
-		ORDER BY created_at DESC
+		ORDER BY %s
 		LIMIT $%d OFFSET $%d
-	`, whereClause, argIdx, argIdx+1)
+	`, whereClause, orderBy, argIdx, argIdx+1)
 
 	args = append(args, params.Limit, params.Offset)
 

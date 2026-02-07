@@ -37,6 +37,8 @@ export async function adminSearchGear(
     headers: {
       Authorization: `Bearer ${token}`,
     },
+    // Prevent browser from returning cached responses
+    cache: 'no-store',
   });
 
   if (!response.ok) {
@@ -61,6 +63,7 @@ export async function adminGetGear(id: string): Promise<GearCatalogItem> {
     headers: {
       Authorization: `Bearer ${token}`,
     },
+    cache: 'no-store',
   });
 
   if (!response.ok) {
@@ -177,6 +180,15 @@ export async function adminDeleteGearImage(id: string): Promise<void> {
 }
 
 // Get the URL for a gear catalog image (public endpoint)
-export function getGearImageUrl(gearId: string): string {
-  return `/api/gear-catalog/${gearId}/image`;
+// Optional timestamp parameter for cache-busting after uploads
+export function getGearImageUrl(gearId: string, cacheBuster?: number): string {
+  const url = `/api/gear-catalog/${gearId}/image`;
+  return cacheBuster ? `${url}?v=${cacheBuster}` : url;
+}
+
+// Get the URL for a gear catalog image via admin endpoint (no caching)
+// Use this in admin UI to always see latest image
+export function getAdminGearImageUrl(gearId: string, cacheBuster?: number): string {
+  const url = `/api/admin/gear/${gearId}/image`;
+  return cacheBuster ? `${url}?v=${cacheBuster}` : url;
 }
