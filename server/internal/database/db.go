@@ -667,31 +667,38 @@ ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS image_type VARCHAR(50);
 // Migration to add unique partial index on (user_id, catalog_id) for inventory items
 // This prevents duplicate entries for the same catalog item per user and enables UPSERT
 const migrationInventoryCatalogUnique = `
--- Step 1: Update the oldest duplicate to have the sum of all quantities
+-- Step 1: Update the oldest duplicate (by created_at) to have the sum of all quantities
 UPDATE inventory_items i
 SET quantity = sub.total_quantity
 FROM (
-    SELECT user_id, catalog_id, MIN(id) as keep_id, SUM(quantity) as total_quantity
+    SELECT DISTINCT ON (user_id, catalog_id) 
+           id as keep_id, 
+           user_id, 
+           catalog_id,
+           SUM(quantity) OVER (PARTITION BY user_id, catalog_id) as total_quantity
     FROM inventory_items
     WHERE catalog_id IS NOT NULL
-    GROUP BY user_id, catalog_id
-    HAVING COUNT(*) > 1
+      AND (user_id, catalog_id) IN (
+          SELECT user_id, catalog_id 
+          FROM inventory_items 
+          WHERE catalog_id IS NOT NULL 
+          GROUP BY user_id, catalog_id 
+          HAVING COUNT(*) > 1
+      )
+    ORDER BY user_id, catalog_id, created_at ASC
 ) sub
 WHERE i.id = sub.keep_id;
 
--- Step 2: Delete the non-oldest duplicates
+-- Step 2: Delete all but the oldest duplicate (by created_at)
 DELETE FROM inventory_items
 WHERE id IN (
-    SELECT i.id
-    FROM inventory_items i
-    INNER JOIN (
-        SELECT user_id, catalog_id, MIN(id) as keep_id
+    SELECT id FROM (
+        SELECT id,
+               ROW_NUMBER() OVER (PARTITION BY user_id, catalog_id ORDER BY created_at ASC) as rn
         FROM inventory_items
         WHERE catalog_id IS NOT NULL
-        GROUP BY user_id, catalog_id
-        HAVING COUNT(*) > 1
-    ) dups ON i.user_id = dups.user_id AND i.catalog_id = dups.catalog_id
-    WHERE i.id != dups.keep_id
+    ) ranked
+    WHERE rn > 1
 );
 
 -- Step 3: Create unique partial index (only for non-null catalog_id)
