@@ -51,6 +51,13 @@ function GearCard({
     onOpenDetail(item);
   };
 
+  const handleCardKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onOpenDetail(item);
+    }
+  };
+
   const handleAddClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     onAddToInventory?.(item);
@@ -58,8 +65,12 @@ function GearCard({
   
   return (
     <div 
-      className="bg-slate-800 border border-slate-700 rounded-xl p-4 hover:border-slate-600 transition-colors cursor-pointer"
+      role="button"
+      tabIndex={0}
+      className="bg-slate-800 border border-slate-700 rounded-xl p-4 hover:border-slate-600 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
       onClick={handleCardClick}
+      onKeyDown={handleCardKeyDown}
+      aria-label={`View details for ${getCatalogItemDisplayName(item)}`}
     >
       <div className="flex gap-4">
         {/* Image */}

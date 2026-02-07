@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import type { GearCatalogItem } from '../gearCatalogTypes';
 import { GEAR_TYPES, DRONE_TYPES, getCatalogItemDisplayName } from '../gearCatalogTypes';
 
@@ -16,10 +17,41 @@ export function GearDetailModal({
   onAddToInventory,
   isAuthenticated,
 }: GearDetailModalProps) {
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  // Handle focus management
+  useEffect(() => {
+    if (isOpen) {
+      // Save the currently focused element
+      previousFocusRef.current = document.activeElement as HTMLElement;
+      // Focus the modal container
+      modalRef.current?.focus();
+    } else {
+      // Return focus to the trigger element
+      previousFocusRef.current?.focus();
+    }
+  }, [isOpen]);
+
+  // Handle Escape key
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const typeLabel = GEAR_TYPES.find(t => t.value === item.gearType)?.label || item.gearType;
   const displayName = getCatalogItemDisplayName(item);
+  const titleId = `gear-detail-title-${item.id}`;
 
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
@@ -41,23 +73,32 @@ export function GearDetailModal({
       <div 
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
+        aria-hidden="true"
       />
 
       {/* Modal */}
-      <div className="relative bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div 
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="relative bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col focus:outline-none"
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700">
           <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold text-white">{displayName}</h2>
+            <h2 id={titleId} className="text-lg font-semibold text-white">{displayName}</h2>
             <span className="px-2 py-0.5 bg-slate-700 text-slate-300 text-xs rounded-full">
               {typeLabel}
             </span>
           </div>
           <button
             onClick={onClose}
+            aria-label="Close"
             className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
