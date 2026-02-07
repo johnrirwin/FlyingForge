@@ -102,7 +102,7 @@ export function CatalogSearchModal({ isOpen, onClose, onSelectItem, initialGearT
       />
 
       {/* Modal */}
-      <div className="relative bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+      <div className="relative bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-2xl max-h-[calc(100vh-2rem)] sm:max-h-[85vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700">
           <div>
@@ -423,8 +423,8 @@ function CreateCatalogItemForm({ initialGearType, initialQuery, onSuccess, onCan
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+    <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
+      <div className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0">
         {error && (
           <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
             {error}
@@ -586,7 +586,7 @@ function CreateCatalogItemForm({ initialGearType, initialQuery, onSuccess, onCan
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-700 bg-slate-800/50">
+      <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-700 bg-slate-800/50 flex-shrink-0">
         <button
           type="button"
           onClick={onCancel}

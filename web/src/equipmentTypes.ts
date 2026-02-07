@@ -119,7 +119,6 @@ export interface InventoryItem {
   catalogId?: string; // Link to gear catalog item
   buildId?: string;
   purchasePrice?: number;
-  purchaseDate?: string;
   purchaseSeller?: string;
   productUrl?: string;
   imageUrl?: string;
@@ -140,7 +139,6 @@ export interface AddInventoryParams {
   catalogId?: string; // Link to gear catalog item
   buildId?: string;
   purchasePrice?: number;
-  purchaseDate?: string;
   purchaseSeller?: string;
   productUrl?: string;
   imageUrl?: string;
@@ -158,7 +156,6 @@ export interface UpdateInventoryParams {
   notes?: string;
   buildId?: string;
   purchasePrice?: number;
-  purchaseDate?: string;
   purchaseSeller?: string;
   productUrl?: string;
   imageUrl?: string;

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/johnrirwin/flyingforge/internal/models"
 )
@@ -23,14 +22,6 @@ func NewInventoryStore(db *DB) *InventoryStore {
 
 // Add creates a new inventory item
 func (s *InventoryStore) Add(ctx context.Context, userID string, params models.AddInventoryParams) (*models.InventoryItem, error) {
-	var purchaseDate *time.Time
-	if params.PurchaseDate != "" {
-		t, err := time.Parse("2006-01-02", params.PurchaseDate)
-		if err == nil {
-			purchaseDate = &t
-		}
-	}
-
 	specs := params.Specs
 	if specs == nil {
 		specs = json.RawMessage(`{}`)
@@ -49,9 +40,9 @@ func (s *InventoryStore) Add(ctx context.Context, userID string, params models.A
 	query := `
 		INSERT INTO inventory_items (
 			user_id, name, category, manufacturer, quantity, condition, notes,
-			build_id, purchase_price, purchase_date, purchase_seller,
+			build_id, purchase_price, purchase_seller,
 			product_url, image_url, specs, source_equipment_id, catalog_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		RETURNING id, created_at, updated_at
 	`
 
@@ -65,7 +56,6 @@ func (s *InventoryStore) Add(ctx context.Context, userID string, params models.A
 		Notes:             params.Notes,
 		BuildID:           params.BuildID,
 		PurchasePrice:     params.PurchasePrice,
-		PurchaseDate:      purchaseDate,
 		PurchaseSeller:    params.PurchaseSeller,
 		ProductURL:        params.ProductURL,
 		ImageURL:          params.ImageURL,
@@ -76,7 +66,7 @@ func (s *InventoryStore) Add(ctx context.Context, userID string, params models.A
 
 	err := s.db.QueryRowContext(ctx, query,
 		nullString(userID), item.Name, item.Category, item.Manufacturer, item.Quantity, item.Condition, item.Notes,
-		nullString(item.BuildID), item.PurchasePrice, purchaseDate, nullString(item.PurchaseSeller),
+		nullString(item.BuildID), item.PurchasePrice, nullString(item.PurchaseSeller),
 		nullString(item.ProductURL), nullString(item.ImageURL), item.Specs, nullString(item.SourceEquipmentID),
 		nullString(item.CatalogID),
 	).Scan(&item.ID, &item.CreatedAt, &item.UpdatedAt)
@@ -93,14 +83,6 @@ func (s *InventoryStore) Add(ctx context.Context, userID string, params models.A
 func (s *InventoryStore) AddOrIncrement(ctx context.Context, userID string, params models.AddInventoryParams) (*models.InventoryItem, error) {
 	if params.CatalogID == "" {
 		return nil, fmt.Errorf("AddOrIncrement requires a catalog_id")
-	}
-
-	var purchaseDate *time.Time
-	if params.PurchaseDate != "" {
-		t, err := time.Parse("2006-01-02", params.PurchaseDate)
-		if err == nil {
-			purchaseDate = &t
-		}
 	}
 
 	specs := params.Specs
@@ -123,13 +105,13 @@ func (s *InventoryStore) AddOrIncrement(ctx context.Context, userID string, para
 	query := `
 		INSERT INTO inventory_items (
 			user_id, name, category, manufacturer, quantity, condition, notes,
-			build_id, purchase_price, purchase_date, purchase_seller,
+			build_id, purchase_price, purchase_seller,
 			product_url, image_url, specs, source_equipment_id, catalog_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		ON CONFLICT (user_id, catalog_id) WHERE user_id IS NOT NULL AND catalog_id IS NOT NULL
 		DO UPDATE SET quantity = inventory_items.quantity + EXCLUDED.quantity, updated_at = NOW()
 		RETURNING id, user_id, name, category, manufacturer, quantity, condition, notes,
-			build_id, purchase_price, purchase_date, purchase_seller,
+			build_id, purchase_price, purchase_seller,
 			product_url, image_url, specs, source_equipment_id, catalog_id, created_at, updated_at
 	`
 
@@ -137,17 +119,16 @@ func (s *InventoryStore) AddOrIncrement(ctx context.Context, userID string, para
 	var itemUserID sql.NullString
 	var buildID, purchaseSeller, productURL, imageURL, sourceEquipmentID, catalogID sql.NullString
 	var purchasePriceNull sql.NullFloat64
-	var purchaseDateNull sql.NullTime
 
 	err := s.db.QueryRowContext(ctx, query,
 		nullString(userID), params.Name, params.Category, params.Manufacturer, quantity, condition, params.Notes,
-		nullString(params.BuildID), params.PurchasePrice, purchaseDate, nullString(params.PurchaseSeller),
+		nullString(params.BuildID), params.PurchasePrice, nullString(params.PurchaseSeller),
 		nullString(params.ProductURL), nullString(params.ImageURL), specs, nullString(params.SourceEquipmentID),
 		nullString(params.CatalogID),
 	).Scan(
 		&item.ID, &itemUserID, &item.Name, &item.Category, &item.Manufacturer,
 		&item.Quantity, &item.Condition, &item.Notes,
-		&buildID, &purchasePriceNull, &purchaseDateNull, &purchaseSeller,
+		&buildID, &purchasePriceNull, &purchaseSeller,
 		&productURL, &imageURL, &item.Specs, &sourceEquipmentID, &catalogID,
 		&item.CreatedAt, &item.UpdatedAt,
 	)
@@ -169,9 +150,6 @@ func (s *InventoryStore) AddOrIncrement(ctx context.Context, userID string, para
 	if purchasePriceNull.Valid {
 		item.PurchasePrice = &purchasePriceNull.Float64
 	}
-	if purchaseDateNull.Valid {
-		item.PurchaseDate = &purchaseDateNull.Time
-	}
 
 	return item, nil
 }
@@ -180,7 +158,7 @@ func (s *InventoryStore) AddOrIncrement(ctx context.Context, userID string, para
 func (s *InventoryStore) Get(ctx context.Context, id string, userID string) (*models.InventoryItem, error) {
 	query := `
 		SELECT id, user_id, name, category, manufacturer, quantity, condition, notes,
-			   build_id, purchase_price, purchase_date, purchase_seller,
+			   build_id, purchase_price, purchase_seller,
 			   product_url, image_url, specs, source_equipment_id, catalog_id, created_at, updated_at
 		FROM inventory_items
 		WHERE id = $1
@@ -191,7 +169,7 @@ func (s *InventoryStore) Get(ctx context.Context, id string, userID string) (*mo
 	if userID != "" {
 		query = `
 			SELECT id, user_id, name, category, manufacturer, quantity, condition, notes,
-				   build_id, purchase_price, purchase_date, purchase_seller,
+				   build_id, purchase_price, purchase_seller,
 				   product_url, image_url, specs, source_equipment_id, catalog_id, created_at, updated_at
 			FROM inventory_items
 			WHERE id = $1 AND user_id = $2
@@ -203,12 +181,11 @@ func (s *InventoryStore) Get(ctx context.Context, id string, userID string) (*mo
 	var itemUserID sql.NullString
 	var buildID, purchaseSeller, productURL, imageURL, sourceEquipmentID, catalogID sql.NullString
 	var purchasePrice sql.NullFloat64
-	var purchaseDate sql.NullTime
 
 	err := s.db.QueryRowContext(ctx, query, args...).Scan(
 		&item.ID, &itemUserID, &item.Name, &item.Category, &item.Manufacturer,
 		&item.Quantity, &item.Condition, &item.Notes,
-		&buildID, &purchasePrice, &purchaseDate, &purchaseSeller,
+		&buildID, &purchasePrice, &purchaseSeller,
 		&productURL, &imageURL, &item.Specs, &sourceEquipmentID, &catalogID,
 		&item.CreatedAt, &item.UpdatedAt,
 	)
@@ -232,9 +209,6 @@ func (s *InventoryStore) Get(ctx context.Context, id string, userID string) (*mo
 
 	if purchasePrice.Valid {
 		item.PurchasePrice = &purchasePrice.Float64
-	}
-	if purchaseDate.Valid {
-		item.PurchaseDate = &purchaseDate.Time
 	}
 
 	return item, nil
@@ -302,7 +276,7 @@ func (s *InventoryStore) List(ctx context.Context, userID string, params models.
 
 	query := fmt.Sprintf(`
 		SELECT id, user_id, name, category, manufacturer, quantity, condition, notes,
-			   build_id, purchase_price, purchase_date, purchase_seller,
+			   build_id, purchase_price, purchase_seller,
 			   product_url, image_url, specs, source_equipment_id, catalog_id, created_at, updated_at
 		FROM inventory_items %s
 		ORDER BY created_at DESC
@@ -324,12 +298,11 @@ func (s *InventoryStore) List(ctx context.Context, userID string, params models.
 		var item models.InventoryItem
 		var buildID, purchaseSeller, productURL, imageURL, sourceEquipmentID, catalogID sql.NullString
 		var purchasePrice sql.NullFloat64
-		var purchaseDate sql.NullTime
 
 		if err := rows.Scan(
 			&item.ID, &item.UserID, &item.Name, &item.Category, &item.Manufacturer,
 			&item.Quantity, &item.Condition, &item.Notes,
-			&buildID, &purchasePrice, &purchaseDate, &purchaseSeller,
+			&buildID, &purchasePrice, &purchaseSeller,
 			&productURL, &imageURL, &item.Specs, &sourceEquipmentID, &catalogID,
 			&item.CreatedAt, &item.UpdatedAt,
 		); err != nil {
@@ -345,9 +318,6 @@ func (s *InventoryStore) List(ctx context.Context, userID string, params models.
 
 		if purchasePrice.Valid {
 			item.PurchasePrice = &purchasePrice.Float64
-		}
-		if purchaseDate.Valid {
-			item.PurchaseDate = &purchaseDate.Time
 		}
 
 		items = append(items, item)
@@ -413,19 +383,6 @@ func (s *InventoryStore) Update(ctx context.Context, userID string, params model
 	if params.PurchasePrice != nil {
 		sets = append(sets, fmt.Sprintf("purchase_price = $%d", argIndex))
 		args = append(args, *params.PurchasePrice)
-		argIndex++
-	}
-
-	if params.PurchaseDate != nil {
-		sets = append(sets, fmt.Sprintf("purchase_date = $%d", argIndex))
-		var purchaseDate *time.Time
-		if *params.PurchaseDate != "" {
-			t, err := time.Parse("2006-01-02", *params.PurchaseDate)
-			if err == nil {
-				purchaseDate = &t
-			}
-		}
-		args = append(args, purchaseDate)
 		argIndex++
 	}
 
@@ -594,7 +551,7 @@ func (s *InventoryStore) GetByCatalogID(ctx context.Context, userID, catalogID s
 
 	query := `
 		SELECT id, user_id, name, category, manufacturer, quantity, condition, notes,
-			   build_id, purchase_price, purchase_date, purchase_seller,
+			   build_id, purchase_price, purchase_seller,
 			   product_url, image_url, specs, source_equipment_id, catalog_id, created_at, updated_at
 		FROM inventory_items
 		WHERE user_id = $1 AND catalog_id = $2
@@ -606,12 +563,11 @@ func (s *InventoryStore) GetByCatalogID(ctx context.Context, userID, catalogID s
 	var itemUserID sql.NullString
 	var buildID, purchaseSeller, productURL, imageURL, sourceEquipmentID, itemCatalogID sql.NullString
 	var purchasePrice sql.NullFloat64
-	var purchaseDate sql.NullTime
 
 	err := s.db.QueryRowContext(ctx, query, userID, catalogID).Scan(
 		&item.ID, &itemUserID, &item.Name, &item.Category, &item.Manufacturer,
 		&item.Quantity, &item.Condition, &item.Notes,
-		&buildID, &purchasePrice, &purchaseDate, &purchaseSeller,
+		&buildID, &purchasePrice, &purchaseSeller,
 		&productURL, &imageURL, &item.Specs, &sourceEquipmentID, &itemCatalogID,
 		&item.CreatedAt, &item.UpdatedAt,
 	)
@@ -635,9 +591,6 @@ func (s *InventoryStore) GetByCatalogID(ctx context.Context, userID, catalogID s
 
 	if purchasePrice.Valid {
 		item.PurchasePrice = &purchasePrice.Float64
-	}
-	if purchaseDate.Valid {
-		item.PurchaseDate = &purchaseDate.Time
 	}
 
 	return item, nil

@@ -38,7 +38,6 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
   const [condition, setCondition] = useState<ItemCondition>('new');
   const [purchasePrice, setPurchasePrice] = useState('');
   const [purchaseSeller, setPurchaseSeller] = useState('');
-  const [purchaseDate, setPurchaseDate] = useState('');
   const [notes, setNotes] = useState('');
   const [buildId, setBuildId] = useState('');
   const [imageUrl, setImageUrl] = useState('');
@@ -107,7 +106,6 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
       setCondition('new');
       setNotes('');
       setBuildId('');
-      setPurchaseDate('');
     } else if (editItem) {
       setName(editItem.name);
       setCategory(editItem.category);
@@ -116,7 +114,6 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
       setCondition(editItem.condition);
       setPurchasePrice(editItem.purchasePrice?.toFixed(2) || '');
       setPurchaseSeller(editItem.purchaseSeller || '');
-      setPurchaseDate(editItem.purchaseDate ? editItem.purchaseDate.split('T')[0] : '');
       setNotes(editItem.notes || '');
       setBuildId(editItem.buildId || '');
       setImageUrl(editItem.imageUrl || '');
@@ -129,7 +126,6 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
       setCondition('new');
       setPurchasePrice('');
       setPurchaseSeller('');
-      setPurchaseDate('');
       setNotes('');
       setBuildId('');
       setImageUrl('');
@@ -151,7 +147,6 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
         condition,
         purchasePrice: purchasePrice ? parseFloat(purchasePrice) : undefined,
         purchaseSeller: purchaseSeller.trim() || undefined,
-        purchaseDate: purchaseDate || undefined,
         notes: notes.trim() || undefined,
         buildId: buildId.trim() || undefined,
         imageUrl: imageUrl.trim() || undefined,
@@ -243,7 +238,7 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto overflow-x-hidden">
           <div className="p-6 space-y-4">
             {/* Error */}
             {error && (
@@ -268,7 +263,7 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
             </div>
 
             {/* Category & Condition */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">
                   Category <span className="text-red-400">*</span>
@@ -302,7 +297,7 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
             </div>
 
             {/* Manufacturer & Quantity */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">
                   Manufacturer
@@ -330,7 +325,7 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
             </div>
 
             {/* Purchase Price & Seller */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">
                   Purchase Price
@@ -361,44 +356,17 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
               </div>
             </div>
 
-            {/* Purchase Date & Build Name */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
-                  Purchase Date
-                </label>
-                <input
-                  type="date"
-                  value={purchaseDate}
-                  onChange={(e) => setPurchaseDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
-                  Build/Quad Name
-                </label>
-                <input
-                  type="text"
-                  value={buildId}
-                  onChange={(e) => setBuildId(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
-                  placeholder='e.g., 5" Freestyle'
-                />
-              </div>
-            </div>
-
-            {/* Image URL */}
+            {/* Build Name */}
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">
-                Image URL
+                Build/Quad Name
               </label>
               <input
-                type="url"
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
+                type="text"
+                value={buildId}
+                onChange={(e) => setBuildId(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
-                placeholder="https://..."
+                placeholder='e.g., 5" Freestyle'
               />
             </div>
 

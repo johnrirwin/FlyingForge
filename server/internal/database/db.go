@@ -105,15 +105,16 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationAircraftTuningSnapshots,
 		migrationTuningSnapshotDiffBackup,
 		migrationDropPasswordHash,
-		migrationGearCatalog,            // Creates gear_catalog table
-		migrationPgTrgm,                 // Adds trigram search for gear_catalog
-		migrationInventoryCatalogLink,   // Adds FK to gear_catalog (depends on migrationGearCatalog)
-		migrationGearCatalogBestFor,     // Adds best_for column for drone type
-		migrationGearCatalogMSRP,        // Adds msrp column for price
-		migrationGearCatalogCuration,    // Adds image curation fields
-		migrationUserIsAdmin,            // Adds is_admin flag to users
-		migrationGearCatalogImageData,   // Adds image_data binary storage for gear images
-		migrationInventoryCatalogUnique, // Adds unique constraint on (user_id, catalog_id)
+		migrationGearCatalog,               // Creates gear_catalog table
+		migrationPgTrgm,                    // Adds trigram search for gear_catalog
+		migrationInventoryCatalogLink,      // Adds FK to gear_catalog (depends on migrationGearCatalog)
+		migrationGearCatalogBestFor,        // Adds best_for column for drone type
+		migrationGearCatalogMSRP,           // Adds msrp column for price
+		migrationGearCatalogCuration,       // Adds image curation fields
+		migrationUserIsAdmin,               // Adds is_admin flag to users
+		migrationGearCatalogImageData,      // Adds image_data binary storage for gear images
+		migrationInventoryCatalogUnique,    // Adds unique constraint on (user_id, catalog_id)
+		migrationDropInventoryPurchaseDate, // Drops unused purchase_date column
 	}
 
 	for i, migration := range migrations {
@@ -223,7 +224,6 @@ CREATE TABLE IF NOT EXISTS inventory_items (
     notes TEXT,
     build_id VARCHAR(100),
     purchase_price DECIMAL(10,2),
-    purchase_date DATE,
     purchase_seller VARCHAR(255),
     product_url VARCHAR(1024),
     image_url VARCHAR(1024),
@@ -709,4 +709,9 @@ WHERE id IN (
 -- Step 3: Create unique partial index (only for non-null user_id and catalog_id)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_user_catalog_unique 
     ON inventory_items(user_id, catalog_id) WHERE user_id IS NOT NULL AND catalog_id IS NOT NULL;
+`
+
+// Migration to drop unused purchase_date column from inventory_items
+const migrationDropInventoryPurchaseDate = `
+ALTER TABLE inventory_items DROP COLUMN IF EXISTS purchase_date;
 `

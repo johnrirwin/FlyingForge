@@ -31,10 +31,9 @@ type InventoryItem struct {
 	CatalogItem *GearCatalogItem `json:"catalogItem,omitempty"` // Populated when fetching with catalog data
 
 	// Purchase tracking
-	BuildID        string     `json:"buildId,omitempty"`
-	PurchasePrice  *float64   `json:"purchasePrice,omitempty"`
-	PurchaseDate   *time.Time `json:"purchaseDate,omitempty"`
-	PurchaseSeller string     `json:"purchaseSeller,omitempty"`
+	BuildID        string   `json:"buildId,omitempty"`
+	PurchasePrice  *float64 `json:"purchasePrice,omitempty"`
+	PurchaseSeller string   `json:"purchaseSeller,omitempty"`
 
 	// Links and images
 	ProductURL string `json:"productUrl,omitempty"`
@@ -61,7 +60,6 @@ type AddInventoryParams struct {
 	Notes             string            `json:"notes,omitempty"`
 	BuildID           string            `json:"buildId,omitempty"`
 	PurchasePrice     *float64          `json:"purchasePrice,omitempty"`
-	PurchaseDate      string            `json:"purchaseDate,omitempty"` // ISO 8601 date string
 	PurchaseSeller    string            `json:"purchaseSeller,omitempty"`
 	ProductURL        string            `json:"productUrl,omitempty"`
 	ImageURL          string            `json:"imageUrl,omitempty"`
@@ -81,7 +79,6 @@ type UpdateInventoryParams struct {
 	Notes          *string            `json:"notes,omitempty"`
 	BuildID        *string            `json:"buildId,omitempty"`
 	PurchasePrice  *float64           `json:"purchasePrice,omitempty"`
-	PurchaseDate   *string            `json:"purchaseDate,omitempty"`
 	PurchaseSeller *string            `json:"purchaseSeller,omitempty"`
 	ProductURL     *string            `json:"productUrl,omitempty"`
 	ImageURL       *string            `json:"imageUrl,omitempty"`
