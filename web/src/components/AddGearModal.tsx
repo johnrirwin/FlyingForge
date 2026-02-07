@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { EquipmentItem, InventoryItem, EquipmentCategory, ItemCondition, AddInventoryParams } from '../equipmentTypes';
 import { EQUIPMENT_CATEGORIES, ITEM_CONDITIONS } from '../equipmentTypes';
 import type { GearCatalogItem } from '../gearCatalogTypes';
@@ -26,6 +26,9 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Track whether auto-add has been triggered to prevent duplicate submissions
+  const autoAddTriggeredRef = useRef<string | null>(null);
 
   // Form state (for editing/equipment items)
   const [name, setName] = useState('');
@@ -71,8 +74,17 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
 
   // Auto-add pre-selected catalog item when modal opens
   useEffect(() => {
+    // Only auto-add if we haven't already triggered for this catalog item
+    // This prevents duplicate submissions when callback references change
     if (isOpen && hasPreselectedCatalogItem && catalogItem && !isEditing) {
-      autoAddCatalogItem(catalogItem);
+      if (autoAddTriggeredRef.current !== catalogItem.id) {
+        autoAddTriggeredRef.current = catalogItem.id;
+        autoAddCatalogItem(catalogItem);
+      }
+    }
+    // Reset the ref when modal closes
+    if (!isOpen) {
+      autoAddTriggeredRef.current = null;
     }
   }, [isOpen, hasPreselectedCatalogItem, catalogItem, isEditing, autoAddCatalogItem]);
 
