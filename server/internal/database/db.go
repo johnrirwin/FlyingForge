@@ -668,6 +668,7 @@ ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS image_type VARCHAR(50);
 // This prevents duplicate entries for the same catalog item per user and enables UPSERT
 const migrationInventoryCatalogUnique = `
 -- Step 1: Update the oldest duplicate (by created_at) to have the sum of all quantities
+-- Only process rows where both user_id and catalog_id are NOT NULL to avoid NULL comparison issues
 UPDATE inventory_items i
 SET quantity = sub.total_quantity
 FROM (
@@ -677,11 +678,13 @@ FROM (
            catalog_id,
            SUM(quantity) OVER (PARTITION BY user_id, catalog_id) as total_quantity
     FROM inventory_items
-    WHERE catalog_id IS NOT NULL
+    WHERE user_id IS NOT NULL
+      AND catalog_id IS NOT NULL
       AND (user_id, catalog_id) IN (
           SELECT user_id, catalog_id 
           FROM inventory_items 
-          WHERE catalog_id IS NOT NULL 
+          WHERE user_id IS NOT NULL
+            AND catalog_id IS NOT NULL 
           GROUP BY user_id, catalog_id 
           HAVING COUNT(*) > 1
       )
@@ -690,18 +693,20 @@ FROM (
 WHERE i.id = sub.keep_id;
 
 -- Step 2: Delete all but the oldest duplicate (by created_at)
+-- Must use same predicates as Step 1 to avoid deleting rows whose quantities weren't summed
 DELETE FROM inventory_items
 WHERE id IN (
     SELECT id FROM (
         SELECT id,
                ROW_NUMBER() OVER (PARTITION BY user_id, catalog_id ORDER BY created_at ASC) as rn
         FROM inventory_items
-        WHERE catalog_id IS NOT NULL
+        WHERE user_id IS NOT NULL
+          AND catalog_id IS NOT NULL
     ) ranked
     WHERE rn > 1
 );
 
--- Step 3: Create unique partial index (only for non-null catalog_id)
+-- Step 3: Create unique partial index (only for non-null user_id and catalog_id)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_user_catalog_unique 
-    ON inventory_items(user_id, catalog_id) WHERE catalog_id IS NOT NULL;
+    ON inventory_items(user_id, catalog_id) WHERE user_id IS NOT NULL AND catalog_id IS NOT NULL;
 `

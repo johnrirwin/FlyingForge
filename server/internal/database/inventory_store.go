@@ -119,13 +119,14 @@ func (s *InventoryStore) AddOrIncrement(ctx context.Context, userID string, para
 	}
 
 	// UPSERT: insert if not exists, otherwise increment quantity
+	// The ON CONFLICT predicate must match the partial unique index exactly
 	query := `
 		INSERT INTO inventory_items (
 			user_id, name, category, manufacturer, quantity, condition, notes,
 			build_id, purchase_price, purchase_date, purchase_seller,
 			product_url, image_url, specs, source_equipment_id, catalog_id
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-		ON CONFLICT (user_id, catalog_id) WHERE catalog_id IS NOT NULL
+		ON CONFLICT (user_id, catalog_id) WHERE user_id IS NOT NULL AND catalog_id IS NOT NULL
 		DO UPDATE SET quantity = inventory_items.quantity + EXCLUDED.quantity, updated_at = NOW()
 		RETURNING id, user_id, name, category, manufacturer, quantity, condition, notes,
 			build_id, purchase_price, purchase_date, purchase_seller,
