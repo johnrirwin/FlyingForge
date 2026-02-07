@@ -664,7 +664,7 @@ ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS image_type VARCHAR(50);
 -- (we're moving away from URL-based images to uploaded images)
 `
 
-// Migration to add unique constraint on (user_id, catalog_id) for inventory items
+// Migration to add unique partial index on (user_id, catalog_id) for inventory items
 // This prevents duplicate entries for the same catalog item per user and enables UPSERT
 const migrationInventoryCatalogUnique = `
 -- Step 1: Update the oldest duplicate to have the sum of all quantities
