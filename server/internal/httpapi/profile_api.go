@@ -36,13 +36,15 @@ func (api *ProfileAPI) RegisterRoutes(mux *http.ServeMux, corsMiddleware func(ht
 	mux.HandleFunc("/api/me/avatar", corsMiddleware(api.authMiddleware.RequireAuth(api.handleAvatar)))
 }
 
-// handleProfile handles GET and PUT /api/me/profile
+// handleProfile handles GET, PUT, and DELETE /api/me/profile
 func (api *ProfileAPI) handleProfile(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		api.handleGetProfile(w, r)
 	case http.MethodPut:
 		api.handleUpdateProfile(w, r)
+	case http.MethodDelete:
+		api.handleDeleteProfile(w, r)
 	case http.MethodOptions:
 		w.WriteHeader(http.StatusOK)
 	default:
@@ -254,6 +256,43 @@ func (api *ProfileAPI) handleAvatar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	api.writeJSON(w, http.StatusOK, response)
+}
+
+// handleDeleteProfile permanently deletes the current user's account and all associated data
+func (api *ProfileAPI) handleDeleteProfile(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(auth.UserIDKey).(string)
+
+	// Verify user exists
+	user, err := api.userStore.GetByID(r.Context(), userID)
+	if err != nil {
+		api.logger.Error("Failed to get user for deletion", logging.WithField("error", err.Error()))
+		api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to verify account")
+		return
+	}
+	if user == nil {
+		api.writeError(w, http.StatusNotFound, "not_found", "user not found")
+		return
+	}
+
+	// Log the deletion attempt
+	api.logger.Info("User account deletion requested",
+		logging.WithField("userID", userID),
+		logging.WithField("email", user.Email))
+
+	// Delete the user (cascades to related data via DB constraints)
+	if err := api.userStore.HardDelete(r.Context(), userID); err != nil {
+		api.logger.Error("Failed to delete user account",
+			logging.WithField("error", err.Error()),
+			logging.WithField("userID", userID))
+		api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to delete account")
+		return
+	}
+
+	api.logger.Info("User account deleted successfully",
+		logging.WithField("userID", userID))
+
+	// Return success with no content
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (api *ProfileAPI) writeJSON(w http.ResponseWriter, status int, data interface{}) {

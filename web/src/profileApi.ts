@@ -89,3 +89,20 @@ export function validateCallSign(callSign: string): string | null {
   }
   return null;
 }
+
+// Delete current user's account and all associated data
+export async function deleteProfile(): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/me/profile`, {
+    method: 'DELETE',
+    headers: {
+      ...getAuthHeader(),
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Failed to delete account' }));
+    throw new Error(error.message || 'Failed to delete account');
+  }
+
+  // No content returned on success (204)
+}
