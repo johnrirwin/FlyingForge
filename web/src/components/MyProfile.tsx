@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { getProfile, updateProfile, uploadAvatar, validateCallSign, deleteProfile } from '../profileApi';
+import { getProfile, updateProfile, uploadAvatar, validateCallSign, deleteAccount } from '../profileApi';
 import type { UserProfile, UpdateProfileParams } from '../authTypes';
 
 interface ProfileFormData {
@@ -14,7 +14,7 @@ interface PendingAvatar {
 }
 
 export function MyProfile() {
-  const { updateUser } = useAuth();
+  const { updateUser, logout } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -227,9 +227,9 @@ export function MyProfile() {
     try {
       setIsDeleting(true);
       setError(null);
-      await deleteProfile();
-      // Account deleted - logout and redirect to home
-      // The logout function should clear tokens and redirect
+      await deleteAccount();
+      // Account deleted - clear auth state and redirect to home
+      await logout();
       window.location.href = '/';
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete account');

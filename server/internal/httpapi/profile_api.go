@@ -274,10 +274,9 @@ func (api *ProfileAPI) handleDeleteProfile(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Log the deletion attempt
+	// Log the deletion attempt (avoid logging PII like email)
 	api.logger.Info("User account deletion requested",
-		logging.WithField("userID", userID),
-		logging.WithField("email", user.Email))
+		logging.WithField("userID", userID))
 
 	// Delete the user (cascades to related data via DB constraints)
 	if err := api.userStore.HardDelete(r.Context(), userID); err != nil {

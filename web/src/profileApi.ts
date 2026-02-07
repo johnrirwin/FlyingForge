@@ -91,7 +91,7 @@ export function validateCallSign(callSign: string): string | null {
 }
 
 // Delete current user's account and all associated data
-export async function deleteProfile(): Promise<void> {
+export async function deleteAccount(): Promise<void> {
   const response = await fetch(`${API_BASE}/api/me/profile`, {
     method: 'DELETE',
     headers: {
