@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, type FormEvent, type ChangeEv
 import type { GearCatalogItem, GearType, ImageStatus, AdminUpdateGearCatalogParams } from '../gearCatalogTypes';
 import { GEAR_TYPES } from '../gearCatalogTypes';
 import { adminSearchGear, adminUpdateGear, adminUploadGearImage, adminDeleteGearImage, getGearImageUrl } from '../adminApi';
+import { useDebounce } from '../hooks';
 
 interface AdminGearModerationProps {
   isAdmin: boolean;
@@ -22,6 +23,11 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  
+  // Debounce filter values for live search
+  const debouncedQuery = useDebounce(query, 300);
+  const debouncedGearType = useDebounce(gearType, 300);
+  const debouncedImageStatus = useDebounce(imageStatus, 300);
   
   // Use refs to track current offset and prevent race conditions
   const currentOffsetRef = useRef(0);
@@ -49,9 +55,9 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
 
     try {
       const response = await adminSearchGear({
-        query: query || undefined,
-        gearType: gearType || undefined,
-        imageStatus: imageStatus || undefined,
+        query: debouncedQuery || undefined,
+        gearType: debouncedGearType || undefined,
+        imageStatus: debouncedImageStatus || undefined,
         limit: pageSize,
         offset: offset,
       });
@@ -71,16 +77,14 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
       setIsLoadingMore(false);
       isLoadingRef.current = false;
     }
-  }, [isAdmin, query, gearType, imageStatus]);
+  }, [isAdmin, debouncedQuery, debouncedGearType, debouncedImageStatus]);
 
-  // Initial load - only runs on mount or when isAdmin changes
-  // Filter changes are handled by explicit Search button click
+  // Initial load and auto-search when debounced filters change
   useEffect(() => {
     if (isAdmin) {
       loadItems(true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin]); // Intentionally excluding loadItems to prevent filter-change reloads
+  }, [isAdmin, loadItems]);
 
   // Infinite scroll observer
   // Note: loadItems has a synchronous isLoadingRef guard that prevents concurrent calls,
@@ -101,11 +105,6 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
     observer.observe(element);
     return () => observer.disconnect();
   }, [hasMore, loadItems]);
-
-  const handleSearch = (e: FormEvent) => {
-    e.preventDefault();
-    loadItems(true);
-  };
 
   const handleEditClick = (item: GearCatalogItem) => {
     setEditingItem(item);
@@ -143,35 +142,54 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
   return (
     <>
       {/* Fixed header on mobile - title, filters, count */}
-      <div className="fixed md:relative top-14 md:top-0 left-0 right-0 md:left-auto md:right-auto z-20 md:z-10 bg-slate-900 p-4 md:p-6 pb-2 md:pb-4">
-        <h1 className="text-xl md:text-2xl font-bold text-white mb-3 md:mb-4">Gear Moderation</h1>
+      <div className="fixed md:relative top-14 md:top-0 left-0 right-0 md:left-auto md:right-auto z-20 md:z-10 bg-slate-900">
+        <div className="bg-slate-800 border-b border-slate-700 px-4 md:px-6 py-3 md:py-4">
+          <h1 className="text-lg md:text-2xl font-bold text-white mb-3">Gear Moderation</h1>
 
-        {/* Filters */}
-        <form onSubmit={handleSearch} className="bg-slate-800 rounded-lg p-3 md:p-4 mb-3">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
-            {/* Search query */}
-            <div className="col-span-2 md:col-span-1">
-              <label className="block text-xs md:text-sm font-medium text-slate-300 mb-1">
-                Search
-              </label>
+          {/* Filters */}
+          <div className="flex flex-col gap-3">
+            {/* Search query - full width */}
+            <div className="relative">
+              <svg
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
               <input
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Brand or model..."
-                className="w-full px-3 py-1.5 md:py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm placeholder-slate-400 focus:outline-none focus:border-primary-500"
+                placeholder="Search brand or model..."
+                className="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
+              {query && (
+                <button
+                  onClick={() => setQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                  aria-label="Clear search"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
             </div>
 
-            {/* Gear type filter */}
-            <div>
-              <label className="block text-xs md:text-sm font-medium text-slate-300 mb-1">
-                Gear Type
-              </label>
+            {/* Filter row */}
+            <div className="flex items-center gap-2">
+              {/* Gear type filter */}
               <select
                 value={gearType}
                 onChange={(e) => setGearType(e.target.value as GearType | '')}
-                className="w-full px-2 md:px-3 py-1.5 md:py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500"
+                className="flex-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 <option value="">All Types</option>
                 {GEAR_TYPES.map((type) => (
@@ -180,51 +198,44 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
                   </option>
                 ))}
               </select>
-            </div>
 
-            {/* Image status filter */}
-            <div>
-              <label className="block text-xs md:text-sm font-medium text-slate-300 mb-1">
-                Image Status
-              </label>
+              {/* Image status filter */}
               <select
                 value={imageStatus}
                 onChange={(e) => setImageStatus(e.target.value as ImageStatus | '')}
-                className="w-full px-2 md:px-3 py-1.5 md:py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500"
+                className="flex-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
-                <option value="">All</option>
+                <option value="">All Images</option>
                 <option value="missing">Needs Image</option>
                 <option value="approved">Has Image</option>
               </select>
             </div>
 
-            {/* Search button */}
-            <div className="col-span-2 md:col-span-1 flex items-end">
-              <button
-                type="submit"
-                className="w-full px-4 py-1.5 md:py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
-              >
-                Search
-              </button>
+            {/* Results count */}
+            <p className="text-slate-400 text-sm">
+              {totalCount} item{totalCount !== 1 ? 's' : ''} found
+            </p>
+          </div>
+
+          {/* Error message */}
+          {error && (
+            <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+              {error}
             </div>
-          </div>
-        </form>
-
-        {/* Error message */}
-        {error && (
-          <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm mb-2">
-            {error}
-          </div>
-        )}
-
-        {/* Results count */}
-        <p className="text-slate-400 text-sm">
-          {totalCount} item{totalCount !== 1 ? 's' : ''} found
-        </p>
+          )}
+        </div>
       </div>
 
       {/* Scrollable list - with padding for fixed header on mobile */}
-      <div className="flex-1 overflow-y-auto pt-[280px] md:pt-0 px-4 md:px-6 pb-20">
+      <div 
+        className="flex-1 overflow-y-auto pt-[220px] md:pt-0 px-4 md:px-6 pb-20"
+        onScroll={() => {
+          // Dismiss keyboard on scroll for mobile
+          if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+          }
+        }}
+      >
         {/* Items table - desktop */}
         <div className="hidden md:block bg-slate-800 rounded-lg overflow-hidden">
           {isLoading ? (
