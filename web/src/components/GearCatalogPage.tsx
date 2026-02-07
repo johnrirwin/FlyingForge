@@ -3,6 +3,7 @@ import { searchGearCatalog, getPopularGear } from '../gearCatalogApi';
 import type { GearCatalogItem, GearType } from '../gearCatalogTypes';
 import { GEAR_TYPES, DRONE_TYPES, getCatalogItemDisplayName } from '../gearCatalogTypes';
 import { useAuth } from '../hooks/useAuth';
+import { GearDetailModal } from './GearDetailModal';
 
 interface GearCatalogPageProps {
   onAddToInventory?: (item: GearCatalogItem) => void;
@@ -36,16 +37,30 @@ function GearTypeTab({
 function GearCard({ 
   item, 
   onAddToInventory,
+  onOpenDetail,
   isAuthenticated,
 }: { 
   item: GearCatalogItem; 
   onAddToInventory?: (item: GearCatalogItem) => void;
+  onOpenDetail: (item: GearCatalogItem) => void;
   isAuthenticated: boolean;
 }) {
   const typeLabel = GEAR_TYPES.find(t => t.value === item.gearType)?.label || item.gearType;
+
+  const handleCardClick = () => {
+    onOpenDetail(item);
+  };
+
+  const handleAddClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onAddToInventory?.(item);
+  };
   
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 hover:border-slate-600 transition-colors">
+    <div 
+      className="bg-slate-800 border border-slate-700 rounded-xl p-4 hover:border-slate-600 transition-colors cursor-pointer"
+      onClick={handleCardClick}
+    >
       <div className="flex gap-4">
         {/* Image */}
         {item.imageUrl ? (
@@ -113,7 +128,7 @@ function GearCard({
 
             {onAddToInventory && (
               <button
-                onClick={() => onAddToInventory(item)}
+                onClick={handleAddClick}
                 disabled={!isAuthenticated}
                 title={isAuthenticated ? 'Add to your inventory' : 'Sign in to add to inventory'}
                 className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1"
@@ -142,6 +157,18 @@ export function GearCatalogPage({ onAddToInventory }: GearCatalogPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState(0);
   const [hasSearched, setHasSearched] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<GearCatalogItem | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+
+  const handleOpenDetail = (item: GearCatalogItem) => {
+    setSelectedItem(item);
+    setIsDetailModalOpen(true);
+  };
+
+  const handleCloseDetail = () => {
+    setIsDetailModalOpen(false);
+    setSelectedItem(null);
+  };
 
   // Load popular items on mount
   useEffect(() => {
@@ -391,6 +418,7 @@ export function GearCatalogPage({ onAddToInventory }: GearCatalogPageProps) {
                 key={item.id}
                 item={item}
                 onAddToInventory={onAddToInventory}
+                onOpenDetail={handleOpenDetail}
                 isAuthenticated={isAuthenticated}
               />
             ))}
@@ -415,6 +443,17 @@ export function GearCatalogPage({ onAddToInventory }: GearCatalogPageProps) {
           </div>
         </div>
       </div>
+
+      {/* Gear Detail Modal */}
+      {selectedItem && (
+        <GearDetailModal
+          item={selectedItem}
+          isOpen={isDetailModalOpen}
+          onClose={handleCloseDetail}
+          onAddToInventory={onAddToInventory}
+          isAuthenticated={isAuthenticated}
+        />
+      )}
     </div>
   );
 }

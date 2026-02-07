@@ -203,6 +203,7 @@ type AdminUpdateGearCatalogParams struct {
 	MSRP        *float64 `json:"msrp,omitempty"`
 	ClearMSRP   bool     `json:"clearMsrp,omitempty"` // Explicitly clear MSRP when true
 	ImageURL    *string  `json:"imageUrl,omitempty"`  // Admin can set image URL
+	BestFor     []string `json:"bestFor,omitempty"`   // Drone types this gear is best suited for
 }
 
 // AdminGearSearchParams represents admin search parameters with curation filters

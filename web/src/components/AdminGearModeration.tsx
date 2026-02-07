@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, type FormEvent, type ChangeEvent } from 'react';
-import type { GearCatalogItem, GearType, ImageStatus, AdminUpdateGearCatalogParams } from '../gearCatalogTypes';
-import { GEAR_TYPES } from '../gearCatalogTypes';
+import type { GearCatalogItem, GearType, ImageStatus, AdminUpdateGearCatalogParams, DroneType } from '../gearCatalogTypes';
+import { GEAR_TYPES, DRONE_TYPES } from '../gearCatalogTypes';
 import { adminSearchGear, adminUpdateGear, adminUploadGearImage, adminDeleteGearImage, adminGetGear, getAdminGearImageUrl } from '../adminApi';
 
 interface AdminGearModerationProps {
@@ -450,6 +450,7 @@ function AdminGearEditModal({ itemId, onClose, onSave }: AdminGearEditModalProps
   const [variant, setVariant] = useState('');
   const [description, setDescription] = useState('');
   const [msrp, setMsrp] = useState('');
+  const [bestFor, setBestFor] = useState<DroneType[]>([]);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [deleteImage, setDeleteImage] = useState(false);
@@ -471,6 +472,7 @@ function AdminGearEditModal({ itemId, onClose, onSave }: AdminGearEditModalProps
         setVariant(freshItem.variant || '');
         setDescription(freshItem.description || '');
         setMsrp(freshItem.msrp?.toString() || '');
+        setBestFor((freshItem.bestFor || []) as DroneType[]);
       } catch (err) {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : 'Failed to load item');
@@ -546,6 +548,15 @@ function AdminGearEditModal({ itemId, onClose, onSave }: AdminGearEditModalProps
       if (model !== item.model) params.model = model;
       if (variant !== (item.variant || '')) params.variant = variant;
       if (description !== (item.description || '')) params.description = description;
+      
+      // Check if bestFor has changed
+      const itemBestFor = (item.bestFor || []) as DroneType[];
+      const bestForChanged = bestFor.length !== itemBestFor.length || 
+        bestFor.some(t => !itemBestFor.includes(t));
+      if (bestForChanged) {
+        params.bestFor = bestFor;
+      }
+      
       if (msrp !== (item.msrp?.toString() || '')) {
         if (msrp) {
           params.msrp = parseFloat(msrp);
@@ -705,6 +716,38 @@ function AdminGearEditModal({ itemId, onClose, onSave }: AdminGearEditModalProps
               placeholder="Brief description of the gear..."
               className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500 resize-none"
             />
+          </div>
+
+          {/* Best For - Drone Types */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">
+              Best For (optional)
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {DRONE_TYPES.map(type => (
+                <button
+                  key={type.value}
+                  type="button"
+                  onClick={() => {
+                    setBestFor(prev => 
+                      prev.includes(type.value)
+                        ? prev.filter(t => t !== type.value)
+                        : [...prev, type.value]
+                    );
+                  }}
+                  className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                    bestFor.includes(type.value)
+                      ? 'bg-primary-600 border-primary-500 text-white'
+                      : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-slate-500'
+                  }`}
+                >
+                  {type.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              Select what drone types this gear is best suited for
+            </p>
           </div>
 
           {/* MSRP */}

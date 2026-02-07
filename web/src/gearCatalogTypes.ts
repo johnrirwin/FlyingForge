@@ -119,6 +119,7 @@ export interface AdminUpdateGearCatalogParams {
   msrp?: number;
   clearMsrp?: boolean; // Explicitly clear MSRP when true
   imageUrl?: string;
+  bestFor?: DroneType[]; // Drone types this gear is best suited for
 }
 
 // Admin search parameters

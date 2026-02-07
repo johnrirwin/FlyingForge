@@ -905,6 +905,11 @@ func (s *GearCatalogStore) AdminUpdate(ctx context.Context, id string, adminUser
 		args = append(args, *params.MSRP)
 		argIdx++
 	}
+	if params.BestFor != nil {
+		sets = append(sets, fmt.Sprintf("best_for = $%d", argIdx))
+		args = append(args, pq.Array(params.BestFor))
+		argIdx++
+	}
 	if params.ImageURL != nil {
 		sets = append(sets, fmt.Sprintf("image_url = $%d", argIdx))
 		args = append(args, *params.ImageURL)
