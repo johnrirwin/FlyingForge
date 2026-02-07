@@ -141,10 +141,12 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
 
   return (
     <>
-      {/* Fixed header on mobile - title, filters, count */}
-      <div className="fixed md:relative top-14 md:top-0 left-0 right-0 md:left-auto md:right-auto z-20 md:z-10 bg-slate-900">
-        <div className="bg-slate-800 border-b border-slate-700 px-4 md:px-6 py-3 md:py-4">
-          <h1 className="text-lg md:text-2xl font-bold text-white mb-3">Gear Moderation</h1>
+      {/* Main flex container - matches news section pattern */}
+      <div className="flex-1 flex flex-col min-h-0 relative">
+        {/* Header - flex-shrink-0 keeps it fixed in place */}
+        <div className="flex-shrink-0 z-10 bg-slate-900">
+          <div className="bg-slate-800 border-b border-slate-700 px-4 md:px-6 py-3 md:py-4">
+            <h1 className="text-lg md:text-2xl font-bold text-white mb-3">Gear Moderation</h1>
 
           {/* Filters */}
           <div className="flex flex-col gap-3">
@@ -226,9 +228,9 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
         </div>
       </div>
 
-      {/* Scrollable list - with padding for fixed header on mobile */}
+      {/* Scrollable list */}
       <div 
-        className="flex-1 overflow-y-auto pt-[220px] md:pt-0 px-4 md:px-6 pb-20"
+        className="flex-1 overflow-y-auto min-h-0 px-4 md:px-6 pb-20"
         onScroll={() => {
           // Dismiss keyboard on scroll for mobile
           if (document.activeElement instanceof HTMLElement) {
@@ -395,6 +397,7 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
           Showing all {items.length} of {totalCount} items
         </div>
       )}
+      </div>
       </div>
 
       {/* Edit Modal */}
