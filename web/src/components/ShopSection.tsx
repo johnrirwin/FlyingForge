@@ -39,18 +39,18 @@ export function ShopSection() {
 
       {/* Shop Cards */}
       <div className="p-4 md:p-6">
-        <div className="grid gap-4 md:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 md:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 items-stretch">
           {DRONE_SHOPS.map((shop) => (
             <a
               key={shop.name}
               href={shop.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="group block"
+              className="group block h-full"
             >
-              <div className={`relative overflow-hidden rounded-xl border border-slate-700 bg-gradient-to-br ${shop.color} backdrop-blur-sm transition-all duration-300 hover:border-slate-500 hover:shadow-lg hover:shadow-slate-900/50 hover:-translate-y-1`}>
+              <div className={`relative overflow-hidden rounded-xl border border-slate-700 bg-gradient-to-br ${shop.color} backdrop-blur-sm transition-all duration-300 hover:border-slate-500 hover:shadow-lg hover:shadow-slate-900/50 hover:-translate-y-1 h-full min-h-[280px] flex flex-col`}>
                 {/* Card Content */}
-                <div className="p-6">
+                <div className="p-6 h-full flex flex-col">
                   {/* Logo and Name */}
                   <div className="flex items-center gap-4 mb-4">
                     <div className="w-14 h-14 rounded-xl bg-slate-800/80 flex items-center justify-center text-3xl">
@@ -67,12 +67,12 @@ export function ShopSection() {
                   </div>
 
                   {/* Description */}
-                  <p className="text-sm text-slate-300 leading-relaxed mb-4">
+                  <p className="text-sm text-slate-300 leading-relaxed mb-4 line-clamp-3 min-h-[4.5rem]">
                     {shop.description}
                   </p>
 
                   {/* Tags */}
-                  <div className="flex flex-wrap gap-2 mb-4">
+                  <div className="flex flex-wrap gap-2 mb-4 min-h-[2rem]">
                     {shop.tags.map((tag) => (
                       <span
                         key={tag}
@@ -84,7 +84,7 @@ export function ShopSection() {
                   </div>
 
                   {/* Visit Button */}
-                  <div className="flex items-center justify-between pt-4 border-t border-slate-700/50">
+                  <div className="flex items-center justify-between pt-4 border-t border-slate-700/50 mt-auto">
                     <span className="text-sm text-slate-400">Visit Store</span>
                     <svg 
                       className="w-5 h-5 text-slate-400 group-hover:text-primary-400 group-hover:translate-x-1 transition-all" 
@@ -106,7 +106,7 @@ export function ShopSection() {
           ))}
 
           {/* Add More Card */}
-          <div className="relative overflow-hidden rounded-xl border border-dashed border-slate-700 bg-slate-800/20 p-6 flex flex-col items-center justify-center text-center min-h-[280px]">
+          <div className="relative overflow-hidden rounded-xl border border-dashed border-slate-700 bg-slate-800/20 p-6 flex flex-col items-center justify-center text-center min-h-[280px] h-full">
             <div className="w-14 h-14 rounded-xl bg-slate-800/50 flex items-center justify-center mb-4">
               <svg className="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
