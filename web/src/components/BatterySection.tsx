@@ -367,7 +367,7 @@ export function BatterySection({ onError }: BatterySectionProps) {
 
   // Render list view
   const renderList = () => (
-    <div ref={listContainerRef} className="flex-1 min-h-0 flex flex-col overflow-hidden">
+    <div ref={listContainerRef} className="h-full flex-1 min-h-0 flex flex-col overflow-hidden">
       <div className="px-4 md:px-6 py-4 border-b border-slate-800 bg-slate-900/95 backdrop-blur supports-[backdrop-filter]:bg-slate-900/85 flex-shrink-0">
         {/* Header */}
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -1102,7 +1102,7 @@ export function BatterySection({ onError }: BatterySectionProps) {
 
   // Main render
   return (
-    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+    <div className="h-full flex flex-col flex-1 min-h-0 overflow-hidden">
       {renderList()}
       {typeof document !== 'undefined' && (viewMode === 'create' || viewMode === 'edit') && createPortal(
         <div
