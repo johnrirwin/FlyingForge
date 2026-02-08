@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strconv"
@@ -107,7 +108,7 @@ func (api *AdminAPI) handleAdminGear(w http.ResponseWriter, r *http.Request) {
 	api.writeJSON(w, http.StatusOK, response)
 }
 
-// handleAdminGearByID handles GET/PUT /api/admin/gear/{id} and /api/admin/gear/{id}/image
+// handleAdminGearByID handles GET/PUT/DELETE /api/admin/gear/{id} and /api/admin/gear/{id}/image
 func (api *AdminAPI) handleAdminGearByID(w http.ResponseWriter, r *http.Request) {
 	// Extract ID from path
 	path := strings.TrimPrefix(r.URL.Path, "/api/admin/gear/")
@@ -130,6 +131,8 @@ func (api *AdminAPI) handleAdminGearByID(w http.ResponseWriter, r *http.Request)
 		api.handleGetGear(w, r, id)
 	case http.MethodPut:
 		api.handleUpdateGear(w, r, id)
+	case http.MethodDelete:
+		api.handleDeleteGear(w, r, id)
 	default:
 		api.writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 	}
@@ -213,6 +216,38 @@ func (api *AdminAPI) handleUpdateGear(w http.ResponseWriter, r *http.Request, id
 	)
 
 	api.writeJSON(w, http.StatusOK, item)
+}
+
+// handleDeleteGear handles DELETE /api/admin/gear/{id}
+func (api *AdminAPI) handleDeleteGear(w http.ResponseWriter, r *http.Request, id string) {
+	userID := auth.GetUserID(r.Context())
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	if err := api.catalogStore.AdminDelete(ctx, id); err != nil {
+		if errors.Is(err, database.ErrCatalogItemNotFound) {
+			api.writeJSON(w, http.StatusNotFound, map[string]string{
+				"error": "gear item not found",
+			})
+			return
+		}
+
+		api.logger.Error("Failed to delete gear item", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "failed to delete gear item",
+		})
+		return
+	}
+
+	api.logger.Info("Admin deleted gear item",
+		logging.WithField("gearId", id),
+		logging.WithField("adminId", userID),
+	)
+
+	api.writeJSON(w, http.StatusOK, map[string]string{
+		"message": "Gear item deleted successfully",
+	})
 }
 
 // writeJSON writes a JSON response

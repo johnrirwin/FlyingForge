@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -17,6 +18,8 @@ import (
 type GearCatalogStore struct {
 	db *DB
 }
+
+var ErrCatalogItemNotFound = errors.New("catalog item not found")
 
 // NewGearCatalogStore creates a new gear catalog store
 func NewGearCatalogStore(db *DB) *GearCatalogStore {
@@ -695,10 +698,13 @@ func (s *GearCatalogStore) AdminSearch(ctx context.Context, params models.AdminG
 	}
 
 	if params.ImageStatus != "" {
-		if params.ImageStatus == models.ImageStatusRecentlyCurated {
+		switch params.ImageStatus {
+		case models.ImageStatusRecentlyCurated:
 			// Special filter: items curated within last 24 hours
 			whereClauses = append(whereClauses, "image_curated_at >= NOW() - INTERVAL '24 hours'")
-		} else {
+		case models.ImageStatusAll:
+			// Special filter: include all records (no curation-status WHERE clause)
+		default:
 			whereClauses = append(whereClauses, fmt.Sprintf("COALESCE(image_status, 'missing') = $%d", argIdx))
 			args = append(args, params.ImageStatus)
 			argIdx++
@@ -1035,6 +1041,24 @@ func (s *GearCatalogStore) DeleteImage(ctx context.Context, id string) error {
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
 		return fmt.Errorf("catalog item not found: %s", id)
+	}
+
+	return nil
+}
+
+// AdminDelete permanently deletes a gear catalog item (admin only).
+// Related inventory_items.catalog_id references are nulled via FK ON DELETE SET NULL.
+func (s *GearCatalogStore) AdminDelete(ctx context.Context, id string) error {
+	query := `DELETE FROM gear_catalog WHERE id = $1`
+
+	result, err := s.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete gear catalog item: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("%w: %s", ErrCatalogItemNotFound, id)
 	}
 
 	return nil

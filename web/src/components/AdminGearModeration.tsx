@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef, type FormEvent, type ChangeEvent } from 'react';
-import type { GearCatalogItem, GearType, ImageStatus, AdminUpdateGearCatalogParams, DroneType } from '../gearCatalogTypes';
+import type { GearCatalogItem, GearType, ImageStatusFilter, AdminUpdateGearCatalogParams, DroneType } from '../gearCatalogTypes';
 import { GEAR_TYPES, DRONE_TYPES } from '../gearCatalogTypes';
-import { adminSearchGear, adminUpdateGear, adminUploadGearImage, adminDeleteGearImage, adminGetGear, getAdminGearImageUrl } from '../adminApi';
+import { adminSearchGear, adminUpdateGear, adminUploadGearImage, adminDeleteGearImage, adminDeleteGear, adminGetGear, getAdminGearImageUrl } from '../adminApi';
+import { CatalogSearchModal } from './CatalogSearchModal';
 
 interface AdminGearModerationProps {
   isAdmin: boolean;
@@ -18,7 +19,7 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
   const [query, setQuery] = useState('');
   const [appliedQuery, setAppliedQuery] = useState('');
   const [gearType, setGearType] = useState<GearType | ''>('');
-  const [imageStatus, setImageStatus] = useState<ImageStatus | ''>(''); // Default to all items
+  const [imageStatus, setImageStatus] = useState<ImageStatusFilter | ''>(''); // Default to "Needs Work"
   const pageSize = 30;
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -27,17 +28,23 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
   // Use refs to track current offset and prevent race conditions
   const currentOffsetRef = useRef(0);
   const isLoadingRef = useRef(false);
+  const latestLoadRequestRef = useRef(0);
 
   // Edit modal state - modalKey forces remount to fetch fresh data
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [modalKey, setModalKey] = useState(0);
+  const [showAddGearModal, setShowAddGearModal] = useState(false);
+  const [deleteTargetItem, setDeleteTargetItem] = useState<GearCatalogItem | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [isDeletingItem, setIsDeletingItem] = useState(false);
 
-  const loadItems = useCallback(async (reset = false) => {
+  const loadItems = useCallback(async (reset = false, forceRefresh = false) => {
     if (!isAdmin) return;
     
-    // Prevent concurrent loads
-    if (isLoadingRef.current) return;
+    // Prevent concurrent loads by default; allow forced resets to supersede in-flight loads.
+    if (isLoadingRef.current && !(reset && forceRefresh)) return;
     isLoadingRef.current = true;
+    const requestId = ++latestLoadRequestRef.current;
 
     if (reset) {
       setIsLoading(true);
@@ -57,6 +64,11 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
         limit: pageSize,
         offset: offset,
       });
+
+      // Ignore stale responses from superseded requests.
+      if (requestId !== latestLoadRequestRef.current) {
+        return;
+      }
       
       if (reset) {
         setItems(response.items);
@@ -67,11 +79,16 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
       setTotalCount(response.totalCount);
       setHasMore(response.items.length === pageSize && currentOffsetRef.current < response.totalCount);
     } catch (err) {
+      if (requestId !== latestLoadRequestRef.current) {
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Failed to load gear items');
     } finally {
-      setIsLoading(false);
-      setIsLoadingMore(false);
-      isLoadingRef.current = false;
+      if (requestId === latestLoadRequestRef.current) {
+        setIsLoading(false);
+        setIsLoadingMore(false);
+        isLoadingRef.current = false;
+      }
     }
   }, [isAdmin, appliedQuery, gearType, imageStatus]);
 
@@ -101,8 +118,8 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
   };
 
   // Infinite scroll observer
-  // Note: loadItems has a synchronous isLoadingRef guard that prevents concurrent calls,
-  // so we don't need to check loading state here - just trigger on intersection
+  // Note: loadItems prevents concurrent calls by default (except forced reset refreshes),
+  // so we don't need to check loading state here - just trigger on intersection.
   useEffect(() => {
     const element = loadMoreRef.current;
     if (!element || !hasMore) return;
@@ -134,6 +151,57 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
     setEditingItemId(null);
     loadItems(true);
   };
+
+  const handleDeleteClick = useCallback((item: GearCatalogItem) => {
+    setDeleteTargetItem(item);
+    setDeleteConfirmText('');
+    setError(null);
+  }, []);
+
+  const handleCancelDelete = useCallback(() => {
+    if (isDeletingItem) return;
+    setDeleteTargetItem(null);
+    setDeleteConfirmText('');
+  }, [isDeletingItem]);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!deleteTargetItem) return;
+
+    const requiresTypedDelete = deleteTargetItem.usageCount > 0;
+    if (requiresTypedDelete && deleteConfirmText.trim().toLowerCase() !== 'delete') {
+      return;
+    }
+
+    setIsDeletingItem(true);
+    setError(null);
+    try {
+      await adminDeleteGear(deleteTargetItem.id);
+      if (editingItemId === deleteTargetItem.id) {
+        setEditingItemId(null);
+      }
+      setDeleteTargetItem(null);
+      setDeleteConfirmText('');
+      await loadItems(true, true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete gear item');
+    } finally {
+      setIsDeletingItem(false);
+    }
+  }, [deleteConfirmText, deleteTargetItem, editingItemId, loadItems]);
+
+  const handleAddGearClick = () => {
+    setShowAddGearModal(true);
+  };
+
+  const handleAddGearClose = () => {
+    setShowAddGearModal(false);
+  };
+
+  const handleAddGearSelect = useCallback(() => {
+    // Close create modal after successful add/select and refresh the list.
+    setShowAddGearModal(false);
+    void loadItems(true);
+  }, [loadItems]);
 
   // Show loading while auth state is being determined
   if (authLoading) {
@@ -225,20 +293,32 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
               {/* Image status filter */}
               <select
                 value={imageStatus}
-                onChange={(e) => setImageStatus(e.target.value as ImageStatus | '')}
+                onChange={(e) => setImageStatus(e.target.value as ImageStatusFilter | '')}
                 className="flex-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 <option value="">Needs Work</option>
+                <option value="all">All Records</option>
                 <option value="missing">Needs Image</option>
                 <option value="approved">Has Image</option>
                 <option value="recently-curated">Recently Updated (24h)</option>
               </select>
             </div>
 
-            {/* Results count */}
-            <p className="text-slate-400 text-sm">
-              {totalCount} item{totalCount !== 1 ? 's' : ''} found
-            </p>
+            {/* Results count and actions */}
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-slate-400 text-sm">
+                {totalCount} item{totalCount !== 1 ? 's' : ''} found
+              </p>
+              <button
+                onClick={handleAddGearClick}
+                className="px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add Gear
+              </button>
+            </div>
           </div>
 
           {/* Error message */}
@@ -330,12 +410,20 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
                     )}
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    <button
-                      onClick={() => handleEditClick(item)}
-                      className="px-3 py-1 bg-primary-600 hover:bg-primary-700 text-white text-xs font-medium rounded transition-colors"
-                    >
-                      Edit
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleEditClick(item)}
+                        className="px-3 py-1 bg-primary-600 hover:bg-primary-700 text-white text-xs font-medium rounded transition-colors"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteClick(item)}
+                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded transition-colors"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -387,12 +475,20 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
                     Added {new Date(item.createdAt).toLocaleDateString()}
                   </p>
                 </div>
-                <button
-                  onClick={() => handleEditClick(item)}
-                  className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded transition-colors flex-shrink-0"
-                >
-                  Edit
-                </button>
+                <div className="flex flex-col gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => handleEditClick(item)}
+                    className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded transition-colors"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDeleteClick(item)}
+                    className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
             </div>
           ))
@@ -430,6 +526,95 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
           onClose={handleEditClose}
           onSave={handleEditSave}
         />
+      )}
+
+      <CatalogSearchModal
+        isOpen={showAddGearModal}
+        onClose={handleAddGearClose}
+        onSelectItem={handleAddGearSelect}
+        startInCreateMode
+        onUploadCatalogImage={adminUploadGearImage}
+      />
+
+      {/* Delete Gear Confirmation Modal */}
+      {deleteTargetItem && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full shadow-2xl border border-red-500/50">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-white">Delete Gear Item?</h3>
+            </div>
+
+            <div className="mb-4">
+              <p className="text-slate-300 mb-3">
+                <strong className="text-red-400">This action cannot be undone.</strong> Deleting this catalog item will permanently remove:
+              </p>
+              <ul className="text-sm text-slate-400 space-y-2 mb-4">
+                <li className="flex items-start gap-2">
+                  <span className="text-red-400 mt-0.5">•</span>
+                  <span>
+                    Catalog entry for <span className="font-medium text-slate-200">{deleteTargetItem.brand} {deleteTargetItem.model}{deleteTargetItem.variant ? ` ${deleteTargetItem.variant}` : ''}</span>
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-red-400 mt-0.5">•</span>
+                  <span>Any curated catalog image associated with this item</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-red-400 mt-0.5">•</span>
+                  <span>Catalog links from related inventory records (inventory items themselves are kept)</span>
+                </li>
+              </ul>
+
+              {deleteTargetItem.usageCount > 0 && (
+                <>
+                  <p className="text-sm text-amber-300 mb-2">
+                    This item is currently linked to {deleteTargetItem.usageCount} inventory record{deleteTargetItem.usageCount !== 1 ? 's' : ''}.
+                  </p>
+                  <p className="text-sm text-slate-400">
+                    Type <span className="font-mono text-red-400 bg-red-400/10 px-1.5 py-0.5 rounded">delete</span> to confirm:
+                  </p>
+                </>
+              )}
+            </div>
+
+            {deleteTargetItem.usageCount > 0 && (
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="Type 'delete' to confirm"
+                className="w-full px-4 py-2 bg-slate-700 border border-red-500/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent mb-4"
+                autoFocus
+                disabled={isDeletingItem}
+              />
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleCancelDelete}
+                disabled={isDeletingItem}
+                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleConfirmDelete()}
+                disabled={
+                  isDeletingItem ||
+                  (deleteTargetItem.usageCount > 0 && deleteConfirmText.trim().toLowerCase() !== 'delete')
+                }
+                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isDeletingItem ? 'Deleting...' : 'Delete Item'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

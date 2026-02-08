@@ -35,9 +35,12 @@ export const GEAR_TYPES: { value: GearType; label: string }[] = [
 // Catalog item status
 export type CatalogItemStatus = 'active' | 'pending' | 'flagged' | 'rejected';
 
-// Image/content curation status
-// Note: 'recently-curated' is a special filter value (not stored in DB)
-export type ImageStatus = 'missing' | 'approved' | 'recently-curated';
+// Persisted curation status stored on catalog items.
+export type ImageCurationStatus = 'missing' | 'approved';
+// Filter-only values used by admin moderation search controls.
+export type ImageStatusFilter = ImageCurationStatus | 'recently-curated' | 'all';
+// Backward-compatible alias for persisted status fields.
+export type ImageStatus = ImageCurationStatus;
 
 // Catalog item source
 export type CatalogItemSource = 'user-submitted' | 'admin' | 'import' | 'migration';
@@ -88,11 +91,11 @@ export interface GearCatalogItem {
   createdAt: string;
   updatedAt: string;
   // Image curation fields
-  imageStatus: ImageStatus;
+  imageStatus: ImageCurationStatus;
   imageCuratedByUserId?: string;
   imageCuratedAt?: string;
   // Description curation fields
-  descriptionStatus: ImageStatus;
+  descriptionStatus: ImageCurationStatus;
   descriptionCuratedByUserId?: string;
   descriptionCuratedAt?: string;
 }
@@ -127,7 +130,7 @@ export interface AdminGearSearchParams {
   query?: string;
   gearType?: GearType;
   brand?: string;
-  imageStatus?: ImageStatus;
+  imageStatus?: ImageStatusFilter;
   limit?: number;
   offset?: number;
 }
