@@ -15,7 +15,7 @@ import (
 // InventoryManager defines the interface for inventory operations
 type InventoryManager interface {
 	AddItem(ctx context.Context, userID string, params models.AddInventoryParams) (*models.InventoryItem, error)
-	AddFromEquipment(ctx context.Context, userID string, equipment models.EquipmentItem, quantity int, condition models.ItemCondition, notes string) (*models.InventoryItem, error)
+	AddFromEquipment(ctx context.Context, userID string, equipment models.EquipmentItem, quantity int, notes string) (*models.InventoryItem, error)
 	GetItem(ctx context.Context, id string, userID string) (*models.InventoryItem, error)
 	GetInventory(ctx context.Context, userID string, params models.InventoryFilterParams) (*models.InventoryResponse, error)
 	UpdateItem(ctx context.Context, userID string, params models.UpdateInventoryParams) (*models.InventoryItem, error)
@@ -45,10 +45,6 @@ func (s *Service) AddItem(ctx context.Context, userID string, params models.AddI
 
 	if params.Name == "" {
 		return nil, &ServiceError{Message: "name is required"}
-	}
-
-	if params.Condition != "" && !isValidCondition(params.Condition) {
-		return nil, &ServiceError{Message: "invalid condition: " + string(params.Condition)}
 	}
 
 	// Use atomic UPSERT when catalog_id is provided to prevent duplicates from race conditions
@@ -90,12 +86,9 @@ func (s *Service) AddItem(ctx context.Context, userID string, params models.AddI
 }
 
 // AddFromEquipment adds an equipment item to the inventory
-func (s *Service) AddFromEquipment(ctx context.Context, userID string, equipment models.EquipmentItem, quantity int, condition models.ItemCondition, notes string) (*models.InventoryItem, error) {
+func (s *Service) AddFromEquipment(ctx context.Context, userID string, equipment models.EquipmentItem, quantity int, notes string) (*models.InventoryItem, error) {
 	if quantity <= 0 {
 		quantity = 1
-	}
-	if condition == "" {
-		condition = models.ConditionNew
 	}
 
 	params := models.AddInventoryParams{
@@ -103,7 +96,6 @@ func (s *Service) AddFromEquipment(ctx context.Context, userID string, equipment
 		Category:          equipment.Category,
 		Manufacturer:      equipment.Manufacturer,
 		Quantity:          quantity,
-		Condition:         condition,
 		Notes:             notes,
 		PurchasePrice:     &equipment.Price,
 		PurchaseSeller:    equipment.Seller,
@@ -130,10 +122,6 @@ func (s *Service) GetInventory(ctx context.Context, userID string, params models
 func (s *Service) UpdateItem(ctx context.Context, userID string, params models.UpdateInventoryParams) (*models.InventoryItem, error) {
 	if params.ID == "" {
 		return nil, &ServiceError{Message: "item ID is required"}
-	}
-
-	if params.Condition != nil && !isValidCondition(*params.Condition) {
-		return nil, &ServiceError{Message: "invalid condition: " + string(*params.Condition)}
 	}
 
 	s.logger.Debug("Updating inventory item", logging.WithField("id", params.ID))
@@ -207,11 +195,6 @@ func (s *InMemoryService) AddItem(ctx context.Context, userID string, params mod
 		quantity = 1
 	}
 
-	condition := params.Condition
-	if condition == "" {
-		condition = models.ConditionNew
-	}
-
 	item := models.InventoryItem{
 		ID:                id,
 		UserID:            userID,
@@ -219,7 +202,6 @@ func (s *InMemoryService) AddItem(ctx context.Context, userID string, params mod
 		Category:          params.Category,
 		Manufacturer:      params.Manufacturer,
 		Quantity:          quantity,
-		Condition:         condition,
 		Notes:             params.Notes,
 		BuildID:           params.BuildID,
 		PurchasePrice:     params.PurchasePrice,
@@ -239,12 +221,9 @@ func (s *InMemoryService) AddItem(ctx context.Context, userID string, params mod
 }
 
 // AddFromEquipment adds an equipment item to the in-memory inventory
-func (s *InMemoryService) AddFromEquipment(ctx context.Context, userID string, equipment models.EquipmentItem, quantity int, condition models.ItemCondition, notes string) (*models.InventoryItem, error) {
+func (s *InMemoryService) AddFromEquipment(ctx context.Context, userID string, equipment models.EquipmentItem, quantity int, notes string) (*models.InventoryItem, error) {
 	if quantity <= 0 {
 		quantity = 1
-	}
-	if condition == "" {
-		condition = models.ConditionNew
 	}
 
 	return s.AddItem(ctx, userID, models.AddInventoryParams{
@@ -252,7 +231,6 @@ func (s *InMemoryService) AddFromEquipment(ctx context.Context, userID string, e
 		Category:          equipment.Category,
 		Manufacturer:      equipment.Manufacturer,
 		Quantity:          quantity,
-		Condition:         condition,
 		Notes:             notes,
 		PurchasePrice:     &equipment.Price,
 		PurchaseSeller:    equipment.Seller,
@@ -287,9 +265,6 @@ func (s *InMemoryService) GetInventory(ctx context.Context, userID string, param
 			continue
 		}
 		if params.Category != "" && item.Category != params.Category {
-			continue
-		}
-		if params.Condition != "" && item.Condition != params.Condition {
 			continue
 		}
 		if params.BuildID != "" && item.BuildID != params.BuildID {
@@ -355,9 +330,6 @@ func (s *InMemoryService) UpdateItem(ctx context.Context, userID string, params 
 	if params.Quantity != nil {
 		item.Quantity = *params.Quantity
 	}
-	if params.Condition != nil {
-		item.Condition = *params.Condition
-	}
 	if params.Notes != nil {
 		item.Notes = *params.Notes
 	}
@@ -403,8 +375,7 @@ func (s *InMemoryService) RemoveItem(ctx context.Context, id string, userID stri
 // GetSummary returns a summary of the inventory
 func (s *InMemoryService) GetSummary(ctx context.Context, userID string) (*models.InventorySummary, error) {
 	summary := &models.InventorySummary{
-		ByCategory:  make(map[models.EquipmentCategory]int),
-		ByCondition: make(map[models.ItemCondition]int),
+		ByCategory: make(map[models.EquipmentCategory]int),
 	}
 
 	for _, item := range s.items {
@@ -417,7 +388,6 @@ func (s *InMemoryService) GetSummary(ctx context.Context, userID string) (*model
 			summary.TotalValue += *item.PurchasePrice * float64(item.Quantity)
 		}
 		summary.ByCategory[item.Category]++
-		summary.ByCondition[item.Condition]++
 	}
 
 	return summary, nil
@@ -430,16 +400,6 @@ type ServiceError struct {
 
 func (e *ServiceError) Error() string {
 	return e.Message
-}
-
-// isValidCondition checks if a condition is valid
-func isValidCondition(condition models.ItemCondition) bool {
-	switch condition {
-	case models.ConditionNew, models.ConditionUsed, models.ConditionBroken, models.ConditionSpare:
-		return true
-	default:
-		return false
-	}
 }
 
 func generateID() string {

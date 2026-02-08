@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest'
 import { screen, fireEvent } from '@testing-library/react'
 import { render } from '../test/test-utils'
 import { Sidebar } from './Sidebar'
-import type { EquipmentSearchParams, InventorySummary, EquipmentCategory, ItemCondition } from '../equipmentTypes'
 import type { User } from '../authTypes'
 
 // Mock user for authenticated tests
@@ -18,53 +17,11 @@ const mockUser: User = {
   createdAt: '2025-01-01T00:00:00Z',
 }
 
-// Default search params
-const defaultSearchParams: EquipmentSearchParams = {
-  query: '',
-  category: undefined,
-  minPrice: undefined,
-  maxPrice: undefined,
-  inStockOnly: false,
-  seller: undefined,
-}
-
-// Default inventory summary - must include all categories and conditions
-const mockInventorySummary: InventorySummary = {
-  totalItems: 15,
-  totalValue: 2500,
-  byCategory: {
-    frames: 3,
-    motors: 8,
-    propellers: 4,
-    vtx: 0,
-    flight_controllers: 0,
-    esc: 0,
-    aio: 0,
-    receivers: 0,
-    cameras: 0,
-    antennas: 0,
-    accessories: 0,
-  } as Record<EquipmentCategory, number>,
-  byCondition: {
-    new: 5,
-    used: 10,
-    broken: 0,
-    spare: 0,
-  } as Record<ItemCondition, number>,
-}
-
 // Helper to create default props
 function createDefaultProps(overrides = {}) {
   return {
     activeSection: 'news' as const,
     onSectionChange: vi.fn(),
-    searchParams: defaultSearchParams,
-    onSearchChange: vi.fn(),
-    sellers: [],
-    inventorySummary: null,
-    inventoryCategory: null,
-    inventoryCondition: null,
-    onInventoryFilterChange: vi.fn(),
     isAuthenticated: false,
     user: null,
     authLoading: false,
@@ -137,90 +94,19 @@ describe('Sidebar', () => {
     })
   })
 
-  describe('Inventory Filters', () => {
-    it('shows inventory filters only when inventory section is active', () => {
-      const { rerender } = render(<Sidebar {...createDefaultProps({ activeSection: 'news' })} />)
+  describe('Inventory navigation', () => {
+    it('does not render inventory filter controls inside the sidebar', () => {
+      render(<Sidebar {...createDefaultProps({ 
+        activeSection: 'inventory',
+        isAuthenticated: true,
+        user: mockUser,
+      })} />)
       
       expect(screen.queryByText('Condition')).not.toBeInTheDocument()
       expect(screen.queryByText('Categories')).not.toBeInTheDocument()
-      
-      rerender(<Sidebar {...createDefaultProps({ 
-        activeSection: 'inventory',
-        isAuthenticated: true,
-        user: mockUser 
-      })} />)
-      
-      expect(screen.getByText('Condition')).toBeInTheDocument()
-      expect(screen.getByText('Categories')).toBeInTheDocument()
-    })
-
-    it('shows inventory summary when available', () => {
-      render(<Sidebar {...createDefaultProps({ 
-        activeSection: 'inventory',
-        isAuthenticated: true,
-        user: mockUser,
-        inventorySummary: mockInventorySummary
-      })} />)
-      
-      expect(screen.getByText('Total Items')).toBeInTheDocument()
-      expect(screen.getByText('Total Value')).toBeInTheDocument()
-      expect(screen.getByText('$2500')).toBeInTheDocument()
-      // 15 appears once in the inventory summary section
-      expect(screen.getByText('15')).toBeInTheDocument()
-    })
-
-    it('calls onInventoryFilterChange when condition is changed', () => {
-      const onInventoryFilterChange = vi.fn()
-      render(<Sidebar {...createDefaultProps({ 
-        activeSection: 'inventory',
-        isAuthenticated: true,
-        user: mockUser,
-        onInventoryFilterChange
-      })} />)
-      
-      const conditionSelect = screen.getByRole('combobox')
-      fireEvent.change(conditionSelect, { target: { value: 'new' } })
-      
-      expect(onInventoryFilterChange).toHaveBeenCalledWith(null, 'new')
-    })
-
-    it('calls onInventoryFilterChange when category is selected', () => {
-      const onInventoryFilterChange = vi.fn()
-      render(<Sidebar {...createDefaultProps({ 
-        activeSection: 'inventory',
-        isAuthenticated: true,
-        user: mockUser,
-        onInventoryFilterChange
-      })} />)
-      
-      fireEvent.click(screen.getByText('Motors'))
-      
-      expect(onInventoryFilterChange).toHaveBeenCalledWith('motors', null)
-    })
-
-    it('highlights the selected category', () => {
-      render(<Sidebar {...createDefaultProps({ 
-        activeSection: 'inventory',
-        isAuthenticated: true,
-        user: mockUser,
-        inventoryCategory: 'motors'
-      })} />)
-      
-      const motorsButton = screen.getByText('Motors').closest('button')
-      expect(motorsButton).toHaveClass('bg-slate-800')
-      expect(motorsButton).toHaveClass('text-white')
-    })
-
-    it('shows All Categories option and highlights when no category selected', () => {
-      render(<Sidebar {...createDefaultProps({ 
-        activeSection: 'inventory',
-        isAuthenticated: true,
-        user: mockUser,
-        inventoryCategory: null
-      })} />)
-      
-      const allCategoriesButton = screen.getByText('All Categories').closest('button')
-      expect(allCategoriesButton).toHaveClass('bg-slate-800')
+      expect(screen.queryByText('All Categories')).not.toBeInTheDocument()
+      expect(screen.queryByText('Total Items')).not.toBeInTheDocument()
+      expect(screen.queryByText('Total Value')).not.toBeInTheDocument()
     })
   })
 

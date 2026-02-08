@@ -116,6 +116,7 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationGearCatalogImageData,      // Adds image_data binary storage for gear images
 		migrationInventoryCatalogUnique,    // Adds unique constraint on (user_id, catalog_id)
 		migrationDropInventoryPurchaseDate, // Drops unused purchase_date column
+		migrationDropInventoryCondition,    // Drops unused condition column
 	}
 
 	for i, migration := range migrations {
@@ -221,7 +222,6 @@ CREATE TABLE IF NOT EXISTS inventory_items (
     category VARCHAR(50) NOT NULL,
     manufacturer VARCHAR(255),
     quantity INTEGER NOT NULL DEFAULT 1,
-    condition VARCHAR(20) NOT NULL DEFAULT 'new',
     notes TEXT,
     build_id VARCHAR(100),
     purchase_price DECIMAL(10,2),
@@ -245,7 +245,6 @@ CREATE INDEX IF NOT EXISTS idx_equipment_name_search ON equipment_items USING gi
 
 CREATE INDEX IF NOT EXISTS idx_inventory_user ON inventory_items(user_id);
 CREATE INDEX IF NOT EXISTS idx_inventory_category ON inventory_items(category);
-CREATE INDEX IF NOT EXISTS idx_inventory_condition ON inventory_items(condition);
 CREATE INDEX IF NOT EXISTS idx_inventory_build ON inventory_items(build_id);
 CREATE INDEX IF NOT EXISTS idx_inventory_name_search ON inventory_items USING gin(to_tsvector('english', name));
 `
@@ -724,4 +723,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_user_catalog_unique
 // Migration to drop unused purchase_date column from inventory_items
 const migrationDropInventoryPurchaseDate = `
 ALTER TABLE inventory_items DROP COLUMN IF EXISTS purchase_date;
+`
+
+// Migration to drop unused condition column from inventory_items
+const migrationDropInventoryCondition = `
+DROP INDEX IF EXISTS idx_inventory_condition;
+ALTER TABLE inventory_items DROP COLUMN IF EXISTS condition;
 `

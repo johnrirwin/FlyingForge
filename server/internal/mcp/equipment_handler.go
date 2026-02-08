@@ -143,11 +143,6 @@ func (h *EquipmentHandler) GetTools() []ToolDefinition {
 						"type": "integer",
 						"description": "Quantity owned (default: 1)"
 					},
-					"condition": {
-						"type": "string",
-						"enum": ["new", "used", "broken", "spare"],
-						"description": "Condition of the item (default: 'new')"
-					},
 					"notes": {
 						"type": "string",
 						"description": "Personal notes about this item"
@@ -187,11 +182,6 @@ func (h *EquipmentHandler) GetTools() []ToolDefinition {
 						"enum": ["frames", "vtx", "flight_controllers", "esc", "aio", "motors", "propellers", "receivers", "batteries", "cameras", "antennas", "accessories"],
 						"description": "Filter by category"
 					},
-					"condition": {
-						"type": "string",
-						"enum": ["new", "used", "broken", "spare"],
-						"description": "Filter by condition"
-					},
 					"buildId": {
 						"type": "string",
 						"description": "Filter by build ID"
@@ -213,7 +203,7 @@ func (h *EquipmentHandler) GetTools() []ToolDefinition {
 		},
 		{
 			Name:        "update_inventory_item",
-			Description: "Update an existing item in your inventory (quantity, condition, notes, etc.).",
+			Description: "Update an existing item in your inventory (quantity, notes, etc.).",
 			InputSchema: json.RawMessage(`{
 				"type": "object",
 				"properties": {
@@ -224,11 +214,6 @@ func (h *EquipmentHandler) GetTools() []ToolDefinition {
 					"quantity": {
 						"type": "integer",
 						"description": "New quantity"
-					},
-					"condition": {
-						"type": "string",
-						"enum": ["new", "used", "broken", "spare"],
-						"description": "New condition"
 					},
 					"notes": {
 						"type": "string",
@@ -397,12 +382,11 @@ func (h *EquipmentHandler) handleAddInventoryItem(ctx context.Context, arguments
 
 func (h *EquipmentHandler) handleGetInventory(ctx context.Context, arguments json.RawMessage) (interface{}, error) {
 	var params struct {
-		Category  string `json:"category"`
-		Condition string `json:"condition"`
-		BuildID   string `json:"buildId"`
-		Query     string `json:"query"`
-		Limit     int    `json:"limit"`
-		Offset    int    `json:"offset"`
+		Category string `json:"category"`
+		BuildID  string `json:"buildId"`
+		Query    string `json:"query"`
+		Limit    int    `json:"limit"`
+		Offset   int    `json:"offset"`
 	}
 
 	if len(arguments) > 0 {
@@ -412,12 +396,11 @@ func (h *EquipmentHandler) handleGetInventory(ctx context.Context, arguments jso
 	}
 
 	filterParams := models.InventoryFilterParams{
-		Category:  models.EquipmentCategory(params.Category),
-		Condition: models.ItemCondition(params.Condition),
-		BuildID:   params.BuildID,
-		Query:     params.Query,
-		Limit:     params.Limit,
-		Offset:    params.Offset,
+		Category: models.EquipmentCategory(params.Category),
+		BuildID:  params.BuildID,
+		Query:    params.Query,
+		Limit:    params.Limit,
+		Offset:   params.Offset,
 	}
 
 	// MCP mode operates without user authentication - use empty userID

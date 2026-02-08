@@ -32,17 +32,12 @@ func (s *InventoryStore) Add(ctx context.Context, userID string, params models.A
 		quantity = 1
 	}
 
-	condition := params.Condition
-	if condition == "" {
-		condition = models.ConditionNew
-	}
-
 	query := `
 		INSERT INTO inventory_items (
-			user_id, name, category, manufacturer, quantity, condition, notes,
+			user_id, name, category, manufacturer, quantity, notes,
 			build_id, purchase_price, purchase_seller,
 			product_url, image_url, specs, source_equipment_id, catalog_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		RETURNING id, created_at, updated_at
 	`
 
@@ -52,7 +47,6 @@ func (s *InventoryStore) Add(ctx context.Context, userID string, params models.A
 		Category:          params.Category,
 		Manufacturer:      params.Manufacturer,
 		Quantity:          quantity,
-		Condition:         condition,
 		Notes:             params.Notes,
 		BuildID:           params.BuildID,
 		PurchasePrice:     params.PurchasePrice,
@@ -65,7 +59,7 @@ func (s *InventoryStore) Add(ctx context.Context, userID string, params models.A
 	}
 
 	err := s.db.QueryRowContext(ctx, query,
-		nullString(userID), item.Name, item.Category, item.Manufacturer, item.Quantity, item.Condition, item.Notes,
+		nullString(userID), item.Name, item.Category, item.Manufacturer, item.Quantity, item.Notes,
 		nullString(item.BuildID), item.PurchasePrice, nullString(item.PurchaseSeller),
 		nullString(item.ProductURL), nullString(item.ImageURL), item.Specs, nullString(item.SourceEquipmentID),
 		nullString(item.CatalogID),
@@ -95,22 +89,17 @@ func (s *InventoryStore) AddOrIncrement(ctx context.Context, userID string, para
 		quantity = 1
 	}
 
-	condition := params.Condition
-	if condition == "" {
-		condition = models.ConditionNew
-	}
-
 	// UPSERT: insert if not exists, otherwise increment quantity
 	// The ON CONFLICT predicate must match the partial unique index exactly
 	query := `
 		INSERT INTO inventory_items (
-			user_id, name, category, manufacturer, quantity, condition, notes,
+			user_id, name, category, manufacturer, quantity, notes,
 			build_id, purchase_price, purchase_seller,
 			product_url, image_url, specs, source_equipment_id, catalog_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		ON CONFLICT (user_id, catalog_id) WHERE user_id IS NOT NULL AND catalog_id IS NOT NULL
 		DO UPDATE SET quantity = inventory_items.quantity + EXCLUDED.quantity, updated_at = NOW()
-		RETURNING id, user_id, name, category, manufacturer, quantity, condition, notes,
+		RETURNING id, user_id, name, category, manufacturer, quantity, notes,
 			build_id, purchase_price, purchase_seller,
 			product_url, image_url, specs, source_equipment_id, catalog_id, created_at, updated_at
 	`
@@ -121,13 +110,13 @@ func (s *InventoryStore) AddOrIncrement(ctx context.Context, userID string, para
 	var purchasePriceNull sql.NullFloat64
 
 	err := s.db.QueryRowContext(ctx, query,
-		nullString(userID), params.Name, params.Category, params.Manufacturer, quantity, condition, params.Notes,
+		nullString(userID), params.Name, params.Category, params.Manufacturer, quantity, params.Notes,
 		nullString(params.BuildID), params.PurchasePrice, nullString(params.PurchaseSeller),
 		nullString(params.ProductURL), nullString(params.ImageURL), specs, nullString(params.SourceEquipmentID),
 		nullString(params.CatalogID),
 	).Scan(
 		&item.ID, &itemUserID, &item.Name, &item.Category, &item.Manufacturer,
-		&item.Quantity, &item.Condition, &item.Notes,
+		&item.Quantity, &item.Notes,
 		&buildID, &purchasePriceNull, &purchaseSeller,
 		&productURL, &imageURL, &item.Specs, &sourceEquipmentID, &catalogID,
 		&item.CreatedAt, &item.UpdatedAt,
@@ -157,7 +146,7 @@ func (s *InventoryStore) AddOrIncrement(ctx context.Context, userID string, para
 // Get retrieves an inventory item by ID (optionally scoped to user)
 func (s *InventoryStore) Get(ctx context.Context, id string, userID string) (*models.InventoryItem, error) {
 	query := `
-		SELECT i.id, i.user_id, i.name, i.category, i.manufacturer, i.quantity, i.condition, i.notes,
+		SELECT i.id, i.user_id, i.name, i.category, i.manufacturer, i.quantity, i.notes,
 			   i.build_id, i.purchase_price, i.purchase_seller,
 			   i.product_url, 
 			   COALESCE(i.image_url, 
@@ -175,7 +164,7 @@ func (s *InventoryStore) Get(ctx context.Context, id string, userID string) (*mo
 	// If userID is provided, scope the query
 	if userID != "" {
 		query = `
-			SELECT i.id, i.user_id, i.name, i.category, i.manufacturer, i.quantity, i.condition, i.notes,
+			SELECT i.id, i.user_id, i.name, i.category, i.manufacturer, i.quantity, i.notes,
 				   i.build_id, i.purchase_price, i.purchase_seller,
 				   i.product_url, 
 				   COALESCE(i.image_url, 
@@ -198,7 +187,7 @@ func (s *InventoryStore) Get(ctx context.Context, id string, userID string) (*mo
 
 	err := s.db.QueryRowContext(ctx, query, args...).Scan(
 		&item.ID, &itemUserID, &item.Name, &item.Category, &item.Manufacturer,
-		&item.Quantity, &item.Condition, &item.Notes,
+		&item.Quantity, &item.Notes,
 		&buildID, &purchasePrice, &purchaseSeller,
 		&productURL, &imageURL, &item.Specs, &sourceEquipmentID, &catalogID,
 		&item.CreatedAt, &item.UpdatedAt,
@@ -248,12 +237,6 @@ func (s *InventoryStore) List(ctx context.Context, userID string, params models.
 		argIndex++
 	}
 
-	if params.Condition != "" {
-		conditions = append(conditions, fmt.Sprintf("i.condition = $%d", argIndex))
-		args = append(args, params.Condition)
-		argIndex++
-	}
-
 	if params.BuildID != "" {
 		conditions = append(conditions, fmt.Sprintf("i.build_id = $%d", argIndex))
 		args = append(args, params.BuildID)
@@ -289,7 +272,7 @@ func (s *InventoryStore) List(ctx context.Context, userID string, params models.
 	offset := params.Offset
 
 	query := fmt.Sprintf(`
-		SELECT i.id, i.user_id, i.name, i.category, i.manufacturer, i.quantity, i.condition, i.notes,
+		SELECT i.id, i.user_id, i.name, i.category, i.manufacturer, i.quantity, i.notes,
 			   i.build_id, i.purchase_price, i.purchase_seller,
 			   i.product_url, 
 			   COALESCE(i.image_url, 
@@ -323,7 +306,7 @@ func (s *InventoryStore) List(ctx context.Context, userID string, params models.
 
 		if err := rows.Scan(
 			&item.ID, &item.UserID, &item.Name, &item.Category, &item.Manufacturer,
-			&item.Quantity, &item.Condition, &item.Notes,
+			&item.Quantity, &item.Notes,
 			&buildID, &purchasePrice, &purchaseSeller,
 			&productURL, &imageURL, &item.Specs, &sourceEquipmentID, &catalogID,
 			&item.CreatedAt, &item.UpdatedAt,
@@ -381,12 +364,6 @@ func (s *InventoryStore) Update(ctx context.Context, userID string, params model
 	if params.Quantity != nil {
 		sets = append(sets, fmt.Sprintf("quantity = $%d", argIndex))
 		args = append(args, *params.Quantity)
-		argIndex++
-	}
-
-	if params.Condition != nil {
-		sets = append(sets, fmt.Sprintf("condition = $%d", argIndex))
-		args = append(args, *params.Condition)
 		argIndex++
 	}
 
@@ -533,35 +510,10 @@ func (s *InventoryStore) GetSummary(ctx context.Context, userID string) (*models
 		byCategory[category] = count
 	}
 
-	// Get counts by condition
-	byCondition := make(map[models.ItemCondition]int)
-
-	conditionQuery := `SELECT condition, COUNT(*) FROM inventory_items`
-	if userID != "" {
-		conditionQuery += " WHERE user_id = $1"
-	}
-	conditionQuery += " GROUP BY condition"
-
-	rows, err = s.db.QueryContext(ctx, conditionQuery, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get condition counts: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var condition models.ItemCondition
-		var count int
-		if err := rows.Scan(&condition, &count); err != nil {
-			continue
-		}
-		byCondition[condition] = count
-	}
-
 	return &models.InventorySummary{
-		TotalItems:  totalItems,
-		TotalValue:  totalValue.Float64,
-		ByCategory:  byCategory,
-		ByCondition: byCondition,
+		TotalItems: totalItems,
+		TotalValue: totalValue.Float64,
+		ByCategory: byCategory,
 	}, nil
 }
 
@@ -572,7 +524,7 @@ func (s *InventoryStore) GetByCatalogID(ctx context.Context, userID, catalogID s
 	}
 
 	query := `
-		SELECT i.id, i.user_id, i.name, i.category, i.manufacturer, i.quantity, i.condition, i.notes,
+		SELECT i.id, i.user_id, i.name, i.category, i.manufacturer, i.quantity, i.notes,
 			   i.build_id, i.purchase_price, i.purchase_seller,
 			   i.product_url, 
 			   COALESCE(i.image_url, 
@@ -595,7 +547,7 @@ func (s *InventoryStore) GetByCatalogID(ctx context.Context, userID, catalogID s
 
 	err := s.db.QueryRowContext(ctx, query, userID, catalogID).Scan(
 		&item.ID, &itemUserID, &item.Name, &item.Category, &item.Manufacturer,
-		&item.Quantity, &item.Condition, &item.Notes,
+		&item.Quantity, &item.Notes,
 		&buildID, &purchasePrice, &purchaseSeller,
 		&productURL, &imageURL, &item.Specs, &sourceEquipmentID, &itemCatalogID,
 		&item.CreatedAt, &item.UpdatedAt,

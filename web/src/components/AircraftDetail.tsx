@@ -582,7 +582,6 @@ function QuickAddForm({ category, onSubmit, isSubmitting }: QuickAddFormProps) {
       category: category.equipmentCategory as EquipmentCategory,
       manufacturer: manufacturer.trim() || undefined,
       quantity: 1,
-      condition: 'new',
     });
   };
 
