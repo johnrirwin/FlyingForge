@@ -225,22 +225,6 @@ func (api *AdminAPI) handleDeleteGear(w http.ResponseWriter, r *http.Request, id
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
-	// Verify the item exists first for a clean 404 response.
-	existing, err := api.catalogStore.Get(ctx, id)
-	if err != nil {
-		api.logger.Error("Failed to get gear item for delete", logging.WithField("error", err.Error()))
-		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "failed to get gear item",
-		})
-		return
-	}
-	if existing == nil {
-		api.writeJSON(w, http.StatusNotFound, map[string]string{
-			"error": "gear item not found",
-		})
-		return
-	}
-
 	if err := api.catalogStore.AdminDelete(ctx, id); err != nil {
 		if errors.Is(err, database.ErrCatalogItemNotFound) {
 			api.writeJSON(w, http.StatusNotFound, map[string]string{

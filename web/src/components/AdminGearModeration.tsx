@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, type FormEvent, type ChangeEvent } from 'react';
-import type { GearCatalogItem, GearType, ImageStatus, AdminUpdateGearCatalogParams, DroneType } from '../gearCatalogTypes';
+import type { GearCatalogItem, GearType, ImageStatusFilter, AdminUpdateGearCatalogParams, DroneType } from '../gearCatalogTypes';
 import { GEAR_TYPES, DRONE_TYPES } from '../gearCatalogTypes';
 import { adminSearchGear, adminUpdateGear, adminUploadGearImage, adminDeleteGearImage, adminDeleteGear, adminGetGear, getAdminGearImageUrl } from '../adminApi';
 import { CatalogSearchModal } from './CatalogSearchModal';
@@ -19,7 +19,7 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
   const [query, setQuery] = useState('');
   const [appliedQuery, setAppliedQuery] = useState('');
   const [gearType, setGearType] = useState<GearType | ''>('');
-  const [imageStatus, setImageStatus] = useState<ImageStatus | ''>(''); // Default to "Needs Work"
+  const [imageStatus, setImageStatus] = useState<ImageStatusFilter | ''>(''); // Default to "Needs Work"
   const pageSize = 30;
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -293,7 +293,7 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
               {/* Image status filter */}
               <select
                 value={imageStatus}
-                onChange={(e) => setImageStatus(e.target.value as ImageStatus | '')}
+                onChange={(e) => setImageStatus(e.target.value as ImageStatusFilter | '')}
                 className="flex-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 <option value="">Needs Work</option>

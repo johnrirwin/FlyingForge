@@ -367,6 +367,7 @@ function CreateCatalogItemForm({
   const [checkingDuplicates, setCheckingDuplicates] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   // Parse initial query into brand/model if possible
   const parseInitialQuery = () => {
@@ -429,6 +430,9 @@ function CreateCatalogItemForm({
   const handleRemoveImage = () => {
     setImageFile(null);
     setImagePreview(null);
+    if (imageInputRef.current) {
+      imageInputRef.current.value = '';
+    }
   };
 
   // Check for duplicates
@@ -686,6 +690,7 @@ function CreateCatalogItemForm({
             )}
 
             <input
+              ref={imageInputRef}
               type="file"
               accept="image/jpeg,image/png,image/webp"
               onChange={handleImageFileChange}
