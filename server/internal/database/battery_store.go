@@ -379,20 +379,58 @@ func (s *BatteryStore) List(ctx context.Context, userID string, params models.Ba
 		return nil, fmt.Errorf("failed to count batteries: %w", err)
 	}
 
-	// Normalize and validate sort direction from params.SortOrder, if available.
-	// Only "ASC" and "DESC" are accepted; anything else falls back to the
-	// existing default for each sort field to preserve current behavior.
-	direction := strings.ToUpper(params.SortOrder)
+	// Normalize sort field and direction.
+	// Supports both explicit sort_by/sort_order params and legacy combined values
+	// like "name_desc" in params.Sort.
+	sortField := strings.ToLower(strings.TrimSpace(params.Sort))
+	direction := strings.ToUpper(strings.TrimSpace(params.SortOrder))
 	validDirection := direction == "ASC" || direction == "DESC"
 
+	// Parse legacy suffix if present (e.g. "name_desc", "created_at_asc").
+	if idx := strings.LastIndex(sortField, "_"); idx > 0 {
+		maybeDirection := strings.ToUpper(sortField[idx+1:])
+		if maybeDirection == "ASC" || maybeDirection == "DESC" {
+			if !validDirection {
+				direction = maybeDirection
+				validDirection = true
+			}
+			sortField = sortField[:idx]
+		}
+	}
+
+	// Backward-compatible aliases.
+	switch sortField {
+	case "", "created":
+		sortField = "created_at"
+	case "updated":
+		sortField = "updated_at"
+	case "capacity":
+		sortField = "capacity_mah"
+	}
+
 	// Determine sort order
-	orderBy := "b.updated_at DESC"
-	switch params.Sort {
+	orderBy := "b.created_at DESC"
+	switch sortField {
 	case "name":
 		if !validDirection {
 			direction = "ASC"
 		}
-		orderBy = fmt.Sprintf("COALESCE(NULLIF(b.name, ''), b.battery_code) %s", direction)
+		orderBy = fmt.Sprintf("COALESCE(NULLIF(LOWER(b.name), ''), LOWER(b.battery_code)) %s", direction)
+	case "capacity_mah":
+		if !validDirection {
+			direction = "ASC"
+		}
+		orderBy = fmt.Sprintf("b.capacity_mah %s", direction)
+	case "cells":
+		if !validDirection {
+			direction = "ASC"
+		}
+		orderBy = fmt.Sprintf("b.cells %s", direction)
+	case "created_at":
+		if !validDirection {
+			direction = "DESC"
+		}
+		orderBy = fmt.Sprintf("b.created_at %s", direction)
 	case "logged":
 		if !validDirection {
 			direction = "DESC"
@@ -407,7 +445,7 @@ func (s *BatteryStore) List(ctx context.Context, userID string, params models.Ba
 			direction = "DESC"
 		}
 		orderBy = fmt.Sprintf("total_cycles %s", direction)
-	case "updated":
+	case "updated_at":
 		if !validDirection {
 			direction = "DESC"
 		}

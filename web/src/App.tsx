@@ -759,9 +759,8 @@ function App() {
 
         {/* News Section */}
         {activeSection === 'news' && (
-          <>
-            {/* TopBar - fixed on mobile, normal flow on desktop */}
-            <div className="fixed md:relative top-14 md:top-0 left-0 right-0 md:left-auto md:right-auto z-20 md:z-10 bg-slate-900">
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            <div className="flex-shrink-0">
               <TopBar
                 query={filters.query}
                 onQueryChange={q => updateFilter('query', q)}
@@ -781,13 +780,23 @@ function App() {
                 isCollapsed={false}
               />
             </div>
-            {/* Scrollable feed list - extra top padding on mobile to account for fixed TopBar (~180px) */}
-            <div 
-              className="flex-1 overflow-y-auto pt-[180px] md:pt-0"
-              onScroll={() => {
-                // Dismiss keyboard on scroll for mobile
-                if (document.activeElement instanceof HTMLElement) {
-                  document.activeElement.blur();
+            <div
+              className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain"
+              onScroll={(event) => {
+                // Dismiss keyboard only on touch/coarse-pointer devices and only
+                // when a form control inside this scroll region is focused.
+                if (typeof window === 'undefined') return;
+                if (!window.matchMedia || !window.matchMedia('(pointer: coarse)').matches) return;
+
+                const activeElement = document.activeElement;
+                if (!(activeElement instanceof HTMLElement) || activeElement === document.body) return;
+
+                const scrollContainer = event.currentTarget;
+                if (!scrollContainer.contains(activeElement)) return;
+
+                const tagName = activeElement.tagName;
+                if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') {
+                  activeElement.blur();
                 }
               }}
             >
@@ -801,7 +810,7 @@ function App() {
                 onLoadMore={loadMoreItems}
               />
             </div>
-          </>
+          </div>
         )}
 
         {/* Admin: Gear Moderation Section */}

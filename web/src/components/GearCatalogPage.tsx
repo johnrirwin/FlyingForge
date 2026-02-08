@@ -273,9 +273,9 @@ export function GearCatalogPage({ onAddToInventory }: GearCatalogPageProps) {
   const showingPopular = !hasSearched;
 
   return (
-    <div className="flex-1 overflow-y-auto overflow-x-hidden">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur-sm border-b border-slate-800">
+      <div className="bg-slate-900 border-b border-slate-800 flex-shrink-0">
         <div className="px-6 py-4">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -355,6 +355,14 @@ export function GearCatalogPage({ onAddToInventory }: GearCatalogPageProps) {
       </div>
 
       {/* Content */}
+      <div
+        className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain overflow-x-hidden"
+        onScroll={() => {
+          if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+          }
+        }}
+      >
       <div className="p-6">
         {/* Section header */}
         <div className="flex items-center justify-between mb-4">
@@ -453,6 +461,7 @@ export function GearCatalogPage({ onAddToInventory }: GearCatalogPageProps) {
             </div>
           </div>
         </div>
+      </div>
       </div>
 
       {/* Gear Detail Modal */}

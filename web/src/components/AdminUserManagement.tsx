@@ -417,17 +417,39 @@ export function AdminUserManagement({ isAdmin, currentUserId, authLoading }: Adm
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto p-4 md:p-6">
-          {error && (
-            <div className="mb-4 p-3 rounded-lg border border-red-500/40 bg-red-500/10 text-red-300 text-sm">
-              {error}
-            </div>
-          )}
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div className="px-4 md:px-6 pt-4 md:pt-6 flex-shrink-0">
+            {error && (
+              <div className="mb-4 p-3 rounded-lg border border-red-500/40 bg-red-500/10 text-red-300 text-sm">
+                {error}
+              </div>
+            )}
 
-          <div className="mb-3 text-sm text-slate-400">
-            {isLoading ? 'Loading users...' : `${totalCount} user${totalCount === 1 ? '' : 's'} found`}
+            <div className="mb-3 text-sm text-slate-400">
+              {isLoading ? 'Loading users...' : `${totalCount} user${totalCount === 1 ? '' : 's'} found`}
+            </div>
           </div>
 
+          <div
+            className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain px-4 md:px-6 pb-6"
+            onScroll={(event) => {
+              // Dismiss keyboard only on touch/coarse-pointer devices and only
+              // when a form control inside this scroll region is focused.
+              if (typeof window === 'undefined') return;
+              if (!window.matchMedia || !window.matchMedia('(pointer: coarse)').matches) return;
+
+              const activeElement = document.activeElement;
+              if (!(activeElement instanceof HTMLElement) || activeElement === document.body) return;
+
+              const scrollContainer = event.currentTarget;
+              if (!scrollContainer.contains(activeElement)) return;
+
+              const tagName = activeElement.tagName;
+              if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') {
+                activeElement.blur();
+              }
+            }}
+          >
           {/* Desktop table */}
           <div className="hidden md:block border border-slate-800 rounded-xl overflow-hidden">
             <table className="w-full table-fixed text-sm">
@@ -552,6 +574,7 @@ export function AdminUserManagement({ isAdmin, currentUserId, authLoading }: Adm
           {!isLoading && !hasMore && users.length > 0 && (
             <div className="pt-1 text-center text-xs text-slate-500">All users loaded</div>
           )}
+          </div>
         </div>
       </div>
 

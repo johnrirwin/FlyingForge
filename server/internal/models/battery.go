@@ -106,7 +106,7 @@ type BatteryListParams struct {
 	MinCapacity int              `json:"min_capacity,omitempty"`
 	MaxCapacity int              `json:"max_capacity,omitempty"`
 	Query       string           `json:"query,omitempty"`
-	Sort        string           `json:"sort_by,omitempty"`    // name, updated, logged, cycles
+	Sort        string           `json:"sort_by,omitempty"`    // name, created_at, updated_at, capacity_mah, cells, logged, cycles
 	SortOrder   string           `json:"sort_order,omitempty"` // ASC, DESC
 	Limit       int              `json:"limit,omitempty"`
 	Offset      int              `json:"offset,omitempty"`

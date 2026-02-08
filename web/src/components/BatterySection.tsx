@@ -65,18 +65,18 @@ export function BatterySection({ onError }: BatterySectionProps) {
   const [filterChemistry, setFilterChemistry] = useState<BatteryChemistry | ''>('');
   const [filterCells, setFilterCells] = useState<number | ''>('');
   const [sortBy, setSortBy] = useState<'name' | 'created_at' | 'capacity_mah' | 'cells'>('created_at');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // Load batteries
   const loadBatteries = useCallback(async () => {
     setIsLoading(true);
     try {
+      const resolvedSortOrder: 'asc' | 'desc' = sortBy === 'created_at' ? 'desc' : 'asc';
       const response = await getBatteries({
         query: searchQuery.trim() || undefined,
         chemistry: filterChemistry || undefined,
         cells: filterCells || undefined,
         sort_by: sortBy,
-        sort_order: sortOrder,
+        sort_order: resolvedSortOrder,
       });
       setBatteries(response.batteries);
     } catch (err) {
@@ -85,7 +85,7 @@ export function BatterySection({ onError }: BatterySectionProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [searchQuery, filterChemistry, filterCells, sortBy, sortOrder, onError]);
+  }, [searchQuery, filterChemistry, filterCells, sortBy, onError]);
 
   useEffect(() => {
     loadBatteries();
@@ -367,8 +367,8 @@ export function BatterySection({ onError }: BatterySectionProps) {
 
   // Render list view
   const renderList = () => (
-    <div ref={listContainerRef} className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain">
-      <div className="sticky top-0 z-20 px-4 md:px-6 py-4 border-b border-slate-800 bg-slate-900/95 backdrop-blur supports-[backdrop-filter]:bg-slate-900/85">
+    <div ref={listContainerRef} className="flex-1 min-h-0 flex flex-col overflow-hidden">
+      <div className="px-4 md:px-6 py-4 border-b border-slate-800 bg-slate-900/95 backdrop-blur supports-[backdrop-filter]:bg-slate-900/85 flex-shrink-0">
         {/* Header */}
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
@@ -441,21 +441,29 @@ export function BatterySection({ onError }: BatterySectionProps) {
               <option value="cells">Cells</option>
             </select>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-400 uppercase mb-1.5">Order</label>
-            <select
-              value={sortOrder}
-              onChange={e => setSortOrder(e.target.value as 'asc' | 'desc')}
-              className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-primary-500"
-            >
-              <option value="desc">Newest First</option>
-              <option value="asc">Oldest First</option>
-            </select>
-          </div>
         </div>
       </div>
 
-      <div className="p-4 md:p-6 pb-24">
+      <div
+        className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain p-4 md:p-6 pb-24"
+        onScroll={(event) => {
+          // Dismiss keyboard only on touch/coarse-pointer devices and only
+          // when a form control inside this scroll region is focused.
+          if (typeof window === 'undefined') return;
+          if (!window.matchMedia || !window.matchMedia('(pointer: coarse)').matches) return;
+
+          const activeElement = document.activeElement;
+          if (!(activeElement instanceof HTMLElement) || activeElement === document.body) return;
+
+          const scrollContainer = event.currentTarget;
+          if (!scrollContainer.contains(activeElement)) return;
+
+          const tagName = activeElement.tagName;
+          if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') {
+            activeElement.blur();
+          }
+        }}
+      >
         {/* Battery Grid */}
         {isLoading ? (
           <div className="text-center py-8 text-slate-400">Loading batteries...</div>
