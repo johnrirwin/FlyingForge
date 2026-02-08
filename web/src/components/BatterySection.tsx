@@ -276,128 +276,135 @@ export function BatterySection({ onError }: BatterySectionProps) {
 
   // Render list view
   const renderList = () => (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold text-white">Batteries</h2>
-        <button
-          onClick={() => {
-            setFormState(INITIAL_BATTERY_FORM_STATE);
-            setFormErrors({});
-            setViewMode('create');
-          }}
-          className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Add Battery
-        </button>
-      </div>
+    <div className="flex-1 flex flex-col min-h-0">
+      <div className="px-4 md:px-6 py-4 border-b border-slate-800 bg-slate-900">
+        {/* Header */}
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-white">Batteries</h2>
+            <p className="text-sm text-slate-400">Track battery health, logs, and printable labels</p>
+          </div>
+          <button
+            onClick={() => {
+              setFormState(INITIAL_BATTERY_FORM_STATE);
+              setFormErrors({});
+              setViewMode('create');
+            }}
+            className="w-full sm:w-auto px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center justify-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add Battery
+          </button>
+        </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-4 p-4 bg-slate-800 rounded-lg border border-slate-700">
-        <div>
-          <label className="block text-xs font-medium text-slate-400 uppercase mb-1.5">Chemistry</label>
-          <select
-            value={filterChemistry}
-            onChange={e => setFilterChemistry(e.target.value as BatteryChemistry | '')}
-            className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-primary-500"
-          >
-            <option value="">All</option>
-            {BATTERY_CHEMISTRY_OPTIONS.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-400 uppercase mb-1.5">Cells</label>
-          <select
-            value={filterCells}
-            onChange={e => setFilterCells(e.target.value ? parseInt(e.target.value, 10) : '')}
-            className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-primary-500"
-          >
-            <option value="">All</option>
-            {CELL_COUNT_OPTIONS.map(count => (
-              <option key={count} value={count}>{count}S</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-400 uppercase mb-1.5">Sort By</label>
-          <select
-            value={sortBy}
-            onChange={e => setSortBy(e.target.value as typeof sortBy)}
-            className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-primary-500"
-          >
-            <option value="created_at">Date Added</option>
-            <option value="name">Name</option>
-            <option value="capacity_mah">Capacity</option>
-            <option value="cells">Cells</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-400 uppercase mb-1.5">Order</label>
-          <select
-            value={sortOrder}
-            onChange={e => setSortOrder(e.target.value as 'asc' | 'desc')}
-            className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-primary-500"
-          >
-            <option value="desc">Newest First</option>
-            <option value="asc">Oldest First</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Battery Grid */}
-      {isLoading ? (
-        <div className="text-center py-8 text-slate-400">Loading batteries...</div>
-      ) : batteries.length === 0 ? (
-        <div className="text-center py-8 text-slate-400">
-          No batteries found. Add your first battery to get started!
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {batteries.map(battery => (
-            <div
-              key={battery.id}
-              role="button"
-              tabIndex={0}
-              className="p-4 bg-slate-800 rounded-lg border border-slate-700 hover:border-slate-600 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
-              onClick={() => handleViewBattery(battery)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  handleViewBattery(battery);
-                }
-              }}
+        {/* Filters */}
+        <div className="mt-4 flex flex-wrap gap-4 p-4 bg-slate-800 rounded-lg border border-slate-700">
+          <div>
+            <label className="block text-xs font-medium text-slate-400 uppercase mb-1.5">Chemistry</label>
+            <select
+              value={filterChemistry}
+              onChange={e => setFilterChemistry(e.target.value as BatteryChemistry | '')}
+              className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-primary-500"
             >
-              <div className="flex justify-between items-start mb-2">
-                <h3 className="font-medium text-white">{battery.name}</h3>
-                <span className="text-xs px-2 py-1 bg-slate-700 text-slate-300 rounded font-mono">
-                  {battery.battery_code}
-                </span>
-              </div>
-              <div className="text-sm text-slate-400 space-y-1">
-                <div className="flex gap-2">
-                  <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded text-xs">
-                    {formatChemistry(battery.chemistry)}
-                  </span>
-                  <span className="px-2 py-0.5 bg-green-500/20 text-green-400 rounded text-xs">
-                    {formatCellCount(battery.cells)}
-                  </span>
-                  <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded text-xs">
-                    {formatCapacity(battery.capacity_mah)}
+              <option value="">All</option>
+              {BATTERY_CHEMISTRY_OPTIONS.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 uppercase mb-1.5">Cells</label>
+            <select
+              value={filterCells}
+              onChange={e => setFilterCells(e.target.value ? parseInt(e.target.value, 10) : '')}
+              className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-primary-500"
+            >
+              <option value="">All</option>
+              {CELL_COUNT_OPTIONS.map(count => (
+                <option key={count} value={count}>{count}S</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 uppercase mb-1.5">Sort By</label>
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value as typeof sortBy)}
+              className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-primary-500"
+            >
+              <option value="created_at">Date Added</option>
+              <option value="name">Name</option>
+              <option value="capacity_mah">Capacity</option>
+              <option value="cells">Cells</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 uppercase mb-1.5">Order</label>
+            <select
+              value={sortOrder}
+              onChange={e => setSortOrder(e.target.value as 'asc' | 'desc')}
+              className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-primary-500"
+            >
+              <option value="desc">Newest First</option>
+              <option value="asc">Oldest First</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain p-4 md:p-6 pb-24">
+        {/* Battery Grid */}
+        {isLoading ? (
+          <div className="text-center py-8 text-slate-400">Loading batteries...</div>
+        ) : batteries.length === 0 ? (
+          <div className="text-center py-8 text-slate-400">
+            No batteries found. Add your first battery to get started!
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {batteries.map(battery => (
+              <div
+                key={battery.id}
+                role="button"
+                tabIndex={0}
+                className="p-4 bg-slate-800 rounded-lg border border-slate-700 hover:border-slate-600 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
+                onClick={() => handleViewBattery(battery)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleViewBattery(battery);
+                  }
+                }}
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <h3 className="font-medium text-white">{battery.name}</h3>
+                  <span className="text-xs px-2 py-1 bg-slate-700 text-slate-300 rounded font-mono">
+                    {battery.battery_code}
                   </span>
                 </div>
-                {battery.brand && (
-                  <p className="text-slate-500">{battery.brand} {battery.model}</p>
-                )}
+                <div className="text-sm text-slate-400 space-y-1">
+                  <div className="flex gap-2">
+                    <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded text-xs">
+                      {formatChemistry(battery.chemistry)}
+                    </span>
+                    <span className="px-2 py-0.5 bg-green-500/20 text-green-400 rounded text-xs">
+                      {formatCellCount(battery.cells)}
+                    </span>
+                    <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded text-xs">
+                      {formatCapacity(battery.capacity_mah)}
+                    </span>
+                  </div>
+                  {battery.brand && (
+                    <p className="text-slate-500">{battery.brand} {battery.model}</p>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 
@@ -921,10 +928,18 @@ export function BatterySection({ onError }: BatterySectionProps) {
 
   // Main render
   return (
-    <div className="flex-1 overflow-y-auto p-6 pb-24">
+    <div className="flex-1 min-h-0">
       {viewMode === 'list' && renderList()}
-      {(viewMode === 'create' || viewMode === 'edit') && renderForm()}
-      {viewMode === 'detail' && renderDetail()}
+      {(viewMode === 'create' || viewMode === 'edit') && (
+        <div className="h-full overflow-y-auto p-6 pb-24">
+          {renderForm()}
+        </div>
+      )}
+      {viewMode === 'detail' && (
+        <div className="h-full overflow-y-auto p-6 pb-24">
+          {renderDetail()}
+        </div>
+      )}
     </div>
   );
 }
