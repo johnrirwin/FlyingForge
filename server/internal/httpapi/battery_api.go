@@ -54,18 +54,11 @@ func (api *BatteryAPI) listBatteries(w http.ResponseWriter, r *http.Request) {
 	userID := auth.GetUserID(r.Context())
 	query := r.URL.Query()
 
-	// Handle sort parameters
-	sort := query.Get("sort")
+	// Handle sort parameters. Prefer explicit sort_by/sort_order and
+	// fall back to legacy "sort" query format (e.g. name_desc).
+	sort := query.Get("sort_by")
 	if sort == "" {
-		sortBy := query.Get("sort_by")
-		sortOrder := query.Get("sort_order")
-		if sortBy != "" {
-			if sortOrder != "" {
-				sort = fmt.Sprintf("%s_%s", sortBy, strings.ToLower(sortOrder))
-			} else {
-				sort = sortBy
-			}
-		}
+		sort = query.Get("sort")
 	}
 
 	params := models.BatteryListParams{

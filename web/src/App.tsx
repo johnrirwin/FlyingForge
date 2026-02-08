@@ -759,9 +759,8 @@ function App() {
 
         {/* News Section */}
         {activeSection === 'news' && (
-          <>
-            {/* TopBar - fixed on mobile, normal flow on desktop */}
-            <div className="fixed md:relative top-14 md:top-0 left-0 right-0 md:left-auto md:right-auto z-20 md:z-10 bg-slate-900">
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            <div className="flex-shrink-0">
               <TopBar
                 query={filters.query}
                 onQueryChange={q => updateFilter('query', q)}
@@ -781,9 +780,8 @@ function App() {
                 isCollapsed={false}
               />
             </div>
-            {/* Scrollable feed list - extra top padding on mobile to account for fixed TopBar (~180px) */}
-            <div 
-              className="flex-1 overflow-y-auto pt-[180px] md:pt-0"
+            <div
+              className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain"
               onScroll={() => {
                 // Dismiss keyboard on scroll for mobile
                 if (document.activeElement instanceof HTMLElement) {
@@ -801,7 +799,7 @@ function App() {
                 onLoadMore={loadMoreItems}
               />
             </div>
-          </>
+          </div>
         )}
 
         {/* Admin: Gear Moderation Section */}
