@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strconv"
@@ -241,6 +242,13 @@ func (api *AdminAPI) handleDeleteGear(w http.ResponseWriter, r *http.Request, id
 	}
 
 	if err := api.catalogStore.AdminDelete(ctx, id); err != nil {
+		if errors.Is(err, database.ErrCatalogItemNotFound) {
+			api.writeJSON(w, http.StatusNotFound, map[string]string{
+				"error": "gear item not found",
+			})
+			return
+		}
+
 		api.logger.Error("Failed to delete gear item", logging.WithField("error", err.Error()))
 		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "failed to delete gear item",

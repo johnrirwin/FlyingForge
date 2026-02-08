@@ -389,15 +389,20 @@ function CreateCatalogItemForm({
   const [description, setDescription] = useState('');
 
   const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) {
+    const clearSelectedImage = () => {
       setImageFile(null);
       setImagePreview(null);
+    };
+
+    const file = e.target.files?.[0];
+    if (!file) {
+      clearSelectedImage();
       return;
     }
 
     // Keep validation aligned with admin catalog image endpoint.
     if (file.size > 1024 * 1024) {
+      clearSelectedImage();
       setError('Image file is too large. Maximum size is 1MB.');
       e.target.value = '';
       return;
@@ -405,6 +410,7 @@ function CreateCatalogItemForm({
 
     const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!validTypes.includes(file.type)) {
+      clearSelectedImage();
       setError('Invalid image type. Please use JPEG, PNG, or WebP.');
       e.target.value = '';
       return;

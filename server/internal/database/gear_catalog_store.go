@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -17,6 +18,8 @@ import (
 type GearCatalogStore struct {
 	db *DB
 }
+
+var ErrCatalogItemNotFound = errors.New("catalog item not found")
 
 // NewGearCatalogStore creates a new gear catalog store
 func NewGearCatalogStore(db *DB) *GearCatalogStore {
@@ -1055,7 +1058,7 @@ func (s *GearCatalogStore) AdminDelete(ctx context.Context, id string) error {
 
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
-		return fmt.Errorf("catalog item not found: %s", id)
+		return fmt.Errorf("%w: %s", ErrCatalogItemNotFound, id)
 	}
 
 	return nil

@@ -28,6 +28,7 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
   // Use refs to track current offset and prevent race conditions
   const currentOffsetRef = useRef(0);
   const isLoadingRef = useRef(false);
+  const latestLoadRequestRef = useRef(0);
 
   // Edit modal state - modalKey forces remount to fetch fresh data
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
@@ -37,12 +38,13 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [isDeletingItem, setIsDeletingItem] = useState(false);
 
-  const loadItems = useCallback(async (reset = false) => {
+  const loadItems = useCallback(async (reset = false, forceRefresh = false) => {
     if (!isAdmin) return;
     
-    // Prevent concurrent loads
-    if (isLoadingRef.current) return;
+    // Prevent concurrent loads by default; allow forced resets to supersede in-flight loads.
+    if (isLoadingRef.current && !(reset && forceRefresh)) return;
     isLoadingRef.current = true;
+    const requestId = ++latestLoadRequestRef.current;
 
     if (reset) {
       setIsLoading(true);
@@ -62,6 +64,11 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
         limit: pageSize,
         offset: offset,
       });
+
+      // Ignore stale responses from superseded requests.
+      if (requestId !== latestLoadRequestRef.current) {
+        return;
+      }
       
       if (reset) {
         setItems(response.items);
@@ -72,11 +79,16 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
       setTotalCount(response.totalCount);
       setHasMore(response.items.length === pageSize && currentOffsetRef.current < response.totalCount);
     } catch (err) {
+      if (requestId !== latestLoadRequestRef.current) {
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Failed to load gear items');
     } finally {
-      setIsLoading(false);
-      setIsLoadingMore(false);
-      isLoadingRef.current = false;
+      if (requestId === latestLoadRequestRef.current) {
+        setIsLoading(false);
+        setIsLoadingMore(false);
+        isLoadingRef.current = false;
+      }
     }
   }, [isAdmin, appliedQuery, gearType, imageStatus]);
 
@@ -106,8 +118,8 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
   };
 
   // Infinite scroll observer
-  // Note: loadItems has a synchronous isLoadingRef guard that prevents concurrent calls,
-  // so we don't need to check loading state here - just trigger on intersection
+  // Note: loadItems prevents concurrent calls by default (except forced reset refreshes),
+  // so we don't need to check loading state here - just trigger on intersection.
   useEffect(() => {
     const element = loadMoreRef.current;
     if (!element || !hasMore) return;
@@ -169,7 +181,7 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
       }
       setDeleteTargetItem(null);
       setDeleteConfirmText('');
-      await loadItems(true);
+      await loadItems(true, true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete gear item');
     } finally {
