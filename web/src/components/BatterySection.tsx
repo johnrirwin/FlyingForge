@@ -278,8 +278,8 @@ export function BatterySection({ onError }: BatterySectionProps) {
 
   // Render list view
   const renderList = () => (
-    <div className="flex-1 flex flex-col min-h-0">
-      <div className="px-4 md:px-6 py-4 border-b border-slate-800 bg-slate-900">
+    <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain">
+      <div className="sticky top-0 z-20 px-4 md:px-6 py-4 border-b border-slate-800 bg-slate-900/95 backdrop-blur supports-[backdrop-filter]:bg-slate-900/85">
         {/* Header */}
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
@@ -366,7 +366,7 @@ export function BatterySection({ onError }: BatterySectionProps) {
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain p-4 md:p-6 pb-24">
+      <div className="p-4 md:p-6 pb-24">
         {/* Battery Grid */}
         {isLoading ? (
           <div className="text-center py-8 text-slate-400">Loading batteries...</div>
@@ -942,7 +942,7 @@ export function BatterySection({ onError }: BatterySectionProps) {
 
   // Main render
   return (
-    <div className="flex flex-col flex-1 min-h-0">
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
       {viewMode === 'list' && renderList()}
       {(viewMode === 'create' || viewMode === 'edit') && (
         <div className="flex-1 min-h-0 overflow-y-auto p-6 pb-24">
