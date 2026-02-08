@@ -53,6 +53,7 @@ export async function getBatteries(params?: BatteryListParams): Promise<BatteryL
   if (params?.cells) searchParams.set('cells', params.cells.toString());
   if (params?.min_capacity) searchParams.set('min_capacity', params.min_capacity.toString());
   if (params?.max_capacity) searchParams.set('max_capacity', params.max_capacity.toString());
+  if (params?.query) searchParams.set('query', params.query);
   if (params?.sort_by) searchParams.set('sort_by', params.sort_by);
   if (params?.sort_order) searchParams.set('sort_order', params.sort_order);
   if (params?.limit) searchParams.set('limit', params.limit.toString());

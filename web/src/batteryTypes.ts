@@ -86,6 +86,7 @@ export interface BatteryListParams {
   cells?: number;
   min_capacity?: number;
   max_capacity?: number;
+  query?: string;
   sort_by?: 'name' | 'created_at' | 'capacity_mah' | 'cells';
   sort_order?: 'asc' | 'desc';
   limit?: number;
