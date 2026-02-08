@@ -179,6 +179,32 @@ export async function adminDeleteGearImage(id: string): Promise<void> {
   }
 }
 
+// Delete a gear item (admin only)
+export async function adminDeleteGear(id: string): Promise<void> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const response = await fetch(`${API_BASE}/gear/${id}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Request failed' }));
+    if (response.status === 403) {
+      throw new Error('Admin access required');
+    }
+    if (response.status === 404) {
+      throw new Error('Gear item not found');
+    }
+    throw new Error(data.error || 'Failed to delete gear item');
+  }
+}
+
 // Get the URL for a gear catalog image (public endpoint)
 // Optional timestamp parameter for cache-busting after uploads
 export function getGearImageUrl(gearId: string, cacheBuster?: number): string {

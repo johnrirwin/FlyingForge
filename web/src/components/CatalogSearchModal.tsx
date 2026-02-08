@@ -8,15 +8,24 @@ interface CatalogSearchModalProps {
   onClose: () => void;
   onSelectItem: (item: GearCatalogItem) => void;
   initialGearType?: GearType;
+  startInCreateMode?: boolean;
+  onUploadCatalogImage?: (itemId: string, imageFile: File) => Promise<void>;
 }
 
-export function CatalogSearchModal({ isOpen, onClose, onSelectItem, initialGearType }: CatalogSearchModalProps) {
+export function CatalogSearchModal({
+  isOpen,
+  onClose,
+  onSelectItem,
+  initialGearType,
+  startInCreateMode = false,
+  onUploadCatalogImage,
+}: CatalogSearchModalProps) {
   const [query, setQuery] = useState('');
   const [gearType, setGearType] = useState<GearType | ''>(initialGearType || '');
   const [results, setResults] = useState<GearCatalogItem[]>([]);
   const [popularItems, setPopularItems] = useState<GearCatalogItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(startInCreateMode);
   const [error, setError] = useState<string | null>(null);
   
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -28,6 +37,13 @@ export function CatalogSearchModal({ isOpen, onClose, onSelectItem, initialGearT
       setTimeout(() => searchInputRef.current?.focus(), 100);
     }
   }, [isOpen]);
+
+  // Reset the starting mode each time the modal opens.
+  useEffect(() => {
+    if (isOpen) {
+      setShowCreateForm(startInCreateMode);
+    }
+  }, [isOpen, startInCreateMode]);
 
   // Load popular items
   const loadPopularItems = useCallback(async () => {
@@ -131,6 +147,7 @@ export function CatalogSearchModal({ isOpen, onClose, onSelectItem, initialGearT
             initialQuery={query}
             onSuccess={handleSelectItem}
             onCancel={() => setShowCreateForm(false)}
+            onUploadCatalogImage={onUploadCatalogImage}
           />
         ) : (
           <>
@@ -334,13 +351,22 @@ interface CreateCatalogItemFormProps {
   initialQuery?: string;
   onSuccess: (item: GearCatalogItem) => void;
   onCancel: () => void;
+  onUploadCatalogImage?: (itemId: string, imageFile: File) => Promise<void>;
 }
 
-function CreateCatalogItemForm({ initialGearType, initialQuery, onSuccess, onCancel }: CreateCatalogItemFormProps) {
+function CreateCatalogItemForm({
+  initialGearType,
+  initialQuery,
+  onSuccess,
+  onCancel,
+  onUploadCatalogImage,
+}: CreateCatalogItemFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nearMatches, setNearMatches] = useState<GearCatalogItem[]>([]);
   const [checkingDuplicates, setCheckingDuplicates] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   // Parse initial query into brand/model if possible
   const parseInitialQuery = () => {
@@ -361,6 +387,43 @@ function CreateCatalogItemForm({ initialGearType, initialQuery, onSuccess, onCan
   const [bestFor, setBestFor] = useState<DroneType[]>([]);
   const [msrp, setMsrp] = useState('');
   const [description, setDescription] = useState('');
+
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) {
+      setImageFile(null);
+      setImagePreview(null);
+      return;
+    }
+
+    // Keep validation aligned with admin catalog image endpoint.
+    if (file.size > 1024 * 1024) {
+      setError('Image file is too large. Maximum size is 1MB.');
+      e.target.value = '';
+      return;
+    }
+
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      setError('Invalid image type. Please use JPEG, PNG, or WebP.');
+      e.target.value = '';
+      return;
+    }
+
+    setError(null);
+    setImageFile(file);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setImagePreview(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+  };
 
   // Check for duplicates
   const checkForDuplicates = useCallback(async () => {
@@ -408,6 +471,10 @@ function CreateCatalogItemForm({ initialGearType, initialQuery, onSuccess, onCan
       };
 
       const response = await createGearCatalogItem(params);
+
+      if (onUploadCatalogImage && imageFile) {
+        await onUploadCatalogImage(response.item.id, imageFile);
+      }
       
       if (response.existing) {
         // Found existing item
@@ -583,6 +650,46 @@ function CreateCatalogItemForm({ initialGearType, initialQuery, onSuccess, onCan
             className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500 resize-none"
           />
         </div>
+
+        {/* Catalog image upload (admin flow only) */}
+        {onUploadCatalogImage && (
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">
+              Catalog Image (optional)
+              <span className="ml-2 text-xs text-primary-400">(Max 1MB, JPEG/PNG/WebP)</span>
+            </label>
+
+            {imagePreview && (
+              <div className="mb-3 relative inline-block">
+                <img
+                  src={imagePreview}
+                  alt="Catalog image preview"
+                  className="w-32 h-32 object-cover rounded-lg bg-slate-700"
+                />
+                <button
+                  type="button"
+                  onClick={handleRemoveImage}
+                  className="absolute -top-2 -right-2 p-1 bg-red-600 hover:bg-red-700 text-white rounded-full transition-colors"
+                  title="Remove image"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            )}
+
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleImageFileChange}
+              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-primary-600 file:text-white hover:file:bg-primary-700 file:cursor-pointer cursor-pointer"
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              This uploads to the shared catalog item image, not personal inventory.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Footer */}
