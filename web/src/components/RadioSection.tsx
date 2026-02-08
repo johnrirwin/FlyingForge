@@ -563,13 +563,6 @@ export function RadioSection({ onError }: RadioSectionProps) {
 
             <div className="p-4 border-t border-slate-800 flex justify-end gap-3">
               <button
-                onClick={() => { setShowUploadModal(false); resetUploadForm(); }}
-                disabled={isUploading}
-                className="px-4 py-2 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
                 onClick={handleUploadBackup}
                 disabled={!uploadFile || !uploadName || isUploading}
                 className="px-4 py-2 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-medium rounded-lg transition-colors"

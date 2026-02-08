@@ -198,14 +198,8 @@ export function GearDetailModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-700 bg-slate-800/50">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-          >
-            Close
-          </button>
-          {onAddToInventory && (
+        {onAddToInventory && (
+          <div className="flex items-center justify-end px-6 py-4 border-t border-slate-700 bg-slate-800/50">
             <button
               onClick={handleAddClick}
               disabled={!isAuthenticated}
@@ -217,8 +211,8 @@ export function GearDetailModal({
               </svg>
               Add to My Inventory
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

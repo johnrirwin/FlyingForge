@@ -30,7 +30,6 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const deleteTriggerButtonRef = useRef<HTMLButtonElement | null>(null);
-  const deleteCancelButtonRef = useRef<HTMLButtonElement | null>(null);
   const wasDeleteConfirmOpenRef = useRef(false);
   
   // Track whether auto-add has been triggered to prevent duplicate submissions
@@ -131,9 +130,7 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
   }, [equipmentItem, editItem, isOpen]);
 
   useEffect(() => {
-    if (showDeleteConfirmModal) {
-      deleteCancelButtonRef.current?.focus();
-    } else if (wasDeleteConfirmOpenRef.current) {
+    if (!showDeleteConfirmModal && wasDeleteConfirmOpenRef.current) {
       deleteTriggerButtonRef.current?.focus();
     }
 
@@ -242,14 +239,20 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-        <div className="relative bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-sm">
-          <p className="text-red-400 mb-4">{error}</p>
-          <button
-            onClick={onClose}
-            className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg"
-          >
-            Close
-          </button>
+        <div className="relative bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-sm w-full">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-white">Unable to Add Item</h3>
+            <button
+              onClick={onClose}
+              aria-label="Close add gear error modal"
+              className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <p className="text-red-400">{error}</p>
         </div>
       </div>
     );
@@ -470,32 +473,36 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
             aria-describedby="inventory-delete-dialog-description"
             className="relative bg-slate-800 rounded-xl p-6 max-w-md w-full shadow-2xl border border-red-500/50"
           >
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
-                <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
+                  <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </div>
+                <h3 id="inventory-delete-dialog-title" className="text-lg font-semibold text-white">Delete Item?</h3>
               </div>
-              <h3 id="inventory-delete-dialog-title" className="text-lg font-semibold text-white">Delete Item?</h3>
+              <button
+                type="button"
+                onClick={handleCancelDelete}
+                disabled={isDeleting}
+                aria-label="Close delete item modal"
+                className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
             <p id="inventory-delete-dialog-description" className="text-slate-300 mb-5">
               Are you sure you want to delete <span className="text-white font-medium">{editItem.name}</span> from your inventory?
             </p>
-            <div className="flex gap-3">
-              <button
-                ref={deleteCancelButtonRef}
-                type="button"
-                onClick={handleCancelDelete}
-                disabled={isDeleting}
-                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
+            <div className="flex">
               <button
                 type="button"
                 onClick={() => void handleConfirmDelete()}
                 disabled={isDeleting}
-                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+                className="w-full px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
               >
                 {isDeleting ? 'Deleting...' : 'Delete Item'}
               </button>

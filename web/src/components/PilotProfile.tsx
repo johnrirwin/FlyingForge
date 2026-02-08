@@ -16,9 +16,10 @@ interface PilotProfileProps {
   pilotId: string;
   onBack: () => void;
   onSelectPilot?: (pilotId: string) => void;
+  isModal?: boolean;
 }
 
-export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfileProps) {
+export function PilotProfile({ pilotId, onBack, onSelectPilot, isModal = false }: PilotProfileProps) {
   const { user, updateUser } = useAuth();
   const [profile, setProfile] = useState<PilotProfileType | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -123,7 +124,7 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className={`flex items-center justify-center ${isModal ? 'py-12' : 'h-full'}`}>
         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary-500"></div>
       </div>
     );
@@ -132,15 +133,17 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
   if (error) {
     return (
       <div className="p-6">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 text-slate-400 hover:text-white mb-6 transition-colors"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-          Back to Search
-        </button>
+        {!isModal && (
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 text-slate-400 hover:text-white mb-6 transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Search
+          </button>
+        )}
         <div className="p-4 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 max-w-2xl">
           {error}
         </div>
@@ -151,72 +154,44 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
   if (!profile) {
     return (
       <div className="p-6">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 text-slate-400 hover:text-white mb-6 transition-colors"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-          Back to Search
-        </button>
+        {!isModal && (
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 text-slate-400 hover:text-white mb-6 transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Search
+          </button>
+        )}
         <div className="text-slate-500">Pilot not found</div>
       </div>
     );
   }
 
-  return (
-    <div className="flex-1 overflow-y-auto">
-      <div className="p-6 pb-24">
-      {/* Back Button */}
-      <button
-        onClick={onBack}
-        className="flex items-center gap-2 text-slate-400 hover:text-white mb-6 transition-colors"
-      >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-        </svg>
-        Back to Search
-      </button>
-
-      {/* Profile Header */}
-      <div className="bg-slate-800 rounded-lg p-6 mb-6 max-w-2xl">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
-          {/* Avatar */}
-          <div className="flex items-center gap-4 sm:block">
-            {profile.effectiveAvatarUrl ? (
-              <img
-                src={profile.effectiveAvatarUrl}
-                alt=""
-                className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-2 border-slate-600 flex-shrink-0"
-              />
-            ) : (
-              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-slate-700 flex items-center justify-center border-2 border-slate-600 flex-shrink-0">
-                <svg className="w-10 h-10 sm:w-12 sm:h-12 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-              </div>
-            )}
-            {/* Mobile: Name next to avatar */}
-            <div className="sm:hidden flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl font-bold text-white truncate">{getDisplayName()}</h1>
-                {isOwnProfile && (
-                  <span className="px-2 py-0.5 text-xs font-medium bg-slate-700 text-slate-300 rounded whitespace-nowrap flex-shrink-0">
-                    You
-                  </span>
-                )}
-              </div>
-              {profile.displayName && (
-                <p className="text-slate-400 text-sm mt-0.5">{profile.displayName}</p>
-              )}
+  const profileCard = (
+    <div className="bg-slate-800 rounded-lg p-6">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+        {/* Avatar */}
+        <div className="flex items-center gap-4 sm:block">
+          {profile.effectiveAvatarUrl ? (
+            <img
+              src={profile.effectiveAvatarUrl}
+              alt=""
+              className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-2 border-slate-600 flex-shrink-0"
+            />
+          ) : (
+            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-slate-700 flex items-center justify-center border-2 border-slate-600 flex-shrink-0">
+              <svg className="w-10 h-10 sm:w-12 sm:h-12 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
             </div>
-          </div>
-
-          {/* Info - Desktop */}
-          <div className="hidden sm:block flex-1 min-w-0">
+          )}
+          {/* Mobile: Name next to avatar */}
+          <div className="sm:hidden flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl font-bold text-white truncate">{getDisplayName()}</h1>
+              <h1 className="text-xl font-bold text-white truncate">{getDisplayName()}</h1>
               {isOwnProfile && (
                 <span className="px-2 py-0.5 text-xs font-medium bg-slate-700 text-slate-300 rounded whitespace-nowrap flex-shrink-0">
                   You
@@ -224,46 +199,25 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
               )}
             </div>
             {profile.displayName && (
-              <p className="text-slate-400 mt-1">{profile.displayName}</p>
+              <p className="text-slate-400 text-sm mt-0.5">{profile.displayName}</p>
             )}
-            <div className="flex items-center gap-4 mt-2 text-sm">
-              <button 
-                onClick={() => setShowFollowList('followers')}
-                className="text-slate-400 hover:text-white transition-colors"
-              >
-                <span className="font-medium text-white">{profile.followerCount}</span> followers
-              </button>
-              <button 
-                onClick={() => setShowFollowList('following')}
-                className="text-slate-400 hover:text-white transition-colors"
-              >
-                <span className="font-medium text-white">{profile.followingCount}</span> following
-              </button>
-            </div>
-            <p className="text-sm text-slate-500 mt-1">
-              Member since {new Date(profile.createdAt).toLocaleDateString()}
-            </p>
           </div>
-
-          {/* Follow Button - Desktop */}
-          {!isOwnProfile && (
-            <button
-              onClick={handleFollowToggle}
-              disabled={isFollowLoading}
-              className={`hidden sm:block px-4 py-2 rounded-lg font-medium transition-colors flex-shrink-0 ${
-                isFollowing
-                  ? 'bg-slate-700 text-white hover:bg-slate-600'
-                  : 'bg-primary-500 text-white hover:bg-primary-600'
-              } disabled:opacity-50`}
-            >
-              {isFollowLoading ? '...' : isFollowing ? 'Following' : 'Follow'}
-            </button>
-          )}
         </div>
 
-        {/* Mobile: Stats and Follow Button Row */}
-        <div className="sm:hidden mt-4 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4 text-sm">
+        {/* Info - Desktop */}
+        <div className="hidden sm:block flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-2xl font-bold text-white truncate">{getDisplayName()}</h1>
+            {isOwnProfile && (
+              <span className="px-2 py-0.5 text-xs font-medium bg-slate-700 text-slate-300 rounded whitespace-nowrap flex-shrink-0">
+                You
+              </span>
+            )}
+          </div>
+          {profile.displayName && (
+            <p className="text-slate-400 mt-1">{profile.displayName}</p>
+          )}
+          <div className="flex items-center gap-4 mt-2 text-sm">
             <button 
               onClick={() => setShowFollowList('followers')}
               className="text-slate-400 hover:text-white transition-colors"
@@ -277,55 +231,155 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
               <span className="font-medium text-white">{profile.followingCount}</span> following
             </button>
           </div>
-          {!isOwnProfile && (
-            <button
-              onClick={handleFollowToggle}
-              disabled={isFollowLoading}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors flex-shrink-0 ${
-                isFollowing
-                  ? 'bg-slate-700 text-white hover:bg-slate-600'
-                  : 'bg-primary-500 text-white hover:bg-primary-600'
-              } disabled:opacity-50`}
-            >
-              {isFollowLoading ? '...' : isFollowing ? 'Following' : 'Follow'}
-            </button>
-          )}
+          <p className="text-sm text-slate-500 mt-1">
+            Member since {new Date(profile.createdAt).toLocaleDateString()}
+          </p>
         </div>
 
-        {/* Mobile: Member since */}
-        <p className="sm:hidden text-sm text-slate-500 mt-2">
-          Member since {new Date(profile.createdAt).toLocaleDateString()}
-        </p>
-      </div>
-
-      {/* Aircraft Section */}
-      <div className="bg-slate-800 rounded-lg p-6 max-w-2xl">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-white">Aircraft</h2>
-          <span className="text-sm text-slate-400">
-            {profile.aircraft.length} aircraft
-          </span>
-        </div>
-
-        {profile.aircraft.length === 0 ? (
-          <div className="text-center py-8 text-slate-500">
-            <svg className="w-12 h-12 mx-auto mb-3 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-            </svg>
-            <p>No aircraft to display</p>
-          </div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {profile.aircraft.map((aircraft) => (
-              <AircraftCard 
-                key={aircraft.id} 
-                aircraft={aircraft} 
-                onClick={() => setSelectedAircraft(aircraft)}
-              />
-            ))}
-          </div>
+        {/* Follow Button - Desktop */}
+        {!isOwnProfile && (
+          <button
+            onClick={handleFollowToggle}
+            disabled={isFollowLoading}
+            className={`hidden sm:block px-4 py-2 rounded-lg font-medium transition-colors flex-shrink-0 ${
+              isFollowing
+                ? 'bg-slate-700 text-white hover:bg-slate-600'
+                : 'bg-primary-500 text-white hover:bg-primary-600'
+            } disabled:opacity-50`}
+          >
+            {isFollowLoading ? '...' : isFollowing ? 'Following' : 'Follow'}
+          </button>
         )}
       </div>
+
+      {/* Mobile: Stats and Follow Button Row */}
+      <div className="sm:hidden mt-4 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4 text-sm">
+          <button 
+            onClick={() => setShowFollowList('followers')}
+            className="text-slate-400 hover:text-white transition-colors"
+          >
+            <span className="font-medium text-white">{profile.followerCount}</span> followers
+          </button>
+          <button 
+            onClick={() => setShowFollowList('following')}
+            className="text-slate-400 hover:text-white transition-colors"
+          >
+            <span className="font-medium text-white">{profile.followingCount}</span> following
+          </button>
+        </div>
+        {!isOwnProfile && (
+          <button
+            onClick={handleFollowToggle}
+            disabled={isFollowLoading}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors flex-shrink-0 ${
+              isFollowing
+                ? 'bg-slate-700 text-white hover:bg-slate-600'
+                : 'bg-primary-500 text-white hover:bg-primary-600'
+            } disabled:opacity-50`}
+          >
+            {isFollowLoading ? '...' : isFollowing ? 'Following' : 'Follow'}
+          </button>
+        )}
+      </div>
+
+      {/* Mobile: Member since */}
+      <p className="sm:hidden text-sm text-slate-500 mt-2">
+        Member since {new Date(profile.createdAt).toLocaleDateString()}
+      </p>
+    </div>
+  );
+
+  const aircraftSection = (
+    <div className="bg-slate-800 rounded-lg p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-white">Aircraft</h2>
+        <span className="text-sm text-slate-400">
+          {profile.aircraft.length} aircraft
+        </span>
+      </div>
+
+      {profile.aircraft.length === 0 ? (
+        <div className="text-center py-8 text-slate-500">
+          <svg className="w-12 h-12 mx-auto mb-3 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+          </svg>
+          <p>No aircraft to display</p>
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {profile.aircraft.map((aircraft) => (
+            <AircraftCard 
+              key={aircraft.id} 
+              aircraft={aircraft} 
+              onClick={() => setSelectedAircraft(aircraft)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className={`${isModal ? 'h-full flex flex-col' : 'flex-1 overflow-y-auto'}`}>
+      {isModal ? (
+        <div className="px-6 pt-6 pb-6 flex-1 min-h-0">
+          <div className="max-w-4xl mx-auto w-full h-full flex flex-col">
+            <div>
+              {profileCard}
+            </div>
+            <div className="mt-4 bg-slate-800 rounded-lg p-6 flex-1 min-h-0 flex flex-col">
+              <div className="flex items-center justify-between mb-4 flex-shrink-0">
+                <h2 className="text-lg font-semibold text-white">Aircraft</h2>
+                <span className="text-sm text-slate-400">
+                  {profile.aircraft.length} aircraft
+                </span>
+              </div>
+
+              {profile.aircraft.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center text-center py-8 text-slate-500">
+                  <div>
+                    <svg className="w-12 h-12 mx-auto mb-3 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                    <p>No aircraft to display</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain pr-1">
+                  <div className="grid gap-4 sm:grid-cols-2 pb-1">
+                    {profile.aircraft.map((aircraft) => (
+                      <AircraftCard
+                        key={aircraft.id}
+                        aircraft={aircraft}
+                        onClick={() => setSelectedAircraft(aircraft)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="p-6 pb-24">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 text-slate-400 hover:text-white mb-6 transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Search
+          </button>
+          <div className="max-w-2xl mb-6">
+            {profileCard}
+          </div>
+          <div className="max-w-2xl">
+            {aircraftSection}
+          </div>
+        </div>
+      )}
 
       {/* Aircraft Detail Modal */}
       {selectedAircraft && (
@@ -362,7 +416,6 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot }: PilotProfilePro
           initialCallSign={user?.callSign || ''}
         />
       )}
-      </div>
     </div>
   );
 }

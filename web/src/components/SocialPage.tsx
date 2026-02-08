@@ -63,16 +63,29 @@ export function CallSignPromptModal({
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
       <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md shadow-2xl">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-full bg-emerald-600/20 flex items-center justify-center">
-            <svg className="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-emerald-600/20 flex items-center justify-center">
+              <svg className="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white">{title}</h2>
+              <p className="text-sm text-slate-400">{subtitle}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSaving}
+            aria-label="Close call sign modal"
+            className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
-          </div>
-          <div>
-            <h2 className="text-lg font-bold text-white">{title}</h2>
-            <p className="text-sm text-slate-400">{subtitle}</p>
-          </div>
+          </button>
         </div>
 
         <p className="text-slate-300 text-sm mb-4">

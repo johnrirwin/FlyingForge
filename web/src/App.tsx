@@ -15,6 +15,8 @@ import type { GearCatalogItem } from './gearCatalogTypes';
 
 type AuthModal = 'none' | 'login';
 
+const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 
 // Map URL paths to AppSection values
 const pathToSection: Record<string, AppSection> = {
@@ -116,6 +118,11 @@ function App() {
 
   // Social/Pilot state
   const [selectedPilotId, setSelectedPilotId] = useState<string | null>(null);
+  const appShellRef = useRef<HTMLDivElement | null>(null);
+  const pilotProfileDialogRef = useRef<HTMLDivElement | null>(null);
+  const pilotProfileCloseButtonRef = useRef<HTMLButtonElement | null>(null);
+  const lastFocusedElementBeforePilotModalRef = useRef<HTMLElement | null>(null);
+  const isPilotProfileModalOpen = activeSection === 'social' && Boolean(selectedPilotId);
 
   // Filters
   const { filters, updateFilter } = useFilters();
@@ -541,7 +548,9 @@ function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (showAircraftForm) {
+        if (selectedPilotId) {
+          setSelectedPilotId(null);
+        } else if (showAircraftForm) {
           setShowAircraftForm(false);
           setEditingAircraft(null);
         } else if (selectedAircraftDetails) {
@@ -554,7 +563,7 @@ function App() {
           setSelectedItem(null);
         }
       }
-      if (e.key === '/' && !selectedItem && !showAddInventoryModal && !showAircraftForm && !selectedAircraftDetails) {
+      if (e.key === '/' && !selectedPilotId && !selectedItem && !showAddInventoryModal && !showAircraftForm && !selectedAircraftDetails) {
         e.preventDefault();
         const searchInput = document.querySelector('input[type="text"]') as HTMLInputElement;
         searchInput?.focus();
@@ -563,7 +572,68 @@ function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedItem, showAddInventoryModal, showAircraftForm, selectedAircraftDetails]);
+  }, [selectedItem, selectedPilotId, showAddInventoryModal, showAircraftForm, selectedAircraftDetails]);
+
+  useEffect(() => {
+    const appShell = appShellRef.current;
+    if (!appShell) return;
+
+    if (isPilotProfileModalOpen) {
+      appShell.setAttribute('aria-hidden', 'true');
+      appShell.setAttribute('inert', '');
+    } else {
+      appShell.removeAttribute('aria-hidden');
+      appShell.removeAttribute('inert');
+    }
+  }, [isPilotProfileModalOpen]);
+
+  useEffect(() => {
+    if (!isPilotProfileModalOpen) return;
+
+    const dialog = pilotProfileDialogRef.current;
+    if (!dialog) return;
+
+    lastFocusedElementBeforePilotModalRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+
+    const focusableElements = dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+    const firstElement = focusableElements[0] ?? pilotProfileCloseButtonRef.current ?? dialog;
+    firstElement.focus();
+
+    const handleTabKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab') return;
+
+      const elements = dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+      if (elements.length === 0) {
+        event.preventDefault();
+        return;
+      }
+
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      const activeElement = document.activeElement;
+
+      if (event.shiftKey) {
+        if (activeElement === first || !dialog.contains(activeElement)) {
+          event.preventDefault();
+          last.focus();
+        }
+        return;
+      }
+
+      if (activeElement === last || !dialog.contains(activeElement)) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleTabKey);
+    return () => {
+      document.removeEventListener('keydown', handleTabKey);
+      lastFocusedElementBeforePilotModalRef.current?.focus();
+    };
+  }, [isPilotProfileModalOpen]);
 
   const sourceMap = new Map(sources.map(s => [s.id, s]));
 
@@ -600,6 +670,7 @@ function App() {
 
   return (
     <div className="flex h-screen supports-[height:100dvh]:h-[100dvh] bg-slate-900 text-white overflow-hidden">
+      <div ref={appShellRef} className="flex flex-1 min-h-0 min-w-0">
       {/* Mobile Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-30 bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between">
         <button
@@ -904,21 +975,55 @@ function App() {
         )}
 
         {/* Social/Pilot Directory Section */}
-        {activeSection === 'social' && !selectedPilotId && (
+        {activeSection === 'social' && (
           <SocialPage
             onSelectPilot={(pilotId) => setSelectedPilotId(pilotId)}
           />
         )}
-
-        {/* Pilot Profile View */}
-        {activeSection === 'social' && selectedPilotId && (
-          <PilotProfile
-            pilotId={selectedPilotId}
-            onBack={() => setSelectedPilotId(null)}
-            onSelectPilot={(pilotId) => setSelectedPilotId(pilotId)}
-          />
-        )}
       </div>
+      </div>
+
+      {/* Pilot Profile Modal (Social) */}
+      {isPilotProfileModalOpen && selectedPilotId && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pilot-profile-modal-title"
+          className="fixed inset-0 z-[70] flex items-start md:items-center justify-center p-4 md:p-6"
+        >
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setSelectedPilotId(null)}
+          />
+          <div
+            ref={pilotProfileDialogRef}
+            tabIndex={-1}
+            className="relative w-full max-w-4xl h-[92vh] max-h-[92vh] overflow-hidden bg-slate-900 border border-slate-700 rounded-2xl flex flex-col"
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700">
+              <h2 id="pilot-profile-modal-title" className="text-lg font-semibold text-white">Pilot Profile</h2>
+              <button
+                ref={pilotProfileCloseButtonRef}
+                onClick={() => setSelectedPilotId(null)}
+                aria-label="Close pilot profile modal"
+                className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 min-h-0">
+              <PilotProfile
+                pilotId={selectedPilotId}
+                onBack={() => setSelectedPilotId(null)}
+                onSelectPilot={(pilotId) => setSelectedPilotId(pilotId)}
+                isModal
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Item Detail Modal (News) */}
       {selectedItem && (

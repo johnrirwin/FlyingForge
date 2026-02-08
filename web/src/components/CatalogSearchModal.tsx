@@ -261,7 +261,7 @@ export function CatalogSearchModal({
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-700 bg-slate-800/50">
+            <div className="flex items-center justify-start px-6 py-4 border-t border-slate-700 bg-slate-800/50">
               <button
                 onClick={() => setShowCreateForm(true)}
                 className="text-primary-400 hover:text-primary-300 text-sm font-medium transition-colors flex items-center gap-1"
@@ -270,12 +270,6 @@ export function CatalogSearchModal({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
                 Can't find it? Add new gear
-              </button>
-              <button
-                onClick={onClose}
-                className="px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-              >
-                Cancel
               </button>
             </div>
           </>
