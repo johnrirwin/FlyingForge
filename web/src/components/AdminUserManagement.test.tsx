@@ -101,6 +101,18 @@ describe('AdminUserManagement', () => {
     expect(await screen.findByText('User was updated')).toBeInTheDocument();
   });
 
+  it('opens profile modal from keyboard interaction on desktop row', async () => {
+    render(<AdminUserManagement isAdmin currentUserId="admin-1" authLoading={false} />);
+
+    const openProfileRow = await screen.findByRole('button', { name: 'Open profile for Umbra' });
+    fireEvent.keyDown(openProfileRow, { key: 'Enter' });
+
+    expect(await screen.findByText('User Profile')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(mockAdminGetUser).toHaveBeenCalledWith('user-1');
+    });
+  });
+
   it('removes a user avatar from the profile modal', async () => {
     const updatedWithoutAvatar: AdminUser = {
       ...mockUser,

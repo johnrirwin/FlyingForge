@@ -447,6 +447,15 @@ export function AdminUserManagement({ isAdmin, currentUserId, authLoading }: Adm
                     <tr
                       key={user.id}
                       onClick={() => handleOpenProfile(user)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          handleOpenProfile(user);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Open profile for ${getUserCallSign(user)}`}
                       className={`border-t border-slate-800 transition-colors cursor-pointer ${
                         isSelected ? 'bg-primary-600/10' : 'bg-slate-900/40 hover:bg-slate-800/50'
                       }`}

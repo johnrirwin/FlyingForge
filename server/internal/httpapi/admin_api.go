@@ -72,8 +72,13 @@ func (api *AdminAPI) requireRole(next http.HandlerFunc, allowed func(*models.Use
 		defer cancel()
 
 		user, err := api.userStore.GetByID(ctx, userID)
-		if err != nil || user == nil {
-			api.logger.Error("Failed to get user for admin check", logging.WithField("error", err))
+		if err != nil {
+			api.logger.Error("Failed to get user for admin check", logging.WithField("error", err.Error()))
+			http.Error(w, `{"error":"authentication required"}`, http.StatusUnauthorized)
+			return
+		}
+		if user == nil {
+			api.logger.Warn("Authenticated user missing during admin check", logging.WithField("userId", userID))
 			http.Error(w, `{"error":"authentication required"}`, http.StatusUnauthorized)
 			return
 		}
@@ -287,11 +292,24 @@ func (api *AdminAPI) handleAdminUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	limit := parseIntQuery(query.Get("limit"), 20)
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	offset := parseIntQuery(query.Get("offset"), 0)
+	if offset < 0 {
+		offset = 0
+	}
+
 	params := models.UserFilterParams{
 		Query:  strings.TrimSpace(query.Get("query")),
 		Status: status,
-		Limit:  parseIntQuery(query.Get("limit"), 20),
-		Offset: parseIntQuery(query.Get("offset"), 0),
+		Limit:  limit,
+		Offset: offset,
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
