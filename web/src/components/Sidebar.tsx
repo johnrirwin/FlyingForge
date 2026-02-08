@@ -92,8 +92,9 @@ export const Sidebar = memo(function Sidebar({
       {/* Sidebar */}
       <aside
         className={`
-          fixed md:static inset-y-0 left-0 z-50
-          w-64 flex-shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col overflow-hidden
+          fixed md:static top-0 left-0 z-50 h-screen supports-[height:100dvh]:h-[100dvh] md:h-auto
+          w-64 flex-shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col
+          overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch] md:overflow-hidden
           transform transition-transform duration-300 ease-in-out
           ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         `}
