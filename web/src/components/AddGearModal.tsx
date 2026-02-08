@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { EquipmentItem, InventoryItem, EquipmentCategory, ItemCondition, AddInventoryParams } from '../equipmentTypes';
-import { EQUIPMENT_CATEGORIES, ITEM_CONDITIONS } from '../equipmentTypes';
+import type { EquipmentItem, InventoryItem, EquipmentCategory, AddInventoryParams } from '../equipmentTypes';
+import { EQUIPMENT_CATEGORIES } from '../equipmentTypes';
 import type { GearCatalogItem } from '../gearCatalogTypes';
 import { getCatalogItemDisplayName, gearTypeToEquipmentCategory } from '../gearCatalogTypes';
 import { CatalogSearchModal } from './CatalogSearchModal';
@@ -9,12 +9,13 @@ interface AddGearModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (params: AddInventoryParams) => Promise<void>;
+  onDelete?: (item: InventoryItem) => Promise<void>;
   equipmentItem?: EquipmentItem | null;
   catalogItem?: GearCatalogItem | null; // Pre-selected from gear catalog page
   editItem?: InventoryItem | null;
 }
 
-export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalogItem, editItem }: AddGearModalProps) {
+export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentItem, catalogItem, editItem }: AddGearModalProps) {
   // Only show details form for editing existing items or when coming from shop
   const isEditing = !!editItem;
   const hasEquipmentItem = !!equipmentItem;
@@ -25,6 +26,8 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
   const showCatalogSearch = !showDetailsForm && !hasPreselectedCatalogItem;
   
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   // Track whether auto-add has been triggered to prevent duplicate submissions
@@ -35,7 +38,6 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
   const [category, setCategory] = useState<EquipmentCategory>('accessories');
   const [manufacturer, setManufacturer] = useState('');
   const [quantity, setQuantity] = useState(1);
-  const [condition, setCondition] = useState<ItemCondition>('new');
   const [purchasePrice, setPurchasePrice] = useState('');
   const [purchaseSeller, setPurchaseSeller] = useState('');
   const [notes, setNotes] = useState('');
@@ -52,7 +54,6 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
         category: gearTypeToEquipmentCategory(item.gearType),
         manufacturer: item.brand,
         quantity: 1,
-        condition: 'new',
         purchasePrice: item.msrp,
         catalogId: item.id,
       };
@@ -100,7 +101,6 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
       setPurchasePrice(equipmentItem.price.toFixed(2));
       setPurchaseSeller(equipmentItem.seller);
       setQuantity(1);
-      setCondition('new');
       setNotes('');
       setBuildId('');
     } else if (editItem) {
@@ -108,7 +108,6 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
       setCategory(editItem.category);
       setManufacturer(editItem.manufacturer || '');
       setQuantity(editItem.quantity);
-      setCondition(editItem.condition);
       setPurchasePrice(editItem.purchasePrice?.toFixed(2) || '');
       setPurchaseSeller(editItem.purchaseSeller || '');
       setNotes(editItem.notes || '');
@@ -119,13 +118,13 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
       setCategory('accessories');
       setManufacturer('');
       setQuantity(1);
-      setCondition('new');
       setPurchasePrice('');
       setPurchaseSeller('');
       setNotes('');
       setBuildId('');
     }
     setError(null);
+    setShowDeleteConfirmModal(false);
   }, [equipmentItem, editItem, isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -139,7 +138,6 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
         category,
         manufacturer: manufacturer.trim() || undefined,
         quantity,
-        condition,
         purchasePrice: purchasePrice ? parseFloat(purchasePrice) : undefined,
         purchaseSeller: purchaseSeller.trim() || undefined,
         notes: notes.trim() || undefined,
@@ -156,6 +154,32 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
       setError(err instanceof Error ? err.message : 'Failed to save item');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleOpenDeleteConfirm = () => {
+    if (!editItem || !onDelete || isSubmitting || isDeleting) return;
+    setShowDeleteConfirmModal(true);
+  };
+
+  const handleCancelDelete = () => {
+    if (isDeleting) return;
+    setShowDeleteConfirmModal(false);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!editItem || !onDelete) return;
+
+    setIsDeleting(true);
+    setError(null);
+    try {
+      await onDelete(editItem);
+      setShowDeleteConfirmModal(false);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete item');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -256,38 +280,21 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
               />
             </div>
 
-            {/* Category & Condition */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
-                  Category <span className="text-red-400">*</span>
-                </label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value as EquipmentCategory)}
-                  required
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
-                >
-                  {EQUIPMENT_CATEGORIES.map(cat => (
-                    <option key={cat.value} value={cat.value}>{cat.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
-                  Condition <span className="text-red-400">*</span>
-                </label>
-                <select
-                  value={condition}
-                  onChange={(e) => setCondition(e.target.value as ItemCondition)}
-                  required
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
-                >
-                  {ITEM_CONDITIONS.map(cond => (
-                    <option key={cond.value} value={cond.value}>{cond.label}</option>
-                  ))}
-                </select>
-              </div>
+            {/* Category */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">
+                Category <span className="text-red-400">*</span>
+              </label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value as EquipmentCategory)}
+                required
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
+              >
+                {EQUIPMENT_CATEGORIES.map(cat => (
+                  <option key={cat.value} value={cat.value}>{cat.label}</option>
+                ))}
+              </select>
             </div>
 
             {/* Manufacturer & Quantity */}
@@ -327,8 +334,8 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
                   <input
-                    type="number"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
                     value={purchasePrice}
                     onChange={(e) => setPurchasePrice(e.target.value)}
                     className="w-full pl-7 pr-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
@@ -380,17 +387,23 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-700 bg-slate-800/50">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-            >
-              Cancel
-            </button>
+          <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-slate-700 bg-slate-800/50">
+            <div>
+              {editItem && onDelete && (
+                <button
+                  type="button"
+                  onClick={handleOpenDeleteConfirm}
+                  disabled={isSubmitting || isDeleting}
+                  className="px-4 py-2 bg-red-600/80 hover:bg-red-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isDeleting ? 'Deleting...' : 'Delete Item'}
+                </button>
+              )}
+            </div>
+            <div className="flex items-center">
             <button
               type="submit"
-              disabled={isSubmitting || !name.trim()}
+              disabled={isSubmitting || isDeleting || !name.trim()}
               className="px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors flex items-center gap-2"
             >
               {isSubmitting && (
@@ -398,9 +411,51 @@ export function AddGearModal({ isOpen, onClose, onSubmit, equipmentItem, catalog
               )}
               {editItem ? 'Save Changes' : 'Add to My Inventory'}
             </button>
+            </div>
           </div>
         </form>
       </div>
+
+      {/* Delete confirmation modal */}
+      {showDeleteConfirmModal && editItem && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/70"
+            onClick={handleCancelDelete}
+          />
+          <div className="relative bg-slate-800 rounded-xl p-6 max-w-md w-full shadow-2xl border border-red-500/50">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-white">Delete Item?</h3>
+            </div>
+            <p className="text-slate-300 mb-5">
+              Are you sure you want to delete <span className="text-white font-medium">{editItem.name}</span> from your inventory?
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleCancelDelete}
+                disabled={isDeleting}
+                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmDelete()}
+                disabled={isDeleting}
+                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+              >
+                {isDeleting ? 'Deleting...' : 'Delete Item'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

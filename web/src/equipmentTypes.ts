@@ -28,16 +28,6 @@ export const EQUIPMENT_CATEGORIES: { value: EquipmentCategory; label: string }[]
   { value: 'accessories', label: 'Accessories' },
 ];
 
-// Item condition
-export type ItemCondition = 'new' | 'used' | 'broken' | 'spare';
-
-export const ITEM_CONDITIONS: { value: ItemCondition; label: string; color: string }[] = [
-  { value: 'new', label: 'New', color: 'green' },
-  { value: 'used', label: 'Used', color: 'yellow' },
-  { value: 'broken', label: 'Broken', color: 'red' },
-  { value: 'spare', label: 'Spare', color: 'blue' },
-];
-
 // Equipment item from seller search
 export interface EquipmentItem {
   id: string;
@@ -114,7 +104,6 @@ export interface InventoryItem {
   category: EquipmentCategory;
   manufacturer?: string;
   quantity: number;
-  condition: ItemCondition;
   notes?: string;
   catalogId?: string; // Link to gear catalog item
   buildId?: string;
@@ -134,7 +123,6 @@ export interface AddInventoryParams {
   category: EquipmentCategory;
   manufacturer?: string;
   quantity?: number;
-  condition?: ItemCondition;
   notes?: string;
   catalogId?: string; // Link to gear catalog item
   buildId?: string;
@@ -152,7 +140,6 @@ export interface UpdateInventoryParams {
   category?: EquipmentCategory;
   manufacturer?: string;
   quantity?: number;
-  condition?: ItemCondition;
   notes?: string;
   buildId?: string;
   purchasePrice?: number;
@@ -165,7 +152,6 @@ export interface UpdateInventoryParams {
 // Inventory filter params
 export interface InventoryFilterParams {
   category?: EquipmentCategory;
-  condition?: ItemCondition;
   buildId?: string;
   query?: string;
   limit?: number;
@@ -184,7 +170,6 @@ export interface InventorySummary {
   totalItems: number;
   totalValue: number;
   byCategory: Record<EquipmentCategory, number>;
-  byCondition: Record<ItemCondition, number>;
 }
 
 // App section navigation

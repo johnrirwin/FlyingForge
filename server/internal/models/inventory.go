@@ -5,16 +5,6 @@ import (
 	"time"
 )
 
-// ItemCondition represents the condition of an inventory item
-type ItemCondition string
-
-const (
-	ConditionNew    ItemCondition = "new"
-	ConditionUsed   ItemCondition = "used"
-	ConditionBroken ItemCondition = "broken"
-	ConditionSpare  ItemCondition = "spare"
-)
-
 // InventoryItem represents a piece of equipment in the user's personal inventory
 type InventoryItem struct {
 	ID           string            `json:"id"`
@@ -23,7 +13,6 @@ type InventoryItem struct {
 	Category     EquipmentCategory `json:"category"`
 	Manufacturer string            `json:"manufacturer,omitempty"`
 	Quantity     int               `json:"quantity"`
-	Condition    ItemCondition     `json:"condition"`
 	Notes        string            `json:"notes,omitempty"`
 
 	// Catalog link - for crowd-sourced gear
@@ -56,7 +45,6 @@ type AddInventoryParams struct {
 	Category          EquipmentCategory `json:"category"`
 	Manufacturer      string            `json:"manufacturer,omitempty"`
 	Quantity          int               `json:"quantity"`
-	Condition         ItemCondition     `json:"condition"`
 	Notes             string            `json:"notes,omitempty"`
 	BuildID           string            `json:"buildId,omitempty"`
 	PurchasePrice     *float64          `json:"purchasePrice,omitempty"`
@@ -75,7 +63,6 @@ type UpdateInventoryParams struct {
 	Category       *EquipmentCategory `json:"category,omitempty"`
 	Manufacturer   *string            `json:"manufacturer,omitempty"`
 	Quantity       *int               `json:"quantity,omitempty"`
-	Condition      *ItemCondition     `json:"condition,omitempty"`
 	Notes          *string            `json:"notes,omitempty"`
 	BuildID        *string            `json:"buildId,omitempty"`
 	PurchasePrice  *float64           `json:"purchasePrice,omitempty"`
@@ -87,12 +74,11 @@ type UpdateInventoryParams struct {
 
 // InventoryFilterParams defines parameters for filtering inventory
 type InventoryFilterParams struct {
-	Category  EquipmentCategory `json:"category,omitempty"`
-	Condition ItemCondition     `json:"condition,omitempty"`
-	BuildID   string            `json:"buildId,omitempty"`
-	Query     string            `json:"query,omitempty"`
-	Limit     int               `json:"limit,omitempty"`
-	Offset    int               `json:"offset,omitempty"`
+	Category EquipmentCategory `json:"category,omitempty"`
+	BuildID  string            `json:"buildId,omitempty"`
+	Query    string            `json:"query,omitempty"`
+	Limit    int               `json:"limit,omitempty"`
+	Offset   int               `json:"offset,omitempty"`
 }
 
 // InventoryResponse represents the response for inventory queries
@@ -104,8 +90,7 @@ type InventoryResponse struct {
 
 // InventorySummary provides a summary of the user's inventory
 type InventorySummary struct {
-	TotalItems  int                       `json:"totalItems"`
-	TotalValue  float64                   `json:"totalValue"`
-	ByCategory  map[EquipmentCategory]int `json:"byCategory"`
-	ByCondition map[ItemCondition]int     `json:"byCondition"`
+	TotalItems int                       `json:"totalItems"`
+	TotalValue float64                   `json:"totalValue"`
+	ByCategory map[EquipmentCategory]int `json:"byCategory"`
 }

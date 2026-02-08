@@ -215,10 +215,9 @@ func (api *EquipmentAPI) listInventory(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
 	params := models.InventoryFilterParams{
-		Category:  models.EquipmentCategory(query.Get("category")),
-		Condition: models.ItemCondition(query.Get("condition")),
-		BuildID:   query.Get("buildId"),
-		Query:     query.Get("q"),
+		Category: models.EquipmentCategory(query.Get("category")),
+		BuildID:  query.Get("buildId"),
+		Query:    query.Get("q"),
 	}
 
 	if limit := query.Get("limit"); limit != "" {

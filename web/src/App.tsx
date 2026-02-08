@@ -9,7 +9,7 @@ import { useFilters } from './hooks';
 import { useAuth } from './hooks/useAuth';
 import { useGoogleAnalytics, trackEvent } from './hooks/useGoogleAnalytics';
 import type { FeedItem, SourceInfo, FilterParams } from './types';
-import type { EquipmentItem, InventoryItem, EquipmentSearchParams, EquipmentCategory, ItemCondition, AddInventoryParams, InventorySummary, AppSection } from './equipmentTypes';
+import { EQUIPMENT_CATEGORIES, type EquipmentItem, type InventoryItem, type EquipmentCategory, type AddInventoryParams, type InventorySummary, type AppSection } from './equipmentTypes';
 import type { Aircraft, AircraftDetailsResponse, CreateAircraftParams, UpdateAircraftParams, SetComponentParams, ReceiverConfig } from './aircraftTypes';
 import type { GearCatalogItem } from './gearCatalogTypes';
 
@@ -92,14 +92,10 @@ function App() {
   const [totalCount, setTotalCount] = useState(0);
   const [currentOffset, setCurrentOffset] = useState(0);
 
-  // Equipment state (for search params only)
-  const [equipmentSearchParams, setEquipmentSearchParams] = useState<EquipmentSearchParams>({});
-
   // Inventory state
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [inventorySummary, setInventorySummary] = useState<InventorySummary | null>(null);
   const [inventoryCategory, setInventoryCategory] = useState<EquipmentCategory | null>(null);
-  const [inventoryCondition, setInventoryCondition] = useState<string | null>(null);
   const [isInventoryLoading, setIsInventoryLoading] = useState(false);
   const [inventoryHasLoaded, setInventoryHasLoaded] = useState(false);
   const [inventoryError, setInventoryError] = useState<string | null>(null);
@@ -290,7 +286,6 @@ function App() {
         const [inventoryResponse, summaryResponse] = await Promise.all([
           getInventory({
             category: activeSection === 'inventory' ? (inventoryCategory || undefined) : undefined,
-            condition: activeSection === 'inventory' ? (inventoryCondition as ItemCondition || undefined) : undefined,
           }),
           getInventorySummary(),
         ]);
@@ -307,7 +302,7 @@ function App() {
     };
 
     loadInventory();
-  }, [activeSection, inventoryCategory, inventoryCondition, isAuthenticated]);
+  }, [activeSection, inventoryCategory, isAuthenticated]);
 
   // Load aircraft when section becomes active (also for dashboard)
   useEffect(() => {
@@ -421,15 +416,9 @@ function App() {
     }
   }, [filters.sources, filters.sourceType, filters.sort, filters.fromDate, filters.toDate, appliedQuery, startCooldown]);
 
-  // Equipment search handler
-  const handleEquipmentSearchChange = useCallback((params: Partial<EquipmentSearchParams>) => {
-    setEquipmentSearchParams(prev => ({ ...prev, ...params }));
-  }, []);
-
-  // Inventory filter handler
-  const handleInventoryFilterChange = useCallback((category: EquipmentCategory | null, condition: string | null) => {
+  // Inventory category filter handler
+  const handleInventoryCategoryFilterChange = useCallback((category: EquipmentCategory | null) => {
     setInventoryCategory(category);
-    setInventoryCondition(condition);
   }, []);
 
   // Edit inventory item handler
@@ -441,8 +430,6 @@ function App() {
 
   // Delete inventory item handler
   const handleDeleteInventoryItem = useCallback(async (item: InventoryItem) => {
-    if (!confirm(`Delete "${item.name}" from your inventory?`)) return;
-
     try {
       await deleteInventoryItem(item.id);
       setInventoryItems(prev => prev.filter(i => i.id !== item.id));
@@ -450,20 +437,6 @@ function App() {
       setInventorySummary(summaryResponse);
     } catch (err) {
       console.error('Failed to delete inventory item:', err);
-    }
-  }, []);
-
-  // Adjust inventory quantity handler
-  const handleAdjustQuantity = useCallback(async (item: InventoryItem, delta: number) => {
-    const newQuantity = Math.max(0, item.quantity + delta);
-    
-    try {
-      const updated = await updateInventoryItem(item.id, { quantity: newQuantity });
-      setInventoryItems(prev => prev.map(i => i.id === item.id ? updated : i));
-      const summaryResponse = await getInventorySummary();
-      setInventorySummary(summaryResponse);
-    } catch (err) {
-      console.error('Failed to update quantity:', err);
     }
   }, []);
 
@@ -492,7 +465,6 @@ function App() {
         selectedEquipmentForInventory.imageUrl,
         selectedEquipmentForInventory.keySpecs,
         params.quantity,
-        params.condition,
         params.notes
       );
       setInventoryItems(prev => [...prev, newItem]);
@@ -645,12 +617,6 @@ function App() {
       <Sidebar
         activeSection={activeSection}
         onSectionChange={handleSectionChange}
-        searchParams={equipmentSearchParams}
-        onSearchChange={handleEquipmentSearchChange}
-        inventorySummary={inventorySummary}
-        inventoryCategory={inventoryCategory}
-        inventoryCondition={inventoryCondition}
-        onInventoryFilterChange={handleInventoryFilterChange}
         isAuthenticated={isAuthenticated}
         user={user}
         authLoading={authLoading}
@@ -796,38 +762,88 @@ function App() {
 
         {/* Inventory Section */}
         {activeSection === 'inventory' && (
-          <>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
-              <div>
-                <h1 className="text-xl font-semibold text-white">My Inventory</h1>
-                <p className="text-sm text-slate-400">
-                  Track your drone equipment inventory
-                </p>
+          <div className="flex-1 flex flex-col min-h-0">
+            <div className="px-4 md:px-6 py-4 border-b border-slate-800 bg-slate-900">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <h1 className="text-xl font-semibold text-white">My Inventory</h1>
+                  <p className="text-sm text-slate-400">
+                    Track your drone equipment inventory
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedEquipmentForInventory(null);
+                    setEditingInventoryItem(null);
+                    setShowAddInventoryModal(true);
+                  }}
+                  className="w-full sm:w-auto px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Item
+                </button>
               </div>
-              <button
-                onClick={() => {
-                  setSelectedEquipmentForInventory(null);
-                  setEditingInventoryItem(null);
-                  setShowAddInventoryModal(true);
-                }}
-                className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Add Item
-              </button>
+
+              <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-end">
+                {inventoryCategory && (
+                  <button
+                    onClick={() => handleInventoryCategoryFilterChange(null)}
+                    className="w-full sm:w-auto px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors border border-slate-700"
+                  >
+                    Clear Category
+                  </button>
+                )}
+
+                {inventorySummary && (
+                  <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-3 lg:ml-auto">
+                    <div className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700">
+                      <div className="text-[11px] uppercase tracking-wide text-slate-500">Total Items</div>
+                      <div className="text-sm font-semibold text-white">{inventorySummary.totalItems}</div>
+                    </div>
+                    <div className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700">
+                      <div className="text-[11px] uppercase tracking-wide text-slate-500">Total Value</div>
+                      <div className="text-sm font-semibold text-primary-400">${inventorySummary.totalValue.toFixed(0)}</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-700">
+                <button
+                  onClick={() => handleInventoryCategoryFilterChange(null)}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-lg whitespace-nowrap transition-colors ${
+                    !inventoryCategory
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
+                  }`}
+                >
+                  All Categories
+                </button>
+                {EQUIPMENT_CATEGORIES.map(category => (
+                  <button
+                    key={category.value}
+                    onClick={() => handleInventoryCategoryFilterChange(category.value)}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-lg whitespace-nowrap transition-colors ${
+                      inventoryCategory === category.value
+                        ? 'bg-primary-600 text-white'
+                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
+                    }`}
+                  >
+                    {category.label}
+                  </button>
+                ))}
+              </div>
             </div>
             <InventoryList
               items={inventoryItems}
               isLoading={isInventoryLoading}
               hasLoaded={inventoryHasLoaded}
               error={inventoryError}
-              onEdit={handleEditInventoryItem}
-              onDelete={handleDeleteInventoryItem}
-              onAdjustQuantity={handleAdjustQuantity}
+              onOpenItem={handleEditInventoryItem}
             />
-          </>
+          </div>
         )}
 
         {/* Aircraft Section */}
@@ -922,6 +938,7 @@ function App() {
           setEditingInventoryItem(null);
         }}
         onSubmit={handleInventorySubmit}
+        onDelete={handleDeleteInventoryItem}
         equipmentItem={selectedEquipmentForInventory}
         catalogItem={selectedCatalogItemForInventory}
         editItem={editingInventoryItem}

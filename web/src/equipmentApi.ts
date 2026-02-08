@@ -97,7 +97,6 @@ export async function getInventory(params?: InventoryFilterParams): Promise<Inve
   const searchParams = new URLSearchParams();
   
   if (params?.category) searchParams.set('category', params.category);
-  if (params?.condition) searchParams.set('condition', params.condition);
   if (params?.buildId) searchParams.set('buildId', params.buildId);
   if (params?.query) searchParams.set('q', params.query);
   if (params?.limit) searchParams.set('limit', params.limit.toString());
@@ -147,7 +146,6 @@ export async function addEquipmentToInventory(
   imageUrl?: string,
   specs?: Record<string, unknown>,
   quantity = 1,
-  condition: 'new' | 'used' | 'broken' | 'spare' = 'new',
   notes?: string
 ): Promise<InventoryItem> {
   return addInventoryItem({
@@ -155,7 +153,6 @@ export async function addEquipmentToInventory(
     category,
     manufacturer,
     quantity,
-    condition,
     notes,
     purchasePrice: price,
     purchaseSeller: seller,

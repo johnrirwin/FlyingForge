@@ -332,7 +332,7 @@ func (s *AircraftStore) SetComponent(ctx context.Context, aircraftID string, cat
 func (s *AircraftStore) GetComponents(ctx context.Context, aircraftID string) ([]models.AircraftComponent, error) {
 	query := `
 		SELECT ac.id, ac.aircraft_id, ac.category, ac.inventory_item_id, ac.notes, ac.created_at, ac.updated_at,
-			   ii.id, ii.name, ii.category, ii.manufacturer, ii.quantity, ii.condition, ii.notes,
+			   ii.id, ii.name, ii.category, ii.manufacturer, ii.quantity, ii.notes,
 			   ii.purchase_price, ii.image_url, ii.specs
 		FROM aircraft_components ac
 		LEFT JOIN inventory_items ii ON ac.inventory_item_id = ii.id
@@ -350,14 +350,14 @@ func (s *AircraftStore) GetComponents(ctx context.Context, aircraftID string) ([
 	for rows.Next() {
 		var c models.AircraftComponent
 		var scanInventoryItemID, scanNotes sql.NullString
-		var invID, invName, invCategory, invManufacturer, invCondition, invNotes, invImageURL sql.NullString
+		var invID, invName, invCategory, invManufacturer, invNotes, invImageURL sql.NullString
 		var invQuantity sql.NullInt32
 		var invPrice sql.NullFloat64
 		var invSpecs []byte // Use []byte instead of json.RawMessage to handle NULL
 
 		if err := rows.Scan(
 			&c.ID, &c.AircraftID, &c.Category, &scanInventoryItemID, &scanNotes, &c.CreatedAt, &c.UpdatedAt,
-			&invID, &invName, &invCategory, &invManufacturer, &invQuantity, &invCondition, &invNotes,
+			&invID, &invName, &invCategory, &invManufacturer, &invQuantity, &invNotes,
 			&invPrice, &invImageURL, &invSpecs,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan component: %w", err)
@@ -373,7 +373,6 @@ func (s *AircraftStore) GetComponents(ctx context.Context, aircraftID string) ([
 				Category:     models.EquipmentCategory(invCategory.String),
 				Manufacturer: invManufacturer.String,
 				Quantity:     int(invQuantity.Int32),
-				Condition:    models.ItemCondition(invCondition.String),
 				Notes:        invNotes.String,
 				ImageURL:     invImageURL.String,
 				Specs:        json.RawMessage(invSpecs),

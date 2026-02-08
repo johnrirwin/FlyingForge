@@ -1,18 +1,10 @@
 import { type ReactNode, memo } from 'react';
-import type { EquipmentCategory, EquipmentSearchParams, InventorySummary } from '../equipmentTypes';
-import { EQUIPMENT_CATEGORIES, ITEM_CONDITIONS } from '../equipmentTypes';
 import type { AppSection } from '../equipmentTypes';
 import type { User } from '../authTypes';
 
 interface SidebarProps {
   activeSection: AppSection;
   onSectionChange: (section: AppSection) => void;
-  searchParams: EquipmentSearchParams;
-  onSearchChange: (params: Partial<EquipmentSearchParams>) => void;
-  inventorySummary: InventorySummary | null;
-  inventoryCategory: EquipmentCategory | null;
-  inventoryCondition: string | null;
-  onInventoryFilterChange: (category: EquipmentCategory | null, condition: string | null) => void;
   // Auth props
   isAuthenticated: boolean;
   user: User | null;
@@ -27,12 +19,6 @@ interface SidebarProps {
 export const Sidebar = memo(function Sidebar({
   activeSection,
   onSectionChange,
-  searchParams,
-  onSearchChange,
-  inventorySummary,
-  inventoryCategory,
-  inventoryCondition,
-  onInventoryFilterChange,
   isAuthenticated,
   user,
   authLoading,
@@ -41,18 +27,6 @@ export const Sidebar = memo(function Sidebar({
   isMobileMenuOpen,
   onMobileMenuClose,
 }: SidebarProps) {
-  const handleCategorySelect = (category: EquipmentCategory | undefined) => {
-    if (activeSection === 'equipment') {
-      onSearchChange({ category });
-    } else {
-      onInventoryFilterChange(category || null, inventoryCondition);
-    }
-  };
-
-  const selectedCategory = activeSection === 'equipment' 
-    ? searchParams.category 
-    : inventoryCategory;
-
   // Handle navigation and close mobile menu
   const handleNavigation = (section: AppSection) => {
     onSectionChange(section);
@@ -302,88 +276,8 @@ export const Sidebar = memo(function Sidebar({
         </nav>
       </div>
 
-      {/* Inventory filters (only for inventory section) */}
-      {activeSection === 'inventory' && (
-        <div className="p-4 border-b border-slate-800">
-          <div className="space-y-3">
-            {/* Condition filter */}
-            <div>
-              <label className="block text-xs font-medium text-slate-500 uppercase mb-1.5">
-                Condition
-              </label>
-              <select
-                value={inventoryCondition || ''}
-                onChange={(e) => onInventoryFilterChange(inventoryCategory, e.target.value || null)}
-                className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500"
-              >
-                <option value="">All Conditions</option>
-                {ITEM_CONDITIONS.map(cond => (
-                  <option key={cond.value} value={cond.value}>{cond.label}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Inventory summary */}
-            {inventorySummary && (
-              <div className="pt-2 border-t border-slate-800">
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="bg-slate-800 rounded-lg p-2">
-                    <div className="text-slate-400 text-xs">Total Items</div>
-                    <div className="text-white font-semibold">{inventorySummary.totalItems}</div>
-                  </div>
-                  <div className="bg-slate-800 rounded-lg p-2">
-                    <div className="text-slate-400 text-xs">Total Value</div>
-                    <div className="text-primary-400 font-semibold">
-                      ${inventorySummary.totalValue.toFixed(0)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Categories (only for inventory section) */}
-      {activeSection === 'inventory' && (
-        <div className="flex-1 overflow-y-auto">
-          <div className="p-4">
-            <h3 className="text-xs font-medium text-slate-500 uppercase mb-2">
-              Categories
-            </h3>
-            <nav className="space-y-0.5">
-              <button
-                onClick={() => handleCategorySelect(undefined)}
-                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-sm transition-colors ${
-                  !selectedCategory
-                    ? 'bg-slate-800 text-white'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                }`}
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
-                All Categories
-              </button>
-              {EQUIPMENT_CATEGORIES.map(cat => (
-                <button
-                  key={cat.value}
-                  onClick={() => handleCategorySelect(cat.value)}
-                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-sm transition-colors ${
-                    selectedCategory === cat.value
-                      ? 'bg-slate-800 text-white'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                  }`}
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary-500" />
-                  {cat.label}
-                </button>
-              ))}
-            </nav>
-          </div>
-        </div>
-      )}
-
-      {/* Spacer to push user section to bottom - only when no inventory filters showing */}
-      {activeSection !== 'inventory' && <div className="flex-1" />}
+      {/* Spacer to push user section to bottom */}
+      <div className="flex-1" />
 
       {/* User section at bottom */}
       <div className="p-4 border-t border-slate-800">

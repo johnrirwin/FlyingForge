@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import type { EquipmentItem, InventoryItem, EquipmentCategory, ItemCondition, AddInventoryParams } from '../equipmentTypes';
-import { EQUIPMENT_CATEGORIES, ITEM_CONDITIONS } from '../equipmentTypes';
+import type { EquipmentItem, InventoryItem, EquipmentCategory, AddInventoryParams } from '../equipmentTypes';
+import { EQUIPMENT_CATEGORIES } from '../equipmentTypes';
 
 interface AddInventoryModalProps {
   isOpen: boolean;
@@ -19,7 +19,6 @@ export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, ed
   const [category, setCategory] = useState<EquipmentCategory>('accessories');
   const [manufacturer, setManufacturer] = useState('');
   const [quantity, setQuantity] = useState(1);
-  const [condition, setCondition] = useState<ItemCondition>('new');
   const [purchasePrice, setPurchasePrice] = useState('');
   const [purchaseSeller, setPurchaseSeller] = useState('');
   const [notes, setNotes] = useState('');
@@ -34,7 +33,6 @@ export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, ed
       setPurchasePrice(equipmentItem.price.toFixed(2));
       setPurchaseSeller(equipmentItem.seller);
       setQuantity(1);
-      setCondition('new');
       setNotes('');
       setBuildId('');
     } else if (editItem) {
@@ -42,7 +40,6 @@ export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, ed
       setCategory(editItem.category);
       setManufacturer(editItem.manufacturer || '');
       setQuantity(editItem.quantity);
-      setCondition(editItem.condition);
       setPurchasePrice(editItem.purchasePrice?.toFixed(2) || '');
       setPurchaseSeller(editItem.purchaseSeller || '');
       setNotes(editItem.notes || '');
@@ -53,7 +50,6 @@ export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, ed
       setCategory('accessories');
       setManufacturer('');
       setQuantity(1);
-      setCondition('new');
       setPurchasePrice('');
       setPurchaseSeller('');
       setNotes('');
@@ -73,7 +69,6 @@ export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, ed
         category,
         manufacturer: manufacturer.trim() || undefined,
         quantity,
-        condition,
         purchasePrice: purchasePrice ? parseFloat(purchasePrice) : undefined,
         purchaseSeller: purchaseSeller.trim() || undefined,
         notes: notes.trim() || undefined,
@@ -142,38 +137,21 @@ export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, ed
               />
             </div>
 
-            {/* Category & Condition */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
-                  Category <span className="text-red-400">*</span>
-                </label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value as EquipmentCategory)}
-                  required
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
-                >
-                  {EQUIPMENT_CATEGORIES.map(cat => (
-                    <option key={cat.value} value={cat.value}>{cat.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
-                  Condition <span className="text-red-400">*</span>
-                </label>
-                <select
-                  value={condition}
-                  onChange={(e) => setCondition(e.target.value as ItemCondition)}
-                  required
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
-                >
-                  {ITEM_CONDITIONS.map(cond => (
-                    <option key={cond.value} value={cond.value}>{cond.label}</option>
-                  ))}
-                </select>
-              </div>
+            {/* Category */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">
+                Category <span className="text-red-400">*</span>
+              </label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value as EquipmentCategory)}
+                required
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
+              >
+                {EQUIPMENT_CATEGORIES.map(cat => (
+                  <option key={cat.value} value={cat.value}>{cat.label}</option>
+                ))}
+              </select>
             </div>
 
             {/* Manufacturer & Quantity */}
