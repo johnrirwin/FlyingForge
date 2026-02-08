@@ -185,7 +185,7 @@ export function AdminGearModeration({ isAdmin, authLoading }: AdminGearModeratio
     setShowAddGearModal(false);
   };
 
-  const handleAddGearSelect = useCallback((_item: GearCatalogItem) => {
+  const handleAddGearSelect = useCallback(() => {
     // Close create modal after successful add/select and refresh the list.
     setShowAddGearModal(false);
     void loadItems(true);

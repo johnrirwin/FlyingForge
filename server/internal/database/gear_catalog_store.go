@@ -695,12 +695,13 @@ func (s *GearCatalogStore) AdminSearch(ctx context.Context, params models.AdminG
 	}
 
 	if params.ImageStatus != "" {
-		if params.ImageStatus == models.ImageStatusRecentlyCurated {
+		switch params.ImageStatus {
+		case models.ImageStatusRecentlyCurated:
 			// Special filter: items curated within last 24 hours
 			whereClauses = append(whereClauses, "image_curated_at >= NOW() - INTERVAL '24 hours'")
-		} else if params.ImageStatus == models.ImageStatusAll {
+		case models.ImageStatusAll:
 			// Special filter: include all records (no curation-status WHERE clause)
-		} else {
+		default:
 			whereClauses = append(whereClauses, fmt.Sprintf("COALESCE(image_status, 'missing') = $%d", argIdx))
 			args = append(args, params.ImageStatus)
 			argIdx++
