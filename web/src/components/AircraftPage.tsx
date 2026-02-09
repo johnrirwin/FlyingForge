@@ -61,7 +61,7 @@ export function AircraftPage({
         onEdit={onEditAircraft}
         onDelete={onDeleteAircraft}
         mobileTopInset
-        onScrollStart={() => setIsMobileMenuOpen((prev) => (prev ? false : prev))}
+        onListScroll={() => setIsMobileMenuOpen((prev) => (prev ? false : prev))}
       />
 
       <MobileFloatingControls

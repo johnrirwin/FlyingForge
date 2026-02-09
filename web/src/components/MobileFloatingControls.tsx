@@ -1,4 +1,4 @@
-import { useEffect, useId } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import type { ReactNode } from 'react';
 
 interface MobileFloatingControlsProps {
@@ -19,22 +19,40 @@ export function MobileFloatingControls({
   panelClassName,
 }: MobileFloatingControlsProps) {
   const panelId = useId();
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const isClosingRef = useRef(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      isClosingRef.current = false;
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
 
     const closeControls = () => {
+      if (isClosingRef.current) return;
+      isClosingRef.current = true;
       onToggle();
     };
 
+    const handlePointerScroll = (event: WheelEvent | TouchEvent) => {
+      const target = event.target;
+      if (target instanceof Node && panelRef.current?.contains(target)) {
+        return;
+      }
+      closeControls();
+    };
+
     window.addEventListener('scroll', closeControls, { passive: true });
-    window.addEventListener('touchmove', closeControls, { passive: true });
-    window.addEventListener('wheel', closeControls, { passive: true });
+    window.addEventListener('touchmove', handlePointerScroll, { passive: true });
+    window.addEventListener('wheel', handlePointerScroll, { passive: true });
 
     return () => {
       window.removeEventListener('scroll', closeControls);
-      window.removeEventListener('touchmove', closeControls);
-      window.removeEventListener('wheel', closeControls);
+      window.removeEventListener('touchmove', handlePointerScroll);
+      window.removeEventListener('wheel', handlePointerScroll);
     };
   }, [isOpen, onToggle]);
 
@@ -63,6 +81,7 @@ export function MobileFloatingControls({
         {isOpen && (
           <div
             id={panelId}
+            ref={panelRef}
             role="region"
             aria-label={label}
             className={`mt-2 rounded-xl border border-slate-700 overflow-hidden shadow-2xl shadow-slate-950/40 bg-slate-900/95 backdrop-blur max-h-[70vh] overflow-y-auto ${panelClassName ?? ''}`}

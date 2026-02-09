@@ -115,7 +115,7 @@ export function InventoryPage({
         error={inventoryError}
         onOpenItem={onOpenItem}
         mobileTopInset
-        onScrollStart={() => setIsMobileMenuOpen((prev) => (prev ? false : prev))}
+        onListScroll={() => setIsMobileMenuOpen((prev) => (prev ? false : prev))}
       />
 
       <MobileFloatingControls

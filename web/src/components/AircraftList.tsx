@@ -10,7 +10,7 @@ interface AircraftListProps {
   onEdit: (aircraft: Aircraft) => void;
   onDelete: (aircraft: Aircraft) => void;
   mobileTopInset?: boolean;
-  onScrollStart?: () => void;
+  onListScroll?: () => void;
 }
 
 export function AircraftList({
@@ -21,7 +21,7 @@ export function AircraftList({
   onEdit,
   onDelete,
   mobileTopInset = false,
-  onScrollStart,
+  onListScroll,
 }: AircraftListProps) {
   if (isLoading) {
     return (
@@ -83,7 +83,7 @@ export function AircraftList({
     <div
       className={`flex-1 overflow-y-auto p-4 md:p-6 ${mobileTopInset ? 'pt-24 md:pt-6' : ''}`}
       onScroll={(event) => {
-        onScrollStart?.();
+        onListScroll?.();
 
         // Dismiss keyboard only on touch/coarse-pointer devices and only
         // when a form control inside this scroll region is focused.

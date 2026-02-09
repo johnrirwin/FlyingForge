@@ -116,7 +116,7 @@ interface InventoryListProps {
   error: string | null;
   onOpenItem: (item: InventoryItem) => void;
   mobileTopInset?: boolean;
-  onScrollStart?: () => void;
+  onListScroll?: () => void;
 }
 
 export function InventoryList({
@@ -126,7 +126,7 @@ export function InventoryList({
   error,
   onOpenItem,
   mobileTopInset = false,
-  onScrollStart,
+  onListScroll,
 }: InventoryListProps) {
   if (error) {
     return (
@@ -208,7 +208,7 @@ export function InventoryList({
     <div
       className={`flex-1 min-h-0 overflow-y-auto overscroll-y-contain p-4 md:p-6 relative ${mobileTopInset ? 'pt-24 md:pt-6' : ''}`}
       onScroll={(event) => {
-        onScrollStart?.();
+        onListScroll?.();
 
         // Dismiss keyboard only on touch/coarse-pointer devices and only
         // when a form control inside this scroll region is focused.

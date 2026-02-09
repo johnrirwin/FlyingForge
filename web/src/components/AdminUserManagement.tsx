@@ -580,7 +580,7 @@ export function AdminUserManagement({ isAdmin, currentUserId, authLoading }: Adm
             </div>
           )}
 
-          <div className="pt-1 text-center text-sm text-slate-400">
+          <div className="pt-1 text-center text-sm text-slate-400 md:hidden">
             {isLoading ? 'Loading users...' : `${totalCount} user${totalCount === 1 ? '' : 's'} found`}
           </div>
 
