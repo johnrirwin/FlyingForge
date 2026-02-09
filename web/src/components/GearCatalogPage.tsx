@@ -4,6 +4,7 @@ import type { GearCatalogItem, GearType } from '../gearCatalogTypes';
 import { GEAR_TYPES, DRONE_TYPES, getCatalogItemDisplayName } from '../gearCatalogTypes';
 import { useAuth } from '../hooks/useAuth';
 import { GearDetailModal } from './GearDetailModal';
+import { MobileFloatingControls } from './MobileFloatingControls';
 
 interface GearCatalogPageProps {
   onAddToInventory?: (item: GearCatalogItem) => void;
@@ -170,6 +171,7 @@ export function GearCatalogPage({ onAddToInventory }: GearCatalogPageProps) {
   const [hasSearched, setHasSearched] = useState(false);
   const [selectedItem, setSelectedItem] = useState<GearCatalogItem | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isMobileControlsOpen, setIsMobileControlsOpen] = useState(false);
 
   const handleOpenDetail = (item: GearCatalogItem) => {
     setSelectedItem(item);
@@ -192,6 +194,7 @@ export function GearCatalogPage({ onAddToInventory }: GearCatalogPageProps) {
 
   // Search handler
   const handleSearch = useCallback(async () => {
+    setIsMobileControlsOpen(false);
     if (!searchQuery.trim() && !selectedType) {
       setHasSearched(false);
       setItems([]);
@@ -234,6 +237,7 @@ export function GearCatalogPage({ onAddToInventory }: GearCatalogPageProps) {
 
   // Clear search and show popular
   const handleClearSearch = () => {
+    setIsMobileControlsOpen(false);
     setSearchQuery('');
     setSelectedType(null);
     setHasSearched(false);
@@ -271,95 +275,109 @@ export function GearCatalogPage({ onAddToInventory }: GearCatalogPageProps) {
 
   const displayItems = hasSearched ? items : popularItems;
   const showingPopular = !hasSearched;
-
-  return (
-    <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="bg-slate-900 border-b border-slate-800 flex-shrink-0">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-xl font-semibold text-white">Gear Catalog</h1>
-              <p className="text-sm text-slate-400">
-                Browse community-contributed FPV gear • Like PCPartPicker for drones
-              </p>
-            </div>
-            {!isAuthenticated && (
-              <div className="flex items-center gap-2 text-sm text-slate-400">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Sign in to add gear to your inventory
-              </div>
-            )}
+  const controls = (
+    <div className="bg-slate-900 border-b border-slate-800">
+      <div className="px-4 md:px-6 py-4">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-xl font-semibold text-white">Gear Catalog</h1>
+            <p className="text-sm text-slate-400">
+              Browse community-contributed FPV gear • Like PCPartPicker for drones
+            </p>
           </div>
-
-          {/* Search bar */}
-          <div className="flex gap-3">
-            <div className="flex-1 relative">
-              <svg
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
+          {!isAuthenticated && (
+            <div className="hidden md:flex items-center gap-2 text-sm text-slate-400">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <input
-                type="text"
-                placeholder="Search by brand, model, or keyword..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={handleKeyDown}
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
-              />
+              Sign in to add gear to your inventory
             </div>
-            <button
-              onClick={handleSearch}
-              className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors"
-            >
-              Search
-            </button>
-            {hasSearched && (
-              <button
-                onClick={handleClearSearch}
-                className="px-4 py-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-              >
-                Clear
-              </button>
-            )}
-          </div>
+          )}
+        </div>
 
-          {/* Type filters */}
-          <div className="mt-4 flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-700">
-            <GearTypeTab
-              label="All Types"
-              isActive={selectedType === null}
-              onClick={handleSelectAllTypes}
-            />
-            {GEAR_TYPES.map(type => (
-              <GearTypeTab
-                key={type.value}
-                label={type.label}
-                isActive={selectedType === type.value}
-                onClick={() => setSelectedType(type.value)}
+        <div className="flex gap-3">
+          <div className="flex-1 relative">
+            <svg
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
               />
-            ))}
+            </svg>
+            <input
+              type="text"
+              placeholder="Search by brand, model, or keyword..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
+            />
           </div>
+          <button
+            onClick={handleSearch}
+            className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors"
+          >
+            Search
+          </button>
+          {hasSearched && (
+            <button
+              onClick={handleClearSearch}
+              className="px-4 py-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
+        <div className="mt-4 flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-700">
+          <GearTypeTab
+            label="All Types"
+            isActive={selectedType === null}
+            onClick={handleSelectAllTypes}
+          />
+          {GEAR_TYPES.map(type => (
+            <GearTypeTab
+              key={type.value}
+              label={type.label}
+              isActive={selectedType === type.value}
+              onClick={() => setSelectedType(type.value)}
+            />
+          ))}
         </div>
       </div>
+    </div>
+  );
+
+  return (
+    <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
+      <div className="hidden md:block flex-shrink-0">{controls}</div>
 
       {/* Content */}
       <div
-        className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain overflow-x-hidden"
-        onScroll={() => {
-          if (document.activeElement instanceof HTMLElement) {
-            document.activeElement.blur();
+        className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain overflow-x-hidden pt-24 md:pt-0"
+        onScroll={(event) => {
+          setIsMobileControlsOpen((prev) => (prev ? false : prev));
+
+          // Dismiss keyboard only on touch/coarse-pointer devices and only
+          // when a form control inside this scroll region is focused.
+          if (typeof window === 'undefined') return;
+          if (!window.matchMedia || !window.matchMedia('(pointer: coarse)').matches) return;
+
+          const activeElement = document.activeElement;
+          if (!(activeElement instanceof HTMLElement) || activeElement === document.body) return;
+
+          const scrollContainer = event.currentTarget;
+          if (!scrollContainer.contains(activeElement)) return;
+
+          const tagName = activeElement.tagName;
+          if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') {
+            activeElement.blur();
           }
         }}
       >
@@ -463,6 +481,14 @@ export function GearCatalogPage({ onAddToInventory }: GearCatalogPageProps) {
         </div>
       </div>
       </div>
+
+      <MobileFloatingControls
+        label="Catalog Filters"
+        isOpen={isMobileControlsOpen}
+        onToggle={() => setIsMobileControlsOpen((prev) => !prev)}
+      >
+        {controls}
+      </MobileFloatingControls>
 
       {/* Gear Detail Modal */}
       {selectedItem && (

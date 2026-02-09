@@ -9,6 +9,8 @@ interface AircraftListProps {
   onSelect: (aircraft: Aircraft) => void;
   onEdit: (aircraft: Aircraft) => void;
   onDelete: (aircraft: Aircraft) => void;
+  mobileTopInset?: boolean;
+  onListScroll?: () => void;
 }
 
 export function AircraftList({
@@ -18,6 +20,8 @@ export function AircraftList({
   onSelect,
   onEdit,
   onDelete,
+  mobileTopInset = false,
+  onListScroll,
 }: AircraftListProps) {
   if (isLoading) {
     return (
@@ -76,7 +80,28 @@ export function AircraftList({
     }));
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 md:p-6">
+    <div
+      className={`flex-1 overflow-y-auto p-4 md:p-6 ${mobileTopInset ? 'pt-24 md:pt-6' : ''}`}
+      onScroll={(event) => {
+        onListScroll?.();
+
+        // Dismiss keyboard only on touch/coarse-pointer devices and only
+        // when a form control inside this scroll region is focused.
+        if (typeof window === 'undefined') return;
+        if (!window.matchMedia || !window.matchMedia('(pointer: coarse)').matches) return;
+
+        const activeElement = document.activeElement;
+        if (!(activeElement instanceof HTMLElement) || activeElement === document.body) return;
+
+        const scrollContainer = event.currentTarget;
+        if (!scrollContainer.contains(activeElement)) return;
+
+        const tagName = activeElement.tagName;
+        if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') {
+          activeElement.blur();
+        }
+      }}
+    >
       <div className="space-y-6 md:space-y-8">
         {sortedTypes.map(type => (
           <section key={type.value}>

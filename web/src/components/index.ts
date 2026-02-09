@@ -14,6 +14,9 @@ export { ShopSection } from './ShopSection';
 export { GearCatalogPage } from './GearCatalogPage';
 export { AdminGearModeration } from './AdminGearModeration';
 export { AdminUserManagement } from './AdminUserManagement';
+export { NewsPage } from './NewsPage';
+export { InventoryPage } from './InventoryPage';
+export { AircraftPage } from './AircraftPage';
 
 // Aircraft components
 export { AircraftCard } from './AircraftCard';
@@ -40,3 +43,4 @@ export { MyProfile } from './MyProfile';
 export { PilotSearch } from './PilotSearch';
 export { PilotProfile } from './PilotProfile';
 export { SocialPage } from './SocialPage';
+export { MobileFloatingControls } from './MobileFloatingControls';

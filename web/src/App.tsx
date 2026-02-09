@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { TopBar, FeedList, ItemDetail, InventoryList, AddGearModal, Sidebar, ShopSection, AircraftList, AircraftForm, AircraftDetail, AuthCallback, Dashboard, Homepage, GettingStarted, RadioSection, BatterySection, MyProfile, SocialPage, PilotProfile, GearCatalogPage, AdminGearModeration, AdminUserManagement } from './components';
+import { ItemDetail, AddGearModal, Sidebar, AircraftForm, AircraftDetail, AuthCallback, Dashboard, PilotProfile } from './components';
 import { LoginPage } from './components/LoginPage';
+import { AppRoutes } from './AppRoutes';
 import { getItems, getSources, refreshFeeds, RateLimitError } from './api';
 import { getInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem, getInventorySummary, addEquipmentToInventory } from './equipmentApi';
 import { listAircraft, createAircraft, updateAircraft, deleteAircraft, getAircraftDetails, setAircraftComponent, setReceiverSettings } from './aircraftApi';
@@ -9,7 +10,7 @@ import { useFilters } from './hooks';
 import { useAuth } from './hooks/useAuth';
 import { useGoogleAnalytics, trackEvent } from './hooks/useGoogleAnalytics';
 import type { FeedItem, SourceInfo, FilterParams } from './types';
-import { EQUIPMENT_CATEGORIES, type EquipmentItem, type InventoryItem, type EquipmentCategory, type AddInventoryParams, type InventorySummary, type AppSection } from './equipmentTypes';
+import type { EquipmentItem, InventoryItem, EquipmentCategory, AddInventoryParams, InventorySummary, AppSection } from './equipmentTypes';
 import type { Aircraft, AircraftDetailsResponse, CreateAircraftParams, UpdateAircraftParams, SetComponentParams, ReceiverConfig } from './aircraftTypes';
 import type { GearCatalogItem } from './gearCatalogTypes';
 
@@ -663,6 +664,44 @@ function App() {
   const handleOpenLogin = useCallback(() => setAuthModal('login'), []);
   const handleCloseMobileMenu = useCallback(() => setIsMobileMenuOpen(false), []);
 
+  const newsTopBarProps = {
+    query: filters.query,
+    onQueryChange: (q: string) => updateFilter('query', q),
+    onSearch: handleNewsSearch,
+    fromDate: filters.fromDate,
+    toDate: filters.toDate,
+    onFromDateChange: (d: string) => updateFilter('fromDate', d),
+    onToDateChange: (d: string) => updateFilter('toDate', d),
+    sort: filters.sort,
+    onSortChange: (s: 'newest' | 'score') => updateFilter('sort', s),
+    sourceType: filters.sourceType,
+    onSourceTypeChange: (t: typeof filters.sourceType) => updateFilter('sourceType', t),
+    onRefresh: handleRefresh,
+    isRefreshing,
+    refreshCooldown,
+    totalCount,
+  };
+
+  const dashboardElement = (
+    <Dashboard
+      recentAircraft={aircraftItems}
+      recentNews={items}
+      sources={sources}
+      isAircraftLoading={isAircraftLoading}
+      isNewsLoading={isLoading}
+      onViewAllNews={() => navigate('/news')}
+      onViewAllAircraft={() => navigate('/aircraft')}
+      onViewAllGear={() => navigate('/inventory')}
+      onSelectAircraft={handleSelectAircraft}
+      onSelectNewsItem={setSelectedItem}
+      onSelectPilot={(pilotId) => {
+        setSelectedPilotId(pilotId);
+        navigate('/social');
+      }}
+      onGoToSocial={() => navigate('/social')}
+    />
+  );
+
   // Handle OAuth callback - must be after all hooks are called
   if (isAuthCallback) {
     return <AuthCallback />;
@@ -700,297 +739,57 @@ function App() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-0 min-w-0 pt-14 md:pt-0">
-        {/* Homepage Section - for unauthenticated users */}
-        {activeSection === 'home' && !isAuthenticated && (
-          <Homepage
-            onSignIn={() => setAuthModal('login')}
-            onExploreNews={() => navigate('/news')}
-          />
-        )}
-
-        {/* Getting Started Section - public education page */}
-        {activeSection === 'getting-started' && (
-          <GettingStarted
-            onSignIn={() => setAuthModal('login')}
-          />
-        )}
-
-        {/* When on 'home' but authenticated, show the dashboard to avoid a blank state */}
-        {activeSection === 'home' && isAuthenticated && (
-          <Dashboard
-            recentAircraft={aircraftItems}
-            recentNews={items}
-            sources={sources}
-            isAircraftLoading={isAircraftLoading}
-            isNewsLoading={isLoading}
-            onViewAllNews={() => navigate('/news')}
-            onViewAllAircraft={() => navigate('/aircraft')}
-            onViewAllGear={() => navigate('/inventory')}
-            onSelectAircraft={handleSelectAircraft}
-            onSelectNewsItem={setSelectedItem}
-            onSelectPilot={(pilotId) => {
-              setSelectedPilotId(pilotId);
-              navigate('/social');
-            }}
-            onGoToSocial={() => navigate('/social')}
-          />
-        )}
-
-        {/* Dashboard Section - only for authenticated users */}
-        {activeSection === 'dashboard' && isAuthenticated && (
-          <Dashboard
-            recentAircraft={aircraftItems}
-            recentNews={items}
-            sources={sources}
-            isAircraftLoading={isAircraftLoading}
-            isNewsLoading={isLoading}
-            onViewAllNews={() => navigate('/news')}
-            onViewAllAircraft={() => navigate('/aircraft')}
-            onViewAllGear={() => navigate('/inventory')}
-            onSelectAircraft={handleSelectAircraft}
-            onSelectNewsItem={setSelectedItem}
-            onSelectPilot={(pilotId) => {
-              setSelectedPilotId(pilotId);
-              navigate('/social');
-            }}
-            onGoToSocial={() => navigate('/social')}
-          />
-        )}
-
-        {/* News Section */}
-        {activeSection === 'news' && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-            <div className="flex-shrink-0">
-              <TopBar
-                query={filters.query}
-                onQueryChange={q => updateFilter('query', q)}
-                onSearch={handleNewsSearch}
-                fromDate={filters.fromDate}
-                toDate={filters.toDate}
-                onFromDateChange={d => updateFilter('fromDate', d)}
-                onToDateChange={d => updateFilter('toDate', d)}
-                sort={filters.sort}
-                onSortChange={s => updateFilter('sort', s)}
-                sourceType={filters.sourceType}
-                onSourceTypeChange={t => updateFilter('sourceType', t)}
-                onRefresh={handleRefresh}
-                isRefreshing={isRefreshing}
-                refreshCooldown={refreshCooldown}
-                totalCount={totalCount}
-                isCollapsed={false}
-              />
-            </div>
-            <div
-              className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain"
-              onScroll={(event) => {
-                // Dismiss keyboard only on touch/coarse-pointer devices and only
-                // when a form control inside this scroll region is focused.
-                if (typeof window === 'undefined') return;
-                if (!window.matchMedia || !window.matchMedia('(pointer: coarse)').matches) return;
-
-                const activeElement = document.activeElement;
-                if (!(activeElement instanceof HTMLElement) || activeElement === document.body) return;
-
-                const scrollContainer = event.currentTarget;
-                if (!scrollContainer.contains(activeElement)) return;
-
-                const tagName = activeElement.tagName;
-                if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') {
-                  activeElement.blur();
-                }
-              }}
-            >
-              <FeedList
-                items={items}
-                sources={sources}
-                isLoading={isLoading || isLoadingMore}
-                error={error}
-                onItemClick={setSelectedItem}
-                hasMore={items.length < totalCount}
-                onLoadMore={loadMoreItems}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Admin: Gear Moderation Section */}
-        {activeSection === 'admin-gear' && (
-          <AdminGearModeration hasGearAdminAccess={Boolean(user?.isAdmin || user?.isGearAdmin)} authLoading={authLoading} />
-        )}
-
-        {/* Admin: User Admin Section */}
-        {activeSection === 'admin-users' && (
-          <AdminUserManagement isAdmin={Boolean(user?.isAdmin)} currentUserId={user?.id} authLoading={authLoading} />
-        )}
-
-        {/* Shop Section */}
-        {activeSection === 'equipment' && (
-          <ShopSection />
-        )}
-
-        {/* Gear Catalog Section - Public browsable catalog like PCPartPicker */}
-        {activeSection === 'gear-catalog' && (
-          <GearCatalogPage 
-            onAddToInventory={(catalogItem) => {
-              // When user clicks add on a catalog item, open the add gear modal with it selected
-              setSelectedEquipmentForInventory(null);
-              setSelectedCatalogItemForInventory(catalogItem);
-              setEditingInventoryItem(null);
-              setShowAddInventoryModal(true);
-            }}
-          />
-        )}
-
-        {/* Inventory Section */}
-        {activeSection === 'inventory' && (
-          <div className="flex-1 flex flex-col min-h-0">
-            <div className="px-4 md:px-6 py-4 border-b border-slate-800 bg-slate-900">
-              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <h1 className="text-xl font-semibold text-white">My Inventory</h1>
-                  <p className="text-sm text-slate-400">
-                    Track your drone equipment inventory
-                  </p>
-                </div>
-                <button
-                  onClick={() => {
-                    setSelectedEquipmentForInventory(null);
-                    setEditingInventoryItem(null);
-                    setShowAddInventoryModal(true);
-                  }}
-                  className="w-full sm:w-auto px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add Item
-                </button>
-              </div>
-
-              <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-end">
-                {inventoryCategory && (
-                  <button
-                    onClick={() => handleInventoryCategoryFilterChange(null)}
-                    className="w-full sm:w-auto px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors border border-slate-700"
-                  >
-                    Clear Category
-                  </button>
-                )}
-
-                {inventorySummary && (
-                  <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-3 lg:ml-auto">
-                    <div className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700">
-                      <div className="text-[11px] uppercase tracking-wide text-slate-500">Total Items</div>
-                      <div className="text-sm font-semibold text-white">{inventorySummary.totalItems}</div>
-                    </div>
-                    <div className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700">
-                      <div className="text-[11px] uppercase tracking-wide text-slate-500">Total Value</div>
-                      <div className="text-sm font-semibold text-primary-400">${inventorySummary.totalValue.toFixed(0)}</div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-4 flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-700">
-                <button
-                  onClick={() => handleInventoryCategoryFilterChange(null)}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-lg whitespace-nowrap transition-colors ${
-                    !inventoryCategory
-                      ? 'bg-primary-600 text-white'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
-                  }`}
-                >
-                  All Categories
-                </button>
-                {EQUIPMENT_CATEGORIES.map(category => (
-                  <button
-                    key={category.value}
-                    onClick={() => handleInventoryCategoryFilterChange(category.value)}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-lg whitespace-nowrap transition-colors ${
-                      inventoryCategory === category.value
-                        ? 'bg-primary-600 text-white'
-                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
-                    }`}
-                  >
-                    {category.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <InventoryList
-              items={inventoryItems}
-              isLoading={isInventoryLoading}
-              hasLoaded={inventoryHasLoaded}
-              error={inventoryError}
-              onOpenItem={handleEditInventoryItem}
-            />
-          </div>
-        )}
-
-        {/* Aircraft Section */}
-        {activeSection === 'aircraft' && (
-          <>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
-              <div>
-                <h1 className="text-xl font-semibold text-white">My Aircraft</h1>
-                <p className="text-sm text-slate-400">
-                  Manage your drones, components, and receiver settings
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  setEditingAircraft(null);
-                  setShowAircraftForm(true);
-                }}
-                className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Add Aircraft
-              </button>
-            </div>
-            <AircraftList
-              aircraft={aircraftItems}
-              isLoading={isAircraftLoading}
-              error={aircraftError}
-              onSelect={handleSelectAircraft}
-              onEdit={(aircraft) => {
-                setEditingAircraft(aircraft);
-                setShowAircraftForm(true);
-              }}
-              onDelete={handleDeleteAircraft}
-            />
-          </>
-        )}
-
-        {/* Radio Section */}
-        {activeSection === 'radio' && (
-          <RadioSection
-            onError={(message) => setError(message)}
-          />
-        )}
-
-        {/* Battery Section */}
-        {activeSection === 'batteries' && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-            <BatterySection
-              onError={(message) => setError(message)}
-            />
-          </div>
-        )}
-
-        {/* Profile Section */}
-        {activeSection === 'profile' && (
-          <MyProfile />
-        )}
-
-        {/* Social/Pilot Directory Section */}
-        {activeSection === 'social' && (
-          <SocialPage
-            onSelectPilot={(pilotId) => setSelectedPilotId(pilotId)}
-          />
-        )}
+        <AppRoutes
+          isAuthenticated={isAuthenticated}
+          user={user}
+          authLoading={authLoading}
+          dashboardElement={dashboardElement}
+          onOpenLogin={() => setAuthModal('login')}
+          newsTopBarProps={newsTopBarProps}
+          newsItems={items}
+          newsSources={sources}
+          isNewsLoading={isLoading}
+          isNewsLoadingMore={isLoadingMore}
+          newsError={error}
+          newsTotalCount={totalCount}
+          onSelectNewsItem={setSelectedItem}
+          onLoadMoreNews={loadMoreItems}
+          onAddToInventoryFromCatalog={(catalogItem) => {
+            setSelectedEquipmentForInventory(null);
+            setSelectedCatalogItemForInventory(catalogItem);
+            setEditingInventoryItem(null);
+            setShowAddInventoryModal(true);
+          }}
+          inventoryCategory={inventoryCategory}
+          inventorySummary={inventorySummary}
+          inventoryItems={inventoryItems}
+          isInventoryLoading={isInventoryLoading}
+          inventoryHasLoaded={inventoryHasLoaded}
+          inventoryError={inventoryError}
+          onInventoryCategoryFilterChange={handleInventoryCategoryFilterChange}
+          onAddInventoryItem={() => {
+            setSelectedEquipmentForInventory(null);
+            setEditingInventoryItem(null);
+            setShowAddInventoryModal(true);
+          }}
+          onOpenInventoryItem={handleEditInventoryItem}
+          aircraftItems={aircraftItems}
+          isAircraftLoading={isAircraftLoading}
+          aircraftError={aircraftError}
+          onSelectAircraft={handleSelectAircraft}
+          onEditAircraft={(aircraft) => {
+            setEditingAircraft(aircraft);
+            setShowAircraftForm(true);
+          }}
+          onDeleteAircraft={handleDeleteAircraft}
+          onAddAircraft={() => {
+            setEditingAircraft(null);
+            setShowAircraftForm(true);
+          }}
+          onRadioError={(message) => setError(message)}
+          onBatteryError={(message) => setError(message)}
+          onSelectPilot={(pilotId) => setSelectedPilotId(pilotId)}
+        />
       </div>
       </div>
 

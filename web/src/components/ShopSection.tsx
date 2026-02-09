@@ -1,3 +1,6 @@
+import { useState } from 'react';
+import { MobileFloatingControls } from './MobileFloatingControls';
+
 interface ShopStore {
   name: string;
   description: string;
@@ -27,18 +30,26 @@ const DRONE_SHOPS: ShopStore[] = [
 ];
 
 export function ShopSection() {
+  const [isMobileControlsOpen, setIsMobileControlsOpen] = useState(false);
+
+  const controls = (
+    <div className="px-4 md:px-6 py-4 border-b border-slate-800 bg-slate-900">
+      <h1 className="text-xl font-semibold text-white">Shop Equipment</h1>
+      <p className="text-sm text-slate-400">
+        Trusted retailers for drone parts and gear
+      </p>
+    </div>
+  );
+
   return (
-    <div className="flex-1 overflow-auto">
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-slate-800">
-        <h1 className="text-xl font-semibold text-white">Shop Equipment</h1>
-        <p className="text-sm text-slate-400">
-          Trusted retailers for drone parts and gear
-        </p>
-      </div>
+    <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
+      <div className="hidden md:block flex-shrink-0">{controls}</div>
 
       {/* Shop Cards */}
-      <div className="p-4 md:p-6">
+      <div
+        className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 pt-24 md:pt-6"
+        onScroll={() => setIsMobileControlsOpen((prev) => (prev ? false : prev))}
+      >
         <div className="grid gap-4 md:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 items-stretch">
           {DRONE_SHOPS.map((shop) => (
             <a
@@ -119,6 +130,14 @@ export function ShopSection() {
           </div>
         </div>
       </div>
+
+      <MobileFloatingControls
+        label="Shop Info"
+        isOpen={isMobileControlsOpen}
+        onToggle={() => setIsMobileControlsOpen((prev) => !prev)}
+      >
+        {controls}
+      </MobileFloatingControls>
     </div>
   );
 }

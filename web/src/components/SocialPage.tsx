@@ -6,6 +6,7 @@ import type { PilotSearchResult, PilotSummary, PilotProfile, PilotSummaryWithFol
 import { useDebounce } from '../hooks';
 import { useAuth } from '../hooks/useAuth';
 import { trackEvent } from '../hooks/useGoogleAnalytics';
+import { MobileFloatingControls } from './MobileFloatingControls';
 
 type SocialTab = 'search' | 'following' | 'followers';
 
@@ -223,6 +224,7 @@ export function SocialPage({ onSelectPilot }: SocialPageProps) {
   const [isLoadingFollowers, setIsLoadingFollowers] = useState(false);
   const [followingError, setFollowingError] = useState<string | null>(null);
   const [followersError, setFollowersError] = useState<string | null>(null);
+  const [isMobileControlsOpen, setIsMobileControlsOpen] = useState(false);
 
   const debouncedQuery = useDebounce(query, 300);
 
@@ -249,6 +251,7 @@ export function SocialPage({ onSelectPilot }: SocialPageProps) {
   // Clear filter when changing tabs
   useEffect(() => {
     setFilterQuery('');
+    setIsMobileControlsOpen(false);
   }, [activeTab]);
 
   // Search when debounced query changes
@@ -467,22 +470,11 @@ export function SocialPage({ onSelectPilot }: SocialPageProps) {
     return myProfile?.callSign || 'Set your callsign';
   };
 
-  return (
-    <div className="flex-1 overflow-y-auto">
-      <div className="w-full p-6 pb-24 flex flex-col items-center">
-      {/* Call Sign Prompt Modal */}
-      {showCallSignPrompt && (
-        <CallSignPromptModal
-          onClose={() => setShowCallSignPrompt(false)}
-          onSave={handleSaveCallSign}
-        />
-      )}
-
-      {/* Centered header section - always centered */}
-      <div className="w-full max-w-xl">
-        {/* My Profile Header */}
-        {isAuthenticated && (
-          <div className="bg-slate-800 rounded-lg p-6 mb-6">
+  const socialControls = (
+    <div className="w-full max-w-xl p-4 md:p-6">
+      {/* My Profile Header */}
+      {isAuthenticated && (
+        <div className="bg-slate-800 rounded-lg p-6 mb-6">
           {isLoadingProfile ? (
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-full bg-slate-700 animate-pulse" />
@@ -554,12 +546,10 @@ export function SocialPage({ onSelectPilot }: SocialPageProps) {
         </div>
       )}
 
-      {/* Section Title */}
       <div className="mb-6">
         <h2 className="text-lg font-semibold text-white">Find Pilots</h2>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-1 mb-6 bg-slate-800 p-1 rounded-lg w-full overflow-hidden">
         <button
           onClick={() => setActiveTab('search')}
@@ -622,49 +612,87 @@ export function SocialPage({ onSelectPilot }: SocialPageProps) {
         )}
       </div>
 
-        {/* Search Input - shown on all tabs */}
-        <div className="mb-6">
-          <div className="relative">
-            <input
-              type="text"
-              value={activeTab === 'search' ? query : filterQuery}
-              onChange={(e) => activeTab === 'search' ? setQuery(e.target.value) : setFilterQuery(e.target.value)}
-              onKeyDown={activeTab === 'search' ? handleKeyDown : undefined}
-              placeholder={
-                activeTab === 'search' 
-                  ? "Search by callsign or name..." 
-                  : activeTab === 'following'
-                    ? "Filter following..."
-                    : "Filter followers..."
-              }
-              className="w-full px-4 py-3 pl-12 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-primary-500"
+      <div className="mb-6">
+        <div className="relative">
+          <input
+            type="text"
+            value={activeTab === 'search' ? query : filterQuery}
+            onChange={(e) => activeTab === 'search' ? setQuery(e.target.value) : setFilterQuery(e.target.value)}
+            onKeyDown={activeTab === 'search' ? handleKeyDown : undefined}
+            placeholder={
+              activeTab === 'search'
+                ? "Search by callsign or name..."
+                : activeTab === 'following'
+                  ? "Filter following..."
+                  : "Filter followers..."
+            }
+            className="w-full px-4 py-3 pl-12 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-primary-500"
+          />
+          <svg
+            className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
             />
-            <svg
-              className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
-            {activeTab === 'search' && isSearching && (
-              <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-primary-500"></div>
-              </div>
-            )}
-          </div>
-          {activeTab === 'search' && (
-            <p className="mt-2 text-xs text-slate-500">
-              Enter at least 2 characters to search
-            </p>
+          </svg>
+          {activeTab === 'search' && isSearching && (
+            <div className="absolute right-4 top-1/2 -translate-y-1/2">
+              <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-primary-500"></div>
+            </div>
           )}
         </div>
+        {activeTab === 'search' && (
+          <p className="mt-2 text-xs text-slate-500">
+            Enter at least 2 characters to search
+          </p>
+        )}
       </div>
+    </div>
+  );
+
+  return (
+    <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
+      {/* Call Sign Prompt Modal */}
+      {showCallSignPrompt && (
+        <CallSignPromptModal
+          onClose={() => setShowCallSignPrompt(false)}
+          onSave={handleSaveCallSign}
+        />
+      )}
+
+      <div className="hidden md:flex justify-center flex-shrink-0 border-b border-slate-800/60">
+        {socialControls}
+      </div>
+
+      <div
+        className="flex-1 overflow-y-auto"
+        onScroll={(event) => {
+          setIsMobileControlsOpen((prev) => (prev ? false : prev));
+
+          // Dismiss keyboard only on touch/coarse-pointer devices and only
+          // when a form control inside this scroll region is focused.
+          if (typeof window === 'undefined') return;
+          if (!window.matchMedia || !window.matchMedia('(pointer: coarse)').matches) return;
+
+          const activeElement = document.activeElement;
+          if (!(activeElement instanceof HTMLElement) || activeElement === document.body) return;
+
+          const scrollContainer = event.currentTarget;
+          if (!scrollContainer.contains(activeElement)) return;
+
+          const tagName = activeElement.tagName;
+          if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') {
+            activeElement.blur();
+          }
+        }}
+      >
+        <div className="w-full p-6 pb-24 pt-24 md:pt-6">
 
       {/* Full width results section */}
       <div className="w-full">
@@ -901,6 +929,15 @@ export function SocialPage({ onSelectPilot }: SocialPageProps) {
         )}
       </div>
       </div>
+      </div>
+
+      <MobileFloatingControls
+        label="Social Controls"
+        isOpen={isMobileControlsOpen}
+        onToggle={() => setIsMobileControlsOpen((prev) => !prev)}
+      >
+        <div className="flex justify-center">{socialControls}</div>
+      </MobileFloatingControls>
     </div>
   );
 }

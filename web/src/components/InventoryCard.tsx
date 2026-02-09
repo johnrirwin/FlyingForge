@@ -115,9 +115,19 @@ interface InventoryListProps {
   hasLoaded: boolean;
   error: string | null;
   onOpenItem: (item: InventoryItem) => void;
+  mobileTopInset?: boolean;
+  onListScroll?: () => void;
 }
 
-export function InventoryList({ items, isLoading, hasLoaded, error, onOpenItem }: InventoryListProps) {
+export function InventoryList({
+  items,
+  isLoading,
+  hasLoaded,
+  error,
+  onOpenItem,
+  mobileTopInset = false,
+  onListScroll,
+}: InventoryListProps) {
   if (error) {
     return (
       <div className="flex-1 flex items-center justify-center p-8">
@@ -195,7 +205,28 @@ export function InventoryList({ items, isLoading, hasLoaded, error, onOpenItem }
     }));
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain p-4 md:p-6 relative">
+    <div
+      className={`flex-1 min-h-0 overflow-y-auto overscroll-y-contain p-4 md:p-6 relative ${mobileTopInset ? 'pt-24 md:pt-6' : ''}`}
+      onScroll={(event) => {
+        onListScroll?.();
+
+        // Dismiss keyboard only on touch/coarse-pointer devices and only
+        // when a form control inside this scroll region is focused.
+        if (typeof window === 'undefined') return;
+        if (!window.matchMedia || !window.matchMedia('(pointer: coarse)').matches) return;
+
+        const activeElement = document.activeElement;
+        if (!(activeElement instanceof HTMLElement) || activeElement === document.body) return;
+
+        const scrollContainer = event.currentTarget;
+        if (!scrollContainer.contains(activeElement)) return;
+
+        const tagName = activeElement.tagName;
+        if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') {
+          activeElement.blur();
+        }
+      }}
+    >
       {/* Show subtle loading overlay when filtering existing items */}
       {isLoading && items.length > 0 && (
         <div className="absolute inset-0 bg-slate-900/50 flex items-center justify-center z-10">

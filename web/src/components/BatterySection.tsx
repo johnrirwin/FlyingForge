@@ -28,6 +28,7 @@ import {
   deleteBatteryLog,
   printBatteryLabel,
 } from '../batteryApi';
+import { MobileFloatingControls } from './MobileFloatingControls';
 
 interface BatterySectionProps {
   onError?: (message: string) => void;
@@ -65,6 +66,7 @@ export function BatterySection({ onError }: BatterySectionProps) {
   const [filterChemistry, setFilterChemistry] = useState<BatteryChemistry | ''>('');
   const [filterCells, setFilterCells] = useState<number | ''>('');
   const [sortBy, setSortBy] = useState<'name' | 'created_at' | 'capacity_mah' | 'cells'>('created_at');
+  const [isMobileControlsOpen, setIsMobileControlsOpen] = useState(false);
 
   // Load batteries
   const loadBatteries = useCallback(async () => {
@@ -114,6 +116,12 @@ export function BatterySection({ onError }: BatterySectionProps) {
       loadLogs();
     }
   }, [viewMode, selectedBattery, loadLogs]);
+
+  useEffect(() => {
+    if (viewMode !== 'list') {
+      setIsMobileControlsOpen(false);
+    }
+  }, [viewMode]);
 
   useEffect(() => {
     const listContainer = listContainerRef.current;
@@ -366,9 +374,9 @@ export function BatterySection({ onError }: BatterySectionProps) {
   };
 
   // Render list view
-  const renderList = () => (
-    <div ref={listContainerRef} className="h-full flex-1 min-h-0 flex flex-col overflow-hidden">
-      <div className="px-4 md:px-6 py-4 border-b border-slate-800 bg-slate-900/95 backdrop-blur supports-[backdrop-filter]:bg-slate-900/85 flex-shrink-0">
+  const renderList = () => {
+    const controls = (
+      <div className="px-4 md:px-6 py-4 border-b border-slate-800 bg-slate-900/95 backdrop-blur supports-[backdrop-filter]:bg-slate-900/85">
         {/* Header */}
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
@@ -380,6 +388,7 @@ export function BatterySection({ onError }: BatterySectionProps) {
               setFormState(INITIAL_BATTERY_FORM_STATE);
               setFormErrors({});
               setViewMode('create');
+              setIsMobileControlsOpen(false);
             }}
             className="w-full sm:w-auto px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center justify-center gap-2"
           >
@@ -443,81 +452,97 @@ export function BatterySection({ onError }: BatterySectionProps) {
           </div>
         </div>
       </div>
+    );
 
-      <div
-        className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain p-4 md:p-6 pb-24"
-        onScroll={(event) => {
-          // Dismiss keyboard only on touch/coarse-pointer devices and only
-          // when a form control inside this scroll region is focused.
-          if (typeof window === 'undefined') return;
-          if (!window.matchMedia || !window.matchMedia('(pointer: coarse)').matches) return;
+    return (
+      <div ref={listContainerRef} className="relative h-full flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div className="hidden md:block flex-shrink-0">{controls}</div>
 
-          const activeElement = document.activeElement;
-          if (!(activeElement instanceof HTMLElement) || activeElement === document.body) return;
+        <div
+          className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain p-4 md:p-6 pt-24 md:pt-6 pb-24"
+          onScroll={(event) => {
+            setIsMobileControlsOpen((prev) => (prev ? false : prev));
 
-          const scrollContainer = event.currentTarget;
-          if (!scrollContainer.contains(activeElement)) return;
+            // Dismiss keyboard only on touch/coarse-pointer devices and only
+            // when a form control inside this scroll region is focused.
+            if (typeof window === 'undefined') return;
+            if (!window.matchMedia || !window.matchMedia('(pointer: coarse)').matches) return;
 
-          const tagName = activeElement.tagName;
-          if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') {
-            activeElement.blur();
-          }
-        }}
-      >
-        {/* Battery Grid */}
-        {isLoading ? (
-          <div className="text-center py-8 text-slate-400">Loading batteries...</div>
-        ) : batteries.length === 0 ? (
-          <div className="text-center py-8 text-slate-400">
-            {searchQuery || filterChemistry || filterCells
-              ? 'No batteries match the current filters.'
-              : 'No batteries found. Add your first battery to get started!'}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {batteries.map(battery => (
-              <div
-                key={battery.id}
-                role="button"
-                tabIndex={0}
-                className="p-4 bg-slate-800 rounded-lg border border-slate-700 hover:border-slate-600 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
-                onClick={() => handleViewBattery(battery)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    handleViewBattery(battery);
-                  }
-                }}
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="font-medium text-white">{battery.name}</h3>
-                  <span className="text-xs px-2 py-1 bg-slate-700 text-slate-300 rounded font-mono">
-                    {battery.battery_code}
-                  </span>
-                </div>
-                <div className="text-sm text-slate-400 space-y-1">
-                  <div className="flex gap-2">
-                    <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded text-xs">
-                      {formatChemistry(battery.chemistry)}
-                    </span>
-                    <span className="px-2 py-0.5 bg-green-500/20 text-green-400 rounded text-xs">
-                      {formatCellCount(battery.cells)}
-                    </span>
-                    <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded text-xs">
-                      {formatCapacity(battery.capacity_mah)}
+            const activeElement = document.activeElement;
+            if (!(activeElement instanceof HTMLElement) || activeElement === document.body) return;
+
+            const scrollContainer = event.currentTarget;
+            if (!scrollContainer.contains(activeElement)) return;
+
+            const tagName = activeElement.tagName;
+            if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') {
+              activeElement.blur();
+            }
+          }}
+        >
+          {/* Battery Grid */}
+          {isLoading ? (
+            <div className="text-center py-8 text-slate-400">Loading batteries...</div>
+          ) : batteries.length === 0 ? (
+            <div className="text-center py-8 text-slate-400">
+              {searchQuery || filterChemistry || filterCells
+                ? 'No batteries match the current filters.'
+                : 'No batteries found. Add your first battery to get started!'}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {batteries.map(battery => (
+                <div
+                  key={battery.id}
+                  role="button"
+                  tabIndex={0}
+                  className="p-4 bg-slate-800 rounded-lg border border-slate-700 hover:border-slate-600 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  onClick={() => handleViewBattery(battery)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleViewBattery(battery);
+                    }
+                  }}
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-medium text-white">{battery.name}</h3>
+                    <span className="text-xs px-2 py-1 bg-slate-700 text-slate-300 rounded font-mono">
+                      {battery.battery_code}
                     </span>
                   </div>
-                  {battery.brand && (
-                    <p className="text-slate-500">{battery.brand} {battery.model}</p>
-                  )}
+                  <div className="text-sm text-slate-400 space-y-1">
+                    <div className="flex gap-2">
+                      <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded text-xs">
+                        {formatChemistry(battery.chemistry)}
+                      </span>
+                      <span className="px-2 py-0.5 bg-green-500/20 text-green-400 rounded text-xs">
+                        {formatCellCount(battery.cells)}
+                      </span>
+                      <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded text-xs">
+                        {formatCapacity(battery.capacity_mah)}
+                      </span>
+                    </div>
+                    {battery.brand && (
+                      <p className="text-slate-500">{battery.brand} {battery.model}</p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
+
+        <MobileFloatingControls
+          label="Battery Controls"
+          isOpen={isMobileControlsOpen}
+          onToggle={() => setIsMobileControlsOpen((prev) => !prev)}
+        >
+          {controls}
+        </MobileFloatingControls>
       </div>
-    </div>
-  );
+    );
+  };
 
   // Render form (create/edit)
   const renderForm = () => (

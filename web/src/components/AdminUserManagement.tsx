@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AdminUser, AdminUserStatus } from '../adminUserTypes';
 import { adminDeleteUser, adminDeleteUserAvatar, adminGetUser, adminSearchUsers, adminUpdateUser } from '../adminApi';
+import { MobileFloatingControls } from './MobileFloatingControls';
 
 interface AdminUserManagementProps {
   isAdmin: boolean;
@@ -95,6 +96,7 @@ export function AdminUserManagement({ isAdmin, currentUserId, authLoading }: Adm
   const [isDeletingUser, setIsDeletingUser] = useState(false);
   const [showRemoveAvatarModal, setShowRemoveAvatarModal] = useState(false);
   const [removeAvatarConfirmText, setRemoveAvatarConfirmText] = useState('');
+  const [isMobileControlsOpen, setIsMobileControlsOpen] = useState(false);
 
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const currentOffsetRef = useRef(0);
@@ -234,6 +236,7 @@ export function AdminUserManagement({ isAdmin, currentUserId, authLoading }: Adm
 
   const handleSearch = useCallback(() => {
     const trimmed = query.trim();
+    setIsMobileControlsOpen(false);
     setAppliedQuery((prev) => {
       if (prev === trimmed) {
         void loadUsers(true, true);
@@ -376,63 +379,69 @@ export function AdminUserManagement({ isAdmin, currentUserId, authLoading }: Adm
     );
   }
 
+  const controls = (
+    <div className="bg-slate-800 border-b border-slate-700 px-4 md:px-6 py-4">
+      <h1 className="text-lg md:text-2xl font-bold text-white">User Admin</h1>
+      <p className="text-slate-400 mt-1 text-sm">Search users, review profile details, manage roles, and delete accounts.</p>
+
+      <div className="mt-4 flex flex-col md:flex-row gap-3">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              handleSearch();
+            }
+          }}
+          placeholder="Search by email, display name, or callsign..."
+          className="flex-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+        />
+        <select
+          value={statusFilter}
+          onChange={(e) => {
+            setStatusFilter(e.target.value as AdminUserStatus | '');
+          }}
+          className="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+        >
+          <option value="">All statuses</option>
+          <option value="active">Active</option>
+          <option value="disabled">Disabled</option>
+          <option value="pending">Pending</option>
+        </select>
+        <button
+          onClick={handleSearch}
+          className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-colors"
+        >
+          Search
+        </button>
+      </div>
+
+      <div className="mt-3 text-sm text-slate-400">
+        {isLoading ? 'Loading users...' : `${totalCount} user${totalCount === 1 ? '' : 's'} found`}
+      </div>
+    </div>
+  );
+
   return (
     <>
-      <div className="flex-1 flex flex-col min-h-0">
-        <div className="bg-slate-800 border-b border-slate-700 px-4 md:px-6 py-4">
-          <h1 className="text-lg md:text-2xl font-bold text-white">User Admin</h1>
-          <p className="text-slate-400 mt-1 text-sm">Search users, review profile details, manage roles, and delete accounts.</p>
-
-          <div className="mt-4 flex flex-col md:flex-row gap-3">
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleSearch();
-                }
-              }}
-              placeholder="Search by email, display name, or callsign..."
-              className="flex-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
-            <select
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value as AdminUserStatus | '');
-              }}
-              className="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-            >
-              <option value="">All statuses</option>
-              <option value="active">Active</option>
-              <option value="disabled">Disabled</option>
-              <option value="pending">Pending</option>
-            </select>
-            <button
-              onClick={handleSearch}
-              className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-colors"
-            >
-              Search
-            </button>
-          </div>
-        </div>
+      <div className="relative flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className="hidden md:block flex-shrink-0">{controls}</div>
 
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-          <div className="px-4 md:px-6 pt-4 md:pt-6 flex-shrink-0">
+          <div className="px-4 md:px-6 pt-24 md:pt-6 flex-shrink-0">
             {error && (
               <div className="mb-4 p-3 rounded-lg border border-red-500/40 bg-red-500/10 text-red-300 text-sm">
                 {error}
               </div>
             )}
-
-            <div className="mb-3 text-sm text-slate-400">
-              {isLoading ? 'Loading users...' : `${totalCount} user${totalCount === 1 ? '' : 's'} found`}
-            </div>
           </div>
 
           <div
             className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain px-4 md:px-6 pb-6"
             onScroll={(event) => {
+              setIsMobileControlsOpen((prev) => (prev ? false : prev));
+
               // Dismiss keyboard only on touch/coarse-pointer devices and only
               // when a form control inside this scroll region is focused.
               if (typeof window === 'undefined') return;
@@ -571,11 +580,23 @@ export function AdminUserManagement({ isAdmin, currentUserId, authLoading }: Adm
             </div>
           )}
 
+          <div className="pt-1 text-center text-sm text-slate-400 md:hidden">
+            {isLoading ? 'Loading users...' : `${totalCount} user${totalCount === 1 ? '' : 's'} found`}
+          </div>
+
           {!isLoading && !hasMore && users.length > 0 && (
             <div className="pt-1 text-center text-xs text-slate-500">All users loaded</div>
           )}
           </div>
         </div>
+
+        <MobileFloatingControls
+          label="User Filters"
+          isOpen={isMobileControlsOpen}
+          onToggle={() => setIsMobileControlsOpen((prev) => !prev)}
+        >
+          {controls}
+        </MobileFloatingControls>
       </div>
 
       {/* User Profile Modal */}

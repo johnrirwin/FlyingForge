@@ -3,6 +3,7 @@ import type { GearCatalogItem, GearType, ImageStatusFilter, AdminUpdateGearCatal
 import { GEAR_TYPES, DRONE_TYPES } from '../gearCatalogTypes';
 import { adminSearchGear, adminUpdateGear, adminUploadGearImage, adminDeleteGearImage, adminDeleteGear, adminGetGear, getAdminGearImageUrl } from '../adminApi';
 import { CatalogSearchModal } from './CatalogSearchModal';
+import { MobileFloatingControls } from './MobileFloatingControls';
 
 interface AdminGearModerationProps {
   hasGearAdminAccess: boolean;
@@ -37,6 +38,7 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
   const [deleteTargetItem, setDeleteTargetItem] = useState<GearCatalogItem | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [isDeletingItem, setIsDeletingItem] = useState(false);
+  const [isMobileControlsOpen, setIsMobileControlsOpen] = useState(false);
 
   const loadItems = useCallback(async (reset = false, forceRefresh = false) => {
     if (!hasGearAdminAccess) return;
@@ -101,6 +103,7 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
 
   // Handle search button click
   const handleSearch = useCallback(() => {
+    setIsMobileControlsOpen(false);
     setAppliedQuery(query);
   }, [query]);
 
@@ -222,118 +225,116 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
     );
   }
 
-  return (
-    <>
-      {/* Main flex container - matches news section pattern */}
-      <div className="flex-1 flex flex-col min-h-0 relative">
-        {/* Header - flex-shrink-0 keeps it fixed in place */}
-        <div className="flex-shrink-0 z-10 bg-slate-900">
-          <div className="bg-slate-800 border-b border-slate-700 px-4 md:px-6 py-3 md:py-4">
-            <h1 className="text-lg md:text-2xl font-bold text-white mb-3">Gear Moderation</h1>
+  const controls = (
+    <div className="bg-slate-800 border-b border-slate-700 px-4 md:px-6 py-3 md:py-4">
+      <h1 className="text-lg md:text-2xl font-bold text-white mb-3">Gear Moderation</h1>
 
-          {/* Filters */}
-          <div className="flex flex-col gap-3">
-            {/* Search query - full width with button */}
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <svg
-                  className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
-                <input
-                  type="text"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Search brand or model..."
-                  className="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
-              </div>
-              <button
-                onClick={handleSearch}
-                className="px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
-              >
-                Search
-              </button>
-              {appliedQuery && (
-                <button
-                  onClick={handleClearSearch}
-                  className="px-3 py-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-
-            {/* Filter row */}
-            <div className="flex items-center gap-2">
-              {/* Gear type filter */}
-              <select
-                value={gearType}
-                onChange={(e) => setGearType(e.target.value as GearType | '')}
-                className="flex-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="">All Types</option>
-                {GEAR_TYPES.map((type) => (
-                  <option key={type.value} value={type.value}>
-                    {type.label}
-                  </option>
-                ))}
-              </select>
-
-              {/* Image status filter */}
-              <select
-                value={imageStatus}
-                onChange={(e) => setImageStatus(e.target.value as ImageStatusFilter | '')}
-                className="flex-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="">Needs Work</option>
-                <option value="all">All Records</option>
-                <option value="missing">Needs Image</option>
-                <option value="approved">Has Image</option>
-                <option value="recently-curated">Recently Updated (24h)</option>
-              </select>
-            </div>
-
-            {/* Results count and actions */}
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-slate-400 text-sm">
-                {totalCount} item{totalCount !== 1 ? 's' : ''} found
-              </p>
-              <button
-                onClick={handleAddGearClick}
-                className="px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Add Gear
-              </button>
-            </div>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <div className="relative flex-1 min-w-0">
+            <svg
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Search brand or model..."
+              className="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            />
           </div>
-
-          {/* Error message */}
-          {error && (
-            <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
-              {error}
-            </div>
+          <button
+            onClick={handleSearch}
+            className="w-full sm:w-auto shrink-0 px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            Search
+          </button>
+          {appliedQuery && (
+            <button
+              onClick={handleClearSearch}
+              className="w-full sm:w-auto shrink-0 px-3 py-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+            >
+              Clear
+            </button>
           )}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <select
+            value={gearType}
+            onChange={(e) => setGearType(e.target.value as GearType | '')}
+            className="w-full min-w-0 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            <option value="">All Types</option>
+            {GEAR_TYPES.map((type) => (
+              <option key={type.value} value={type.value}>
+                {type.label}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={imageStatus}
+            onChange={(e) => setImageStatus(e.target.value as ImageStatusFilter | '')}
+            className="w-full min-w-0 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            <option value="">Needs Work</option>
+            <option value="all">All Records</option>
+            <option value="missing">Needs Image</option>
+            <option value="approved">Has Image</option>
+            <option value="recently-curated">Recently Updated (24h)</option>
+          </select>
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <p className="text-slate-400 text-sm">
+            {totalCount} item{totalCount !== 1 ? 's' : ''} found
+          </p>
+          <button
+            onClick={handleAddGearClick}
+            className="w-full sm:w-auto px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add Gear
+          </button>
         </div>
       </div>
 
+      {error && (
+        <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+          {error}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <>
+      {/* Main flex container - matches news section pattern */}
+      <div className="relative flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className="hidden md:block flex-shrink-0 z-10 bg-slate-900">
+          {controls}
+        </div>
+
       {/* Scrollable list */}
-      <div 
-        className="flex-1 overflow-y-auto min-h-0 px-4 md:px-6 pt-4 md:pt-6 pb-20"
+      <div
+        className="flex-1 overflow-y-auto min-h-0 px-4 md:px-6 pt-24 md:pt-6 pb-20"
         onScroll={() => {
+          setIsMobileControlsOpen((prev) => (prev ? false : prev));
+
           // Dismiss keyboard on scroll for mobile
           if (document.activeElement instanceof HTMLElement) {
             document.activeElement.blur();
@@ -516,6 +517,14 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
         </div>
       )}
       </div>
+
+      <MobileFloatingControls
+        label="Gear Filters"
+        isOpen={isMobileControlsOpen}
+        onToggle={() => setIsMobileControlsOpen((prev) => !prev)}
+      >
+        {controls}
+      </MobileFloatingControls>
       </div>
 
       {/* Edit Modal */}
