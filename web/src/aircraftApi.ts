@@ -48,6 +48,14 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
   return response.json();
 }
 
+export type ModerationStatus = 'APPROVED' | 'REJECTED' | 'PENDING_REVIEW';
+
+export interface ImageModerationResponse {
+  status: ModerationStatus;
+  reason?: string;
+  uploadId?: string;
+}
+
 // Aircraft CRUD
 
 export async function listAircraft(params?: AircraftListParams): Promise<AircraftListResponse> {
@@ -157,6 +165,57 @@ export function getAircraftImageUrl(aircraftId: string): string {
     return `${baseUrl}?token=${encodeURIComponent(token)}&t=${timestamp}`;
   }
   return `${baseUrl}?t=${timestamp}`;
+}
+
+export async function moderateAircraftImageUpload(imageFile: File): Promise<ImageModerationResponse> {
+  const token = getAccessToken();
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const formData = new FormData();
+  formData.append('image', imageFile);
+  formData.append('entityType', 'aircraft');
+
+  const response = await fetch(`${API_BASE}/api/images/upload`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Upload failed' }));
+    throw new Error(error.message || error.reason || error.error || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function saveAircraftImageUpload(aircraftId: string, uploadId: string): Promise<void> {
+  if (!uploadId) {
+    throw new Error('uploadId is required');
+  }
+
+  const token = getAccessToken();
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const response = await fetch(`${API_BASE}/api/aircraft/${aircraftId}/image`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ uploadId }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Upload failed' }));
+    throw new Error(error.message || error.reason || error.error || `HTTP ${response.status}`);
+  }
 }
 
 export async function uploadAircraftImage(aircraftId: string, imageFile: File): Promise<void> {

@@ -98,6 +98,25 @@ resource "aws_iam_role" "ecs_task" {
   }
 }
 
+# Runtime permission for image moderation via Rekognition
+resource "aws_iam_role_policy" "ecs_task_rekognition" {
+  name = "${var.app_name}-ecs-task-rekognition"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "rekognition:DetectModerationLabels"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 # CloudWatch Log Groups
 resource "aws_cloudwatch_log_group" "server" {
   name              = "/ecs/${var.app_name}-server"
@@ -149,6 +168,26 @@ resource "aws_ecs_task_definition" "server" {
         {
           name  = "ENVIRONMENT"
           value = var.environment
+        },
+        {
+          name  = "AWS_REGION"
+          value = var.aws_region
+        },
+        {
+          name  = "IMAGE_MODERATION_ENABLED"
+          value = "true"
+        },
+        {
+          name  = "MODERATION_REJECT_CONFIDENCE"
+          value = "70"
+        },
+        {
+          name  = "MODERATION_TIMEOUT"
+          value = "5s"
+        },
+        {
+          name  = "MODERATION_PENDING_TTL"
+          value = "10m"
         },
         {
           name  = "CORS_ALLOWED_ORIGINS"

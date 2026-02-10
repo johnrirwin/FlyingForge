@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/johnrirwin/flyingforge/internal/aggregator"
@@ -14,9 +15,12 @@ import (
 	"github.com/johnrirwin/flyingforge/internal/database"
 	"github.com/johnrirwin/flyingforge/internal/equipment"
 	"github.com/johnrirwin/flyingforge/internal/httpapi"
+	"github.com/johnrirwin/flyingforge/internal/images"
 	"github.com/johnrirwin/flyingforge/internal/inventory"
 	"github.com/johnrirwin/flyingforge/internal/logging"
 	"github.com/johnrirwin/flyingforge/internal/mcp"
+	"github.com/johnrirwin/flyingforge/internal/models"
+	"github.com/johnrirwin/flyingforge/internal/moderation"
 	"github.com/johnrirwin/flyingforge/internal/radio"
 	"github.com/johnrirwin/flyingforge/internal/ratelimit"
 	"github.com/johnrirwin/flyingforge/internal/sellers"
@@ -45,6 +49,8 @@ type App struct {
 	fcConfigStore    *database.FCConfigStore
 	inventoryStore   *database.InventoryStore
 	gearCatalogStore *database.GearCatalogStore
+	imageAssetStore  *database.ImageAssetStore
+	imageSvc         *images.Service
 	refreshLimiter   ratelimit.RateLimiter
 }
 
@@ -223,12 +229,29 @@ func (a *App) initDatabaseServices() {
 	a.inventoryStore = database.NewInventoryStore(db)
 	a.InventorySvc = inventory.NewService(a.inventoryStore, a.Logger)
 
+	// Initialize centralized image storage + moderation pipeline
+	a.imageAssetStore = database.NewImageAssetStore(db)
+	moderatorSvc, err := a.newModerationService()
+	if err != nil {
+		a.Logger.Warn("Image moderation setup failed, uploads will return PENDING_REVIEW",
+			logging.WithField("error", err.Error()))
+		moderatorSvc = &moderation.MockModerator{Err: fmt.Errorf("moderation unavailable")}
+	}
+	var pendingStore images.PendingStore = images.NewInMemoryPendingStore(a.Config.Moderation.PendingUploadTTL)
+	if redisCache, ok := a.Cache.(*cache.RedisCache); ok {
+		a.Logger.Info("Using Redis pending upload store")
+		pendingStore = images.NewRedisPendingStore(redisCache.Client(), a.Config.Moderation.PendingUploadTTL)
+	} else {
+		a.Logger.Info("Using in-memory pending upload store")
+	}
+	a.imageSvc = images.NewService(moderatorSvc, a.imageAssetStore, pendingStore, a.Config.Moderation.Timeout)
+
 	// Initialize gear catalog store (before aircraft, since aircraft contributes to catalog)
 	a.gearCatalogStore = database.NewGearCatalogStore(db)
 
 	// Initialize aircraft (with encryption support and gear catalog contribution)
 	a.aircraftStore = database.NewAircraftStore(db, encryptor)
-	a.AircraftSvc = aircraft.NewService(a.aircraftStore, a.InventorySvc, a.gearCatalogStore, a.Logger)
+	a.AircraftSvc = aircraft.NewService(a.aircraftStore, a.InventorySvc, a.gearCatalogStore, a.imageSvc, a.Logger)
 
 	// Initialize radio
 	radioStore := database.NewRadioStore(db)
@@ -251,11 +274,29 @@ func (a *App) initDatabaseServices() {
 
 func (a *App) initServers() {
 	// Initialize HTTP server with auth, aircraft, radio, battery, fc-config, gear-catalog, and profile/pilot support
-	a.HTTPServer = httpapi.New(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.AircraftSvc, a.RadioSvc, a.BatterySvc, a.AuthService, a.AuthMiddleware, a.userStore, a.aircraftStore, a.fcConfigStore, a.inventoryStore, a.gearCatalogStore, a.refreshLimiter, a.Logger)
+	a.HTTPServer = httpapi.New(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.AircraftSvc, a.RadioSvc, a.BatterySvc, a.AuthService, a.AuthMiddleware, a.userStore, a.aircraftStore, a.fcConfigStore, a.inventoryStore, a.gearCatalogStore, a.imageSvc, a.refreshLimiter, a.Logger)
 
 	// Initialize MCP server
 	mcpHandler := mcp.NewHandler(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.Logger)
 	a.MCPServer = mcp.NewServer(mcpHandler, a.Logger)
+}
+
+func (a *App) newModerationService() (images.Moderator, error) {
+	if !a.Config.Moderation.Enabled {
+		a.Logger.Warn("Image moderation explicitly disabled; uploads will auto-approve")
+		return &moderation.MockModerator{
+			Decision: &models.ModerationDecision{
+				Status: models.ImageModerationApproved,
+				Reason: "Approved",
+			},
+		}, nil
+	}
+
+	detector, err := moderation.NewAWSDetector(context.Background(), a.Config.Moderation.AWSRegion)
+	if err != nil {
+		return nil, err
+	}
+	return moderation.NewService(detector, a.Config.Moderation.RejectConfidence), nil
 }
 
 func (a *App) runMCPMode(ctx context.Context) error {

@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"strings"
 
 	"github.com/johnrirwin/flyingforge/internal/database"
+	"github.com/johnrirwin/flyingforge/internal/images"
 	"github.com/johnrirwin/flyingforge/internal/inventory"
 	"github.com/johnrirwin/flyingforge/internal/logging"
 	"github.com/johnrirwin/flyingforge/internal/models"
@@ -16,15 +19,17 @@ type Service struct {
 	store            *database.AircraftStore
 	inventorySvc     inventory.InventoryManager
 	gearCatalogStore *database.GearCatalogStore
+	imageSvc         *images.Service
 	logger           *logging.Logger
 }
 
 // NewService creates a new aircraft service
-func NewService(store *database.AircraftStore, inventorySvc inventory.InventoryManager, gearCatalogStore *database.GearCatalogStore, logger *logging.Logger) *Service {
+func NewService(store *database.AircraftStore, inventorySvc inventory.InventoryManager, gearCatalogStore *database.GearCatalogStore, imageSvc *images.Service, logger *logging.Logger) *Service {
 	return &Service{
 		store:            store,
 		inventorySvc:     inventorySvc,
 		gearCatalogStore: gearCatalogStore,
+		imageSvc:         imageSvc,
 		logger:           logger,
 	}
 }
@@ -273,47 +278,107 @@ func (s *Service) GetComponents(ctx context.Context, aircraftID string, userID s
 }
 
 // SetImage uploads an image for an aircraft
-func (s *Service) SetImage(ctx context.Context, userID string, params models.SetAircraftImageParams) error {
+func (s *Service) SetImage(ctx context.Context, userID string, params models.SetAircraftImageParams) (*models.ModerationDecision, error) {
 	if params.AircraftID == "" {
-		return &ServiceError{Message: "aircraftId is required"}
+		return nil, &ServiceError{Message: "aircraftId is required"}
 	}
-	if len(params.ImageData) == 0 {
-		return &ServiceError{Message: "image data is required"}
-	}
-	if params.ImageType != "image/jpeg" && params.ImageType != "image/png" {
-		return &ServiceError{Message: "image must be JPEG or PNG"}
-	}
-
-	// Validate file size (max 5MB)
-	const maxImageSize = 5 * 1024 * 1024
-	if len(params.ImageData) > maxImageSize {
-		return &ServiceError{Message: "image must be less than 5MB"}
+	if s.imageSvc == nil {
+		return nil, &ServiceError{Message: "image moderation unavailable"}
 	}
 
 	// Verify the aircraft belongs to the user
 	aircraft, err := s.store.Get(ctx, params.AircraftID, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if aircraft == nil {
-		return &ServiceError{Message: "aircraft not found"}
+		return nil, &ServiceError{Message: "aircraft not found"}
 	}
 
-	if err := s.store.SetImage(ctx, params.AircraftID, userID, params.ImageType, params.ImageData); err != nil {
+	var (
+		decision *models.ModerationDecision
+		asset    *models.ImageAsset
+	)
+
+	uploadID := strings.TrimSpace(params.UploadID)
+	if uploadID != "" {
+		asset, err = s.imageSvc.PersistApprovedUpload(ctx, userID, uploadID, models.ImageEntityAircraft, params.AircraftID)
+		if err != nil {
+			return nil, err
+		}
+		decision = &models.ModerationDecision{
+			Status: models.ImageModerationApproved,
+			Reason: "Approved",
+		}
+		if params.ImageType == "" {
+			params.ImageType = http.DetectContentType(asset.ImageBytes)
+		}
+	} else {
+		if len(params.ImageData) == 0 {
+			return nil, &ServiceError{Message: "image data is required"}
+		}
+		if params.ImageType != "image/jpeg" && params.ImageType != "image/png" && params.ImageType != "image/webp" {
+			return nil, &ServiceError{Message: "image must be JPEG, PNG, or WebP"}
+		}
+
+		// Validate file size (max 5MB)
+		const maxImageSize = 5 * 1024 * 1024
+		if len(params.ImageData) > maxImageSize {
+			return nil, &ServiceError{Message: "image must be less than 5MB"}
+		}
+
+		decision, asset, err = s.imageSvc.ModerateAndPersist(ctx, images.SaveRequest{
+			OwnerUserID: userID,
+			EntityType:  models.ImageEntityAircraft,
+			EntityID:    params.AircraftID,
+			ImageBytes:  params.ImageData,
+		})
+		if err != nil {
+			s.logger.Error("Failed to moderate aircraft image", logging.WithField("error", err.Error()))
+			return nil, err
+		}
+		if decision.Status != models.ImageModerationApproved {
+			return decision, nil
+		}
+	}
+
+	if params.ImageType == "" {
+		params.ImageType = http.DetectContentType(asset.ImageBytes)
+	}
+	if params.ImageType == "" {
+		params.ImageType = "application/octet-stream"
+	}
+
+	previousAssetID, err := s.store.SetImage(ctx, params.AircraftID, userID, params.ImageType, asset.ID)
+	if err != nil {
 		s.logger.Error("Failed to set aircraft image", logging.WithField("error", err.Error()))
-		return err
+		_ = s.imageSvc.Delete(ctx, asset.ID)
+		return nil, err
+	}
+	if previousAssetID != "" && previousAssetID != asset.ID {
+		_ = s.imageSvc.Delete(ctx, previousAssetID)
 	}
 
 	s.logger.Info("Set aircraft image", logging.WithFields(map[string]interface{}{
 		"aircraft_id": params.AircraftID,
-		"size":        len(params.ImageData),
+		"size":        len(asset.ImageBytes),
 	}))
-	return nil
+	return decision, nil
 }
 
 // GetImage retrieves an aircraft's image
 func (s *Service) GetImage(ctx context.Context, aircraftID string, userID string) ([]byte, string, error) {
-	return s.store.GetImage(ctx, aircraftID, userID)
+	imageData, imageType, err := s.store.GetImage(ctx, aircraftID, userID)
+	if err != nil {
+		return nil, "", err
+	}
+	if len(imageData) == 0 {
+		return imageData, imageType, nil
+	}
+	if imageType == "" {
+		imageType = http.DetectContentType(imageData)
+	}
+	return imageData, imageType, nil
 }
 
 // DeleteImage removes an aircraft's image
@@ -327,7 +392,14 @@ func (s *Service) DeleteImage(ctx context.Context, aircraftID string, userID str
 		return &ServiceError{Message: "aircraft not found"}
 	}
 
-	return s.store.DeleteImage(ctx, aircraftID, userID)
+	previousAssetID, err := s.store.DeleteImage(ctx, aircraftID, userID)
+	if err != nil {
+		return err
+	}
+	if previousAssetID != "" {
+		_ = s.imageSvc.Delete(ctx, previousAssetID)
+	}
+	return nil
 }
 
 // mapComponentToEquipmentCategory maps aircraft component category to equipment category

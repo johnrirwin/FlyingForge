@@ -58,9 +58,15 @@ services:
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - GOOGLE_REDIRECT_URI=http://localhost:8080/api/auth/google/callback
+      - IMAGE_MODERATION_ENABLED=true
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_PROFILE=${AWS_PROFILE:-default}
+      - AWS_SDK_LOAD_CONFIG=1
       # SECURITY: Encryption key for sensitive data (bind phrases, UIDs)
       # MUST be exactly 32 characters. Generate with: openssl rand -base64 32 | head -c 32
       - BIND_PHRASE_ENCRYPTION_KEY=${BIND_PHRASE_ENCRYPTION_KEY:-CHANGE-THIS-32-BYTE-KEY-IN-PROD}
+    volumes:
+      - ${HOME}/.aws:/root/.aws:ro
     depends_on:
       postgres:
         condition: service_healthy

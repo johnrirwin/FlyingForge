@@ -174,5 +174,5 @@ export interface AvatarUploadResponse {
   avatarUrl: string;
   avatarType?: 'google' | 'custom';
   effectiveAvatar?: string;
+  avatarImageAssetId?: string;
 }
-

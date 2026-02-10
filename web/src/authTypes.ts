@@ -19,6 +19,7 @@ export interface User {
   googleAvatarUrl?: string;
   avatarType?: AvatarType;
   customAvatarUrl?: string;
+  avatarImageAssetId?: string;
 }
 
 // Extended user profile response from /api/me/profile

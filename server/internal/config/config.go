@@ -4,17 +4,19 @@ import (
 	"flag"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
 // Config holds all application configuration
 type Config struct {
-	Server   ServerConfig
-	Cache    CacheConfig
-	Database DatabaseConfig
-	Logging  LoggingConfig
-	Auth     AuthConfig
-	Crypto   CryptoConfig
+	Server     ServerConfig
+	Cache      CacheConfig
+	Database   DatabaseConfig
+	Logging    LoggingConfig
+	Auth       AuthConfig
+	Crypto     CryptoConfig
+	Moderation ModerationConfig
 }
 
 // ServerConfig holds HTTP/MCP server configuration
@@ -66,6 +68,15 @@ type CryptoConfig struct {
 	// CRITICAL: This key must be kept secret and backed up securely.
 	// Losing this key means losing access to all encrypted data.
 	EncryptionKey []byte
+}
+
+// ModerationConfig holds image moderation settings.
+type ModerationConfig struct {
+	Enabled          bool
+	AWSRegion        string
+	RejectConfidence float64
+	Timeout          time.Duration
+	PendingUploadTTL time.Duration
 }
 
 // Load parses flags and environment variables to build configuration
@@ -124,6 +135,9 @@ func Load() *Config {
 	// Load crypto config from environment
 	cfg.Crypto = loadCryptoConfig()
 
+	// Load moderation config from environment
+	cfg.Moderation = loadModerationConfig()
+
 	return cfg
 }
 
@@ -166,6 +180,42 @@ func loadCryptoConfig() CryptoConfig {
 
 	return CryptoConfig{
 		EncryptionKey: []byte(key),
+	}
+}
+
+func loadModerationConfig() ModerationConfig {
+	rejectConfidence := 70.0
+	if v := os.Getenv("MODERATION_REJECT_CONFIDENCE"); v != "" {
+		if parsed, err := strconv.ParseFloat(v, 64); err == nil && parsed > 0 {
+			rejectConfidence = parsed
+		}
+	}
+
+	timeout := 5 * time.Second
+	if v := os.Getenv("MODERATION_TIMEOUT"); v != "" {
+		if parsed, err := time.ParseDuration(v); err == nil && parsed > 0 {
+			timeout = parsed
+		}
+	}
+
+	pendingTTL := 10 * time.Minute
+	if v := os.Getenv("MODERATION_PENDING_TTL"); v != "" {
+		if parsed, err := time.ParseDuration(v); err == nil && parsed > 0 {
+			pendingTTL = parsed
+		}
+	}
+
+	enabled := true
+	if v := strings.ToLower(strings.TrimSpace(os.Getenv("IMAGE_MODERATION_ENABLED"))); v == "false" || v == "0" {
+		enabled = false
+	}
+
+	return ModerationConfig{
+		Enabled:          enabled,
+		AWSRegion:        os.Getenv("AWS_REGION"),
+		RejectConfidence: rejectConfidence,
+		Timeout:          timeout,
+		PendingUploadTTL: pendingTTL,
 	}
 }
 

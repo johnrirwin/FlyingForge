@@ -1,6 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { getProfile, updateProfile, uploadAvatar, validateCallSign, deleteAccount } from '../profileApi';
+import {
+  getProfile,
+  updateProfile,
+  uploadAvatar,
+  validateCallSign,
+  deleteAccount,
+  moderateImageUpload,
+  type ModerationStatus,
+} from '../profileApi';
 import type { UserProfile, UpdateProfileParams } from '../authTypes';
 
 interface ProfileFormData {
@@ -11,6 +19,9 @@ interface ProfileFormData {
 interface PendingAvatar {
   file: File;
   previewUrl: string;
+  uploadId?: string;
+  moderationStatus?: ModerationStatus;
+  moderationReason?: string;
 }
 
 export function MyProfile() {
@@ -26,6 +37,11 @@ export function MyProfile() {
   });
   const [validationError, setValidationError] = useState<string | null>(null);
   const [pendingAvatar, setPendingAvatar] = useState<PendingAvatar | null>(null);
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
+  const [avatarStatusText, setAvatarStatusText] = useState<string | null>(null);
+  const [avatarStatusTone, setAvatarStatusTone] = useState<'neutral' | 'success' | 'error'>('neutral');
+  const [isAvatarUploading, setIsAvatarUploading] = useState(false);
+  const [isAvatarSaving, setIsAvatarSaving] = useState(false);
   const [showClearCallSignModal, setShowClearCallSignModal] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
@@ -72,7 +88,6 @@ export function MyProfile() {
 
   // Check if there are unsaved changes
   const hasChanges = () => {
-    if (pendingAvatar) return true;
     if (!profile) return false;
     return (
       formData.callSign !== (profile.callSign || '') ||
@@ -109,34 +124,7 @@ export function MyProfile() {
       setIsSaving(true);
       setError(null);
       setSuccess(null);
-      
-      // Upload avatar first if there's a pending one
-      if (pendingAvatar) {
-        const avatarResult = await uploadAvatar(pendingAvatar.file);
-        
-        // Use effectiveAvatar if available, otherwise fall back to avatarUrl
-        const newAvatarUrl = avatarResult.effectiveAvatar || avatarResult.avatarUrl;
-        
-        // Update local state
-        setProfile(prev => prev ? {
-          ...prev,
-          customAvatarUrl: avatarResult.avatarUrl,
-          avatarType: avatarResult.avatarType || 'custom',
-          effectiveAvatarUrl: newAvatarUrl,
-        } : null);
-        
-        // Update auth context so sidebar updates
-        if (updateUser) {
-          updateUser({
-            avatarUrl: newAvatarUrl,
-          });
-        }
-        
-        // Revoke the preview URL to free memory
-        URL.revokeObjectURL(pendingAvatar.previewUrl);
-        setPendingAvatar(null);
-      }
-      
+
       // Build update params - include fields that have changed from original
       const params: UpdateProfileParams = {};
       const trimmedDisplayName = formData.displayName.trim();
@@ -183,7 +171,7 @@ export function MyProfile() {
     setFormData(prev => ({ ...prev, callSign: profile?.callSign || '' }));
   };
 
-  const handleAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -209,10 +197,42 @@ export function MyProfile() {
     const previewUrl = URL.createObjectURL(file);
     setPendingAvatar({ file, previewUrl });
     setError(null);
-    
+
     // Reset file input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+
+    try {
+      setIsAvatarUploading(true);
+      setAvatarStatusTone('neutral');
+      setAvatarStatusText('Uploading image…');
+
+      // Keep this visible so users understand moderation is in progress.
+      await new Promise(resolve => setTimeout(resolve, 150));
+      setAvatarStatusText('Checking image for safety…');
+      const moderation = await moderateImageUpload(file, 'avatar');
+
+      if (moderation.status === 'APPROVED' && moderation.uploadId) {
+        setPendingAvatar({ file, previewUrl, uploadId: moderation.uploadId, moderationStatus: moderation.status, moderationReason: moderation.reason });
+        setAvatarStatusTone('success');
+        setAvatarStatusText('Approved');
+      } else if (moderation.status === 'REJECTED') {
+        setPendingAvatar({ file, previewUrl, moderationStatus: moderation.status, moderationReason: moderation.reason });
+        setAvatarStatusTone('error');
+        setAvatarStatusText('Not allowed');
+      } else {
+        setPendingAvatar({ file, previewUrl, moderationStatus: moderation.status, moderationReason: moderation.reason });
+        setAvatarStatusTone('error');
+        setAvatarStatusText('Unable to verify right now');
+      }
+    } catch (err) {
+      setPendingAvatar({ file, previewUrl, moderationStatus: 'PENDING_REVIEW' });
+      setAvatarStatusTone('error');
+      setAvatarStatusText('Unable to verify right now');
+      setError(err instanceof Error ? err.message : 'Unable to verify image right now');
+    } finally {
+      setIsAvatarUploading(false);
     }
   };
 
@@ -220,6 +240,56 @@ export function MyProfile() {
     if (pendingAvatar) {
       URL.revokeObjectURL(pendingAvatar.previewUrl);
       setPendingAvatar(null);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    setAvatarStatusText(null);
+    setAvatarStatusTone('neutral');
+  };
+
+  const handleOpenAvatarModal = () => {
+    setShowAvatarModal(true);
+    setError(null);
+    setAvatarStatusText(null);
+    setAvatarStatusTone('neutral');
+  };
+
+  const handleCloseAvatarModal = () => {
+    handleCancelAvatar();
+    setShowAvatarModal(false);
+  };
+
+  const handleSaveAvatar = async () => {
+    if (!pendingAvatar?.uploadId) return;
+
+    try {
+      setIsAvatarSaving(true);
+      setError(null);
+      const avatarResult = await uploadAvatar(pendingAvatar.uploadId);
+      const newAvatarUrl = avatarResult.effectiveAvatar || avatarResult.avatarUrl;
+
+      setProfile(prev => prev ? {
+        ...prev,
+        customAvatarUrl: avatarResult.avatarUrl,
+        avatarType: avatarResult.avatarType || 'custom',
+        avatarImageAssetId: avatarResult.avatarImageAssetId,
+        effectiveAvatarUrl: newAvatarUrl,
+      } : null);
+
+      if (updateUser) {
+        updateUser({
+          avatarUrl: newAvatarUrl,
+        });
+      }
+
+      setSuccess('Profile picture updated successfully!');
+      setTimeout(() => setSuccess(null), 3000);
+      handleCloseAvatarModal();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save avatar');
+    } finally {
+      setIsAvatarSaving(false);
     }
   };
 
@@ -252,7 +322,7 @@ export function MyProfile() {
     );
   }
 
-  const effectiveAvatarUrl = pendingAvatar?.previewUrl || profile?.effectiveAvatarUrl || profile?.avatarUrl;
+  const effectiveAvatarUrl = profile?.effectiveAvatarUrl || profile?.avatarUrl;
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -278,12 +348,12 @@ export function MyProfile() {
           
           <div className="flex items-start gap-6">
             {/* Current Avatar */}
-            <div className="flex-shrink-0 relative">
+            <div className="flex-shrink-0">
               {effectiveAvatarUrl ? (
                 <img
                   src={effectiveAvatarUrl}
                   alt="Profile"
-                  className={`w-24 h-24 rounded-full object-cover border-2 ${pendingAvatar ? 'border-primary-500' : 'border-slate-600'}`}
+                  className="w-24 h-24 rounded-full object-cover border-2 border-slate-600"
                 />
               ) : (
                 <div className="w-24 h-24 rounded-full bg-slate-700 flex items-center justify-center border-2 border-slate-600">
@@ -292,43 +362,19 @@ export function MyProfile() {
                   </svg>
                 </div>
               )}
-              {pendingAvatar && (
-                <span className="absolute -top-1 -right-1 px-1.5 py-0.5 bg-primary-500 text-white text-xs rounded-full">
-                  New
-                </span>
-              )}
             </div>
 
             {/* Upload Button */}
             <div className="flex-1 space-y-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/jpg,image/png,image/webp"
-                onChange={handleAvatarSelect}
-                className="hidden"
-              />
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors"
-                >
-                  {pendingAvatar ? 'Choose Different' : 'Change Avatar'}
-                </button>
-                {pendingAvatar && (
-                  <button
-                    type="button"
-                    onClick={handleCancelAvatar}
-                    className="px-3 py-2 text-slate-400 hover:text-white text-sm transition-colors"
-                  >
-                    Cancel
-                  </button>
-                )}
-              </div>
+              <button
+                type="button"
+                onClick={handleOpenAvatarModal}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors"
+              >
+                Change Avatar
+              </button>
               <p className="text-xs text-slate-500">
-                JPEG, PNG, or WebP. Max 2MB.
-                {pendingAvatar && <span className="text-primary-400 ml-1">Click "Save Changes" to apply.</span>}
+                JPEG, PNG, or WebP. Max 2MB. You must pass image safety checks before Save is enabled.
               </p>
             </div>
           </div>
@@ -433,6 +479,101 @@ export function MyProfile() {
           Delete Account
         </button>
       </div>
+
+      {/* Avatar Edit Modal */}
+      {showAvatarModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full shadow-2xl border border-slate-700">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white">Edit Profile Picture</h3>
+              <button
+                type="button"
+                onClick={handleCloseAvatarModal}
+                disabled={isAvatarSaving}
+                className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex flex-col items-center gap-4 mb-4">
+              <div className="w-28 h-28 rounded-full overflow-hidden border-2 border-slate-600 bg-slate-700">
+                {pendingAvatar?.previewUrl ? (
+                  <img src={pendingAvatar.previewUrl} alt="Avatar preview" className="w-full h-full object-cover" />
+                ) : effectiveAvatarUrl ? (
+                  <img src={effectiveAvatarUrl} alt="Current avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-slate-500">
+                    <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  </div>
+                )}
+              </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,image/webp"
+                onChange={handleAvatarSelect}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isAvatarUploading || isAvatarSaving}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
+              >
+                {pendingAvatar ? 'Choose Different' : 'Select Image'}
+              </button>
+              <p className="text-xs text-slate-500">JPEG, PNG, or WebP. Max 2MB.</p>
+            </div>
+
+            {avatarStatusText && (
+              <div
+                className={`mb-4 p-3 rounded-lg text-sm border ${
+                  avatarStatusTone === 'success'
+                    ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                    : avatarStatusTone === 'error'
+                      ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                      : 'bg-slate-700/50 border-slate-600 text-slate-300'
+                }`}
+              >
+                <p>{avatarStatusText}</p>
+                {pendingAvatar?.moderationReason && avatarStatusTone !== 'success' && (
+                  <p className="mt-1 text-xs text-slate-300">{pendingAvatar.moderationReason}</p>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleCloseAvatarModal}
+                disabled={isAvatarSaving}
+                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveAvatar}
+                disabled={
+                  isAvatarSaving ||
+                  isAvatarUploading ||
+                  !pendingAvatar?.uploadId ||
+                  pendingAvatar?.moderationStatus !== 'APPROVED'
+                }
+                className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isAvatarSaving ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Clear Call Sign Confirmation Modal */}
       {showClearCallSignModal && (

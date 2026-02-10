@@ -1,15 +1,16 @@
 package httpapi
 
 import (
-	"encoding/base64"
+	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/johnrirwin/flyingforge/internal/auth"
 	"github.com/johnrirwin/flyingforge/internal/database"
+	"github.com/johnrirwin/flyingforge/internal/images"
 	"github.com/johnrirwin/flyingforge/internal/logging"
 	"github.com/johnrirwin/flyingforge/internal/models"
 )
@@ -17,14 +18,16 @@ import (
 // ProfileAPI handles profile HTTP endpoints
 type ProfileAPI struct {
 	userStore      *database.UserStore
+	imageSvc       *images.Service
 	authMiddleware *auth.Middleware
 	logger         *logging.Logger
 }
 
 // NewProfileAPI creates a new profile API handler
-func NewProfileAPI(userStore *database.UserStore, authMiddleware *auth.Middleware, logger *logging.Logger) *ProfileAPI {
+func NewProfileAPI(userStore *database.UserStore, imageSvc *images.Service, authMiddleware *auth.Middleware, logger *logging.Logger) *ProfileAPI {
 	return &ProfileAPI{
 		userStore:      userStore,
+		imageSvc:       imageSvc,
 		authMiddleware: authMiddleware,
 		logger:         logger,
 	}
@@ -34,6 +37,7 @@ func NewProfileAPI(userStore *database.UserStore, authMiddleware *auth.Middlewar
 func (api *ProfileAPI) RegisterRoutes(mux *http.ServeMux, corsMiddleware func(http.HandlerFunc) http.HandlerFunc) {
 	mux.HandleFunc("/api/me/profile", corsMiddleware(api.authMiddleware.RequireAuth(api.handleProfile)))
 	mux.HandleFunc("/api/me/avatar", corsMiddleware(api.authMiddleware.RequireAuth(api.handleAvatar)))
+	mux.HandleFunc("/api/users/avatar", corsMiddleware(api.authMiddleware.RequireAuth(api.handleAvatar)))
 }
 
 // handleProfile handles GET, PUT, and DELETE /api/me/profile
@@ -77,6 +81,7 @@ func (api *ProfileAPI) handleGetProfile(w http.ResponseWriter, r *http.Request) 
 		"googleAvatarUrl":    user.GoogleAvatarURL,
 		"avatarType":         user.AvatarType,
 		"customAvatarUrl":    user.CustomAvatarURL,
+		"avatarImageAssetId": user.AvatarImageID,
 		"effectiveAvatarUrl": user.EffectiveAvatarURL(),
 		"createdAt":          user.CreatedAt,
 		"updatedAt":          user.UpdatedAt,
@@ -177,6 +182,7 @@ func (api *ProfileAPI) handleUpdateProfile(w http.ResponseWriter, r *http.Reques
 		"googleAvatarUrl":    user.GoogleAvatarURL,
 		"avatarType":         user.AvatarType,
 		"customAvatarUrl":    user.CustomAvatarURL,
+		"avatarImageAssetId": user.AvatarImageID,
 		"effectiveAvatarUrl": user.EffectiveAvatarURL(),
 		"createdAt":          user.CreatedAt,
 		"updatedAt":          user.UpdatedAt,
@@ -198,61 +204,143 @@ func (api *ProfileAPI) handleAvatar(w http.ResponseWriter, r *http.Request) {
 
 	userID := r.Context().Value(auth.UserIDKey).(string)
 
-	// Parse multipart form - max 2MB
-	if err := r.ParseMultipartForm(2 << 20); err != nil {
-		api.writeError(w, http.StatusBadRequest, "invalid_request", "failed to parse form or file too large")
-		return
-	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
 
-	file, header, err := r.FormFile("avatar")
+	currentUser, err := api.userStore.GetByID(ctx, userID)
 	if err != nil {
-		api.writeError(w, http.StatusBadRequest, "invalid_request", "no avatar file provided")
+		api.logger.Error("Failed to load user before avatar save", logging.WithField("error", err.Error()))
+		api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to save avatar")
 		return
 	}
-	defer file.Close()
-
-	// Validate content type
-	contentType := header.Header.Get("Content-Type")
-	allowedTypes := map[string]bool{
-		"image/jpeg": true,
-		"image/jpg":  true,
-		"image/png":  true,
-		"image/webp": true,
-	}
-	if !allowedTypes[contentType] {
-		api.writeError(w, http.StatusBadRequest, "invalid_format", "only JPEG, PNG, and WebP images are allowed")
+	if currentUser == nil {
+		api.writeError(w, http.StatusNotFound, "not_found", "user not found")
 		return
 	}
 
-	// Read file content
-	data, err := io.ReadAll(file)
-	if err != nil {
-		api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to read file")
+	var (
+		asset *models.ImageAsset
+	)
+
+	contentType := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
+	switch {
+	case strings.HasPrefix(contentType, "application/json"):
+		var req struct {
+			UploadID string `json:"uploadId"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			api.writeError(w, http.StatusBadRequest, "invalid_request", "invalid request body")
+			return
+		}
+		req.UploadID = strings.TrimSpace(req.UploadID)
+		if req.UploadID == "" {
+			api.writeError(w, http.StatusBadRequest, "invalid_request", "uploadId is required")
+			return
+		}
+
+		var err error
+		asset, err = api.imageSvc.PersistApprovedUpload(ctx, userID, req.UploadID, models.ImageEntityAvatar, userID)
+		if err != nil {
+			switch err {
+			case images.ErrPendingUploadNotFound:
+				api.writeError(w, http.StatusUnprocessableEntity, "not_approved", "image approval token expired or missing")
+				return
+			case images.ErrUploadNotApproved:
+				api.writeError(w, http.StatusUnprocessableEntity, "not_approved", "image is not approved")
+				return
+			default:
+				api.logger.Error("Failed to persist approved avatar image", logging.WithField("error", err.Error()))
+				api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to save avatar")
+				return
+			}
+		}
+	default:
+		const maxSize = int64(6 * 1024 * 1024)
+		r.Body = http.MaxBytesReader(w, r.Body, maxSize)
+		if err := r.ParseMultipartForm(maxSize); err != nil {
+			api.writeError(w, http.StatusBadRequest, "invalid_request", "invalid upload payload")
+			return
+		}
+
+		file, _, err := r.FormFile("image")
+		if err != nil {
+			file, _, err = r.FormFile("avatar")
+		}
+		if err != nil {
+			api.writeError(w, http.StatusBadRequest, "invalid_request", "image file is required")
+			return
+		}
+		defer file.Close()
+
+		imageData, err := io.ReadAll(file)
+		if err != nil {
+			api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to read image")
+			return
+		}
+		if len(imageData) > 5*1024*1024 {
+			api.writeError(w, http.StatusBadRequest, "invalid_request", "image must be less than 5MB")
+			return
+		}
+		if _, ok := detectAllowedImageContentType(imageData); !ok {
+			api.writeError(w, http.StatusBadRequest, "invalid_request", "only JPEG, PNG, and WebP images are allowed")
+			return
+		}
+
+		decision, savedAsset, err := api.imageSvc.ModerateAndPersist(ctx, images.SaveRequest{
+			OwnerUserID: userID,
+			EntityType:  models.ImageEntityAvatar,
+			EntityID:    userID,
+			ImageBytes:  imageData,
+		})
+		if err != nil {
+			api.logger.Error("Failed to moderate avatar image", logging.WithField("error", err.Error()))
+			api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to save avatar")
+			return
+		}
+		if decision == nil || decision.Status != models.ImageModerationApproved {
+			if decision != nil && decision.Status == models.ImageModerationPendingReview {
+				api.writeError(w, http.StatusServiceUnavailable, "not_approved", "unable to verify right now")
+				return
+			}
+			reason := "image is not approved"
+			if decision != nil && strings.TrimSpace(decision.Reason) != "" {
+				reason = decision.Reason
+			}
+			api.writeError(w, http.StatusUnprocessableEntity, "not_approved", reason)
+			return
+		}
+		asset = savedAsset
+	}
+
+	if asset == nil {
+		api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to save avatar")
 		return
 	}
 
-	// For now, store as base64 data URL
-	// In production, you'd upload to S3/CloudStorage and store the URL
-	dataURL := fmt.Sprintf("data:%s;base64,%s", contentType, base64.StdEncoding.EncodeToString(data))
-
-	// Update user's custom_avatar_url and set avatar_type to custom
+	avatarURL := "/api/images/" + asset.ID
 	avatarType := models.AvatarTypeCustom
 	updateParams := models.UpdateUserParams{
-		CustomAvatarURL: &dataURL,
+		CustomAvatarURL: &avatarURL, // compatibility field for older clients
+		AvatarImageID:   &asset.ID,
 		AvatarType:      &avatarType,
 	}
 
-	user, err := api.userStore.Update(r.Context(), userID, updateParams)
+	user, err := api.userStore.Update(ctx, userID, updateParams)
 	if err != nil {
 		api.logger.Error("Failed to update avatar", logging.WithField("error", err.Error()))
+		_ = api.imageSvc.Delete(ctx, asset.ID)
 		api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to update avatar")
 		return
 	}
+	if currentUser.AvatarImageID != "" && currentUser.AvatarImageID != asset.ID {
+		_ = api.imageSvc.Delete(ctx, currentUser.AvatarImageID)
+	}
 
 	response := map[string]interface{}{
-		"avatarUrl":       user.CustomAvatarURL,
-		"avatarType":      user.AvatarType,
-		"effectiveAvatar": user.EffectiveAvatarURL(),
+		"avatarUrl":          user.CustomAvatarURL,
+		"avatarType":         user.AvatarType,
+		"avatarImageAssetId": user.AvatarImageID,
+		"effectiveAvatar":    user.EffectiveAvatarURL(),
 	}
 
 	api.writeJSON(w, http.StatusOK, response)

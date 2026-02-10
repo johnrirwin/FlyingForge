@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/johnrirwin/flyingforge/internal/aircraft"
 	"github.com/johnrirwin/flyingforge/internal/auth"
+	"github.com/johnrirwin/flyingforge/internal/images"
 	"github.com/johnrirwin/flyingforge/internal/logging"
 	"github.com/johnrirwin/flyingforge/internal/models"
 )
@@ -470,6 +472,73 @@ func (api *AircraftAPI) handleImage(w http.ResponseWriter, r *http.Request, airc
 // uploadImage handles image upload for an aircraft
 func (api *AircraftAPI) uploadImage(w http.ResponseWriter, r *http.Request, aircraftID string) {
 	userID := auth.GetUserID(r.Context())
+	contentType := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
+
+	if strings.HasPrefix(contentType, "application/json") {
+		var req struct {
+			UploadID string `json:"uploadId"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			api.writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "invalid request body",
+			})
+			return
+		}
+		req.UploadID = strings.TrimSpace(req.UploadID)
+		if req.UploadID == "" {
+			api.writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "uploadId is required",
+			})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+
+		decision, err := api.aircraftSvc.SetImage(ctx, userID, models.SetAircraftImageParams{
+			AircraftID: aircraftID,
+			UploadID:   req.UploadID,
+		})
+		if err != nil {
+			switch err {
+			case images.ErrPendingUploadNotFound:
+				api.writeJSON(w, http.StatusUnprocessableEntity, map[string]string{
+					"status": string(models.ImageModerationRejected),
+					"reason": "Image approval token expired or missing",
+					"error":  "image approval token expired or missing",
+				})
+				return
+			case images.ErrUploadNotApproved:
+				api.writeJSON(w, http.StatusUnprocessableEntity, map[string]string{
+					"status": string(models.ImageModerationRejected),
+					"reason": "Image is not approved",
+					"error":  "image is not approved",
+				})
+				return
+			default:
+				api.logger.Error("Failed to set aircraft image from approved upload", logging.WithFields(map[string]interface{}{
+					"aircraft_id": aircraftID,
+					"error":       err.Error(),
+				}))
+				api.writeJSON(w, http.StatusInternalServerError, map[string]string{
+					"error": err.Error(),
+				})
+				return
+			}
+		}
+		if decision == nil {
+			api.writeJSON(w, http.StatusInternalServerError, map[string]string{
+				"error": "failed to set aircraft image",
+			})
+			return
+		}
+
+		api.writeJSON(w, http.StatusOK, map[string]string{
+			"status":  string(decision.Status),
+			"message": "Image uploaded successfully",
+		})
+		return
+	}
 
 	// Limit request body to 6MB (slightly more than our 5MB limit to account for multipart overhead)
 	r.Body = http.MaxBytesReader(w, r.Body, 6*1024*1024)
@@ -481,7 +550,7 @@ func (api *AircraftAPI) uploadImage(w http.ResponseWriter, r *http.Request, airc
 		return
 	}
 
-	file, header, err := r.FormFile("image")
+	file, _, err := r.FormFile("image")
 	if err != nil {
 		api.logger.Error("Failed to get image from form", logging.WithField("error", err.Error()))
 		http.Error(w, "Image file required", http.StatusBadRequest)
@@ -489,18 +558,16 @@ func (api *AircraftAPI) uploadImage(w http.ResponseWriter, r *http.Request, airc
 	}
 	defer file.Close()
 
-	// Validate content type
-	contentType := header.Header.Get("Content-Type")
-	if contentType != "image/jpeg" && contentType != "image/png" {
-		http.Error(w, "Image must be JPEG or PNG", http.StatusBadRequest)
-		return
-	}
-
 	// Read image data
-	imageData := make([]byte, header.Size)
-	if _, err := file.Read(imageData); err != nil {
+	imageData, err := io.ReadAll(file)
+	if err != nil {
 		api.logger.Error("Failed to read image data", logging.WithField("error", err.Error()))
 		http.Error(w, "Failed to read image", http.StatusInternalServerError)
+		return
+	}
+	detectedContentType, ok := detectAllowedImageContentType(imageData)
+	if !ok {
+		http.Error(w, "Image must be JPEG, PNG, or WebP", http.StatusBadRequest)
 		return
 	}
 
@@ -509,11 +576,12 @@ func (api *AircraftAPI) uploadImage(w http.ResponseWriter, r *http.Request, airc
 
 	params := models.SetAircraftImageParams{
 		AircraftID: aircraftID,
-		ImageType:  contentType,
+		ImageType:  detectedContentType,
 		ImageData:  imageData,
 	}
 
-	if err := api.aircraftSvc.SetImage(ctx, userID, params); err != nil {
+	decision, err := api.aircraftSvc.SetImage(ctx, userID, params)
+	if err != nil {
 		api.logger.Error("Failed to set aircraft image", logging.WithFields(map[string]interface{}{
 			"aircraft_id": aircraftID,
 			"error":       err.Error(),
@@ -523,8 +591,21 @@ func (api *AircraftAPI) uploadImage(w http.ResponseWriter, r *http.Request, airc
 		})
 		return
 	}
+	if decision.Status != models.ImageModerationApproved {
+		statusCode := http.StatusUnprocessableEntity
+		if decision.Status == models.ImageModerationPendingReview {
+			statusCode = http.StatusServiceUnavailable
+		}
+		api.writeJSON(w, statusCode, map[string]string{
+			"status": string(decision.Status),
+			"reason": decision.Reason,
+			"error":  decision.Reason,
+		})
+		return
+	}
 
 	api.writeJSON(w, http.StatusOK, map[string]string{
+		"status":  string(decision.Status),
 		"message": "Image uploaded successfully",
 	})
 }

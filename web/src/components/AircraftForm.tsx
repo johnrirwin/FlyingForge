@@ -1,7 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Aircraft, CreateAircraftParams, AircraftType } from '../aircraftTypes';
 import { AIRCRAFT_TYPES } from '../aircraftTypes';
-import { uploadAircraftImage, getAircraftImageUrl } from '../aircraftApi';
+import {
+  moderateAircraftImageUpload,
+  saveAircraftImageUpload,
+  getAircraftImageUrl,
+  type ModerationStatus,
+} from '../aircraftApi';
 
 interface AircraftFormProps {
   isOpen: boolean;
@@ -10,18 +15,51 @@ interface AircraftFormProps {
   onSubmit: (params: CreateAircraftParams) => Promise<Aircraft>;
 }
 
+type StatusTone = 'neutral' | 'success' | 'error';
+
+interface PendingAircraftImage {
+  previewUrl: string;
+  uploadId?: string;
+  moderationStatus?: ModerationStatus;
+  moderationReason?: string;
+}
+
+function revokeBlobUrl(url?: string | null) {
+  if (url && url.startsWith('blob:')) {
+    URL.revokeObjectURL(url);
+  }
+}
+
 export function AircraftForm({ isOpen, aircraft, onClose, onSubmit }: AircraftFormProps) {
   const [name, setName] = useState('');
   const [nickname, setNickname] = useState('');
   const [type, setType] = useState<AircraftType>('freestyle');
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [existingImagePreview, setExistingImagePreview] = useState<string | null>(null);
+  const [selectedImage, setSelectedImage] = useState<PendingAircraftImage | null>(null);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [modalImage, setModalImage] = useState<PendingAircraftImage | null>(null);
+  const [imageStatusText, setImageStatusText] = useState<string | null>(null);
+  const [imageStatusTone, setImageStatusTone] = useState<StatusTone>('neutral');
+  const [isImageUploading, setIsImageUploading] = useState(false);
+  const [isImageSaving, setIsImageSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const selectedPreviewRef = useRef<string | null>(null);
+  const modalPreviewRef = useRef<string | null>(null);
 
   const isEditing = !!aircraft;
+
+  const replaceSelectedImage = (next: PendingAircraftImage | null) => {
+    setSelectedImage((prev) => {
+      if (prev?.previewUrl && prev.previewUrl !== next?.previewUrl) {
+        revokeBlobUrl(prev.previewUrl);
+      }
+      return next;
+    });
+  };
 
   // Populate form when editing
   useEffect(() => {
@@ -30,63 +68,192 @@ export function AircraftForm({ isOpen, aircraft, onClose, onSubmit }: AircraftFo
       setNickname(aircraft.nickname || '');
       setType(aircraft.type);
       setDescription(aircraft.description || '');
-      // Set existing image preview if aircraft has an image
-      if (aircraft.hasImage) {
-        setImagePreview(getAircraftImageUrl(aircraft.id));
-      } else {
-        setImagePreview(null);
-      }
-      setImageFile(null);
+      setExistingImagePreview(aircraft.hasImage ? getAircraftImageUrl(aircraft.id) : null);
     } else {
       setName('');
       setNickname('');
       setType('freestyle');
-      setImagePreview(null);
-      setImageFile(null);
       setDescription('');
+      setExistingImagePreview(null);
     }
+
+    replaceSelectedImage(null);
+    if (modalImage?.previewUrl) {
+      revokeBlobUrl(modalImage.previewUrl);
+    }
+    setModalImage(null);
+    setShowImageModal(false);
+    setImageStatusText(null);
+    setImageStatusTone('neutral');
+    setIsImageUploading(false);
+    setIsImageSaving(false);
     setError(null);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aircraft, isOpen]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      // Validate file type
-      if (!file.type.match(/^image\/(jpeg|png)$/)) {
-        setError('Only JPEG and PNG images are allowed');
-        return;
+  useEffect(() => {
+    selectedPreviewRef.current = selectedImage?.previewUrl || null;
+  }, [selectedImage?.previewUrl]);
+
+  useEffect(() => {
+    modalPreviewRef.current = modalImage?.previewUrl || null;
+  }, [modalImage?.previewUrl]);
+
+  // Cleanup object URLs when this component unmounts
+  useEffect(() => {
+    return () => {
+      revokeBlobUrl(selectedPreviewRef.current);
+      if (modalPreviewRef.current && modalPreviewRef.current !== selectedPreviewRef.current) {
+        revokeBlobUrl(modalPreviewRef.current);
       }
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        setError('Image must be less than 5MB');
-        return;
-      }
-      
-      setImageFile(file);
-      setError(null);
-      
-      // Create preview URL
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    };
+  }, []);
+
+  const displayImagePreview = selectedImage?.previewUrl || existingImagePreview;
+
+  const handleOpenImageModal = () => {
+    setShowImageModal(true);
+    setError(null);
+
+    if (selectedImage) {
+      setModalImage(selectedImage);
+      setImageStatusTone('success');
+      setImageStatusText('Approved');
+    } else {
+      setModalImage(null);
+      setImageStatusTone('neutral');
+      setImageStatusText(null);
     }
   };
 
-  const handleRemoveImage = () => {
-    setImageFile(null);
-    setImagePreview(null);
+  const handleCloseImageModal = () => {
+    if (modalImage?.previewUrl && modalImage.previewUrl !== selectedImage?.previewUrl) {
+      revokeBlobUrl(modalImage.previewUrl);
+    }
+    setModalImage(null);
+    setShowImageModal(false);
+    setImageStatusText(null);
+    setImageStatusTone('neutral');
+    setIsImageUploading(false);
+    setIsImageSaving(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setError('Only JPEG, PNG, and WebP images are allowed');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image must be less than 5MB');
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    if (modalImage?.previewUrl && modalImage.previewUrl !== selectedImage?.previewUrl) {
+      revokeBlobUrl(modalImage.previewUrl);
+    }
+    setModalImage({ previewUrl });
+    setError(null);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+
+    try {
+      setIsImageUploading(true);
+      setImageStatusTone('neutral');
+      setImageStatusText('Uploading image…');
+
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      setImageStatusText('Checking image for safety…');
+
+      const moderation = await moderateAircraftImageUpload(file);
+      if (moderation.status === 'APPROVED' && moderation.uploadId) {
+        setModalImage({
+          previewUrl,
+          uploadId: moderation.uploadId,
+          moderationStatus: moderation.status,
+          moderationReason: moderation.reason,
+        });
+        setImageStatusTone('success');
+        setImageStatusText('Approved');
+      } else if (moderation.status === 'REJECTED') {
+        setModalImage({
+          previewUrl,
+          moderationStatus: moderation.status,
+          moderationReason: moderation.reason,
+        });
+        setImageStatusTone('error');
+        setImageStatusText('Not allowed');
+      } else {
+        setModalImage({
+          previewUrl,
+          moderationStatus: moderation.status,
+          moderationReason: moderation.reason,
+        });
+        setImageStatusTone('error');
+        setImageStatusText('Unable to verify right now');
+      }
+    } catch (err) {
+      setModalImage({
+        previewUrl,
+        moderationStatus: 'PENDING_REVIEW',
+      });
+      setImageStatusTone('error');
+      setImageStatusText('Unable to verify right now');
+      setError(err instanceof Error ? err.message : 'Unable to verify image right now');
+    } finally {
+      setIsImageUploading(false);
+    }
+  };
+
+  const handleSaveImageSelection = () => {
+    if (!modalImage?.uploadId || modalImage.moderationStatus !== 'APPROVED') {
+      return;
+    }
+
+    setIsImageSaving(true);
+    replaceSelectedImage({
+      previewUrl: modalImage.previewUrl,
+      uploadId: modalImage.uploadId,
+      moderationStatus: modalImage.moderationStatus,
+      moderationReason: modalImage.moderationReason,
+    });
+
+    setShowImageModal(false);
+    setModalImage(null);
+    setImageStatusText(null);
+    setImageStatusTone('neutral');
+    setIsImageSaving(false);
+  };
+
+  const handleRemovePendingImage = () => {
+    replaceSelectedImage(null);
+    setError(null);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!name.trim()) {
       setError('Name is required');
+      return;
+    }
+
+    if (selectedImage && (!selectedImage.uploadId || selectedImage.moderationStatus !== 'APPROVED')) {
+      setError('Selected image must be approved before saving');
       return;
     }
 
@@ -100,23 +267,20 @@ export function AircraftForm({ isOpen, aircraft, onClose, onSubmit }: AircraftFo
         type,
         description: description.trim() || undefined,
       };
-      
-      // Create/update aircraft first
+
       const savedAircraft = await onSubmit(params);
-      
-      // Upload image if a new file was selected
-      if (imageFile) {
+
+      if (selectedImage?.uploadId) {
         try {
-          await uploadAircraftImage(savedAircraft.id, imageFile);
+          await saveAircraftImageUpload(savedAircraft.id, selectedImage.uploadId);
         } catch (imgErr) {
-          // Aircraft was created but image upload failed
           console.error('Image upload failed:', imgErr);
           setError('Aircraft saved but image upload failed: ' + (imgErr instanceof Error ? imgErr.message : 'Unknown error'));
           setIsSubmitting(false);
           return;
         }
       }
-      
+
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save aircraft');
@@ -212,40 +376,38 @@ export function AircraftForm({ isOpen, aircraft, onClose, onSubmit }: AircraftFo
               Image
             </label>
             <div className="flex items-start gap-4">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png"
-                onChange={handleFileChange}
-                className="hidden"
-              />
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={handleOpenImageModal}
                 className="px-4 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-slate-300 text-sm transition-colors"
               >
-                {imagePreview ? 'Change Image' : 'Upload Image'}
+                {displayImagePreview ? 'Change Image' : 'Add Image'}
               </button>
-              {imagePreview && (
+
+              {displayImagePreview && (
                 <div className="relative">
                   <div className="w-20 h-20 rounded-lg overflow-hidden bg-slate-700">
                     <img
-                      src={imagePreview}
+                      src={displayImagePreview}
                       alt="Preview"
                       className="w-full h-full object-cover"
                     />
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleRemoveImage}
-                    className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center text-white text-xs"
-                  >
-                    ×
-                  </button>
+                  {selectedImage && (
+                    <button
+                      type="button"
+                      onClick={handleRemovePendingImage}
+                      className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center text-white text-xs"
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
               )}
             </div>
-            <p className="mt-1 text-xs text-slate-500">JPEG or PNG, max 5MB</p>
+            <p className="mt-1 text-xs text-slate-500">
+              JPEG, PNG, or WebP. Max 5MB. {selectedImage?.uploadId ? 'Approved image ready to save.' : 'Use image modal to run safety checks.'}
+            </p>
           </div>
 
           {/* Description */}
@@ -266,7 +428,7 @@ export function AircraftForm({ isOpen, aircraft, onClose, onSubmit }: AircraftFo
           <div className="flex pt-2">
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isImageUploading || isImageSaving}
               className="w-full px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:bg-primary-600/50 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
             >
               {isSubmitting ? (
@@ -283,6 +445,97 @@ export function AircraftForm({ isOpen, aircraft, onClose, onSubmit }: AircraftFo
           </div>
         </form>
       </div>
+
+      {/* Image Moderation Modal */}
+      {showImageModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
+          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full shadow-2xl border border-slate-700">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white">Edit Aircraft Image</h3>
+              <button
+                type="button"
+                onClick={handleCloseImageModal}
+                disabled={isImageSaving}
+                className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex flex-col items-center gap-4 mb-4">
+              <div className="w-36 h-36 rounded-lg overflow-hidden border-2 border-slate-600 bg-slate-700">
+                {modalImage?.previewUrl ? (
+                  <img src={modalImage.previewUrl} alt="Aircraft preview" className="w-full h-full object-cover" />
+                ) : displayImagePreview ? (
+                  <img src={displayImagePreview} alt="Current aircraft image" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-slate-500 text-4xl">🚁</div>
+                )}
+              </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,image/webp"
+                onChange={handleImageFileChange}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isImageUploading || isImageSaving}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
+              >
+                {modalImage?.previewUrl ? 'Choose Different' : 'Select Image'}
+              </button>
+              <p className="text-xs text-slate-500">JPEG, PNG, or WebP. Max 5MB.</p>
+            </div>
+
+            {imageStatusText && (
+              <div
+                className={`mb-4 p-3 rounded-lg text-sm border ${
+                  imageStatusTone === 'success'
+                    ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                    : imageStatusTone === 'error'
+                      ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                      : 'bg-slate-700/50 border-slate-600 text-slate-300'
+                }`}
+              >
+                <p>{imageStatusText}</p>
+                {modalImage?.moderationReason && imageStatusTone !== 'success' && (
+                  <p className="mt-1 text-xs text-slate-300">{modalImage.moderationReason}</p>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleCloseImageModal}
+                disabled={isImageSaving}
+                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveImageSelection}
+                disabled={
+                  isImageSaving ||
+                  isImageUploading ||
+                  !modalImage?.uploadId ||
+                  modalImage.moderationStatus !== 'APPROVED'
+                }
+                className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

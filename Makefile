@@ -1,7 +1,7 @@
 # FlyingForge Makefile
 # Run `make help` to see available commands
 
-.PHONY: help test test-go test-web lint lint-go lint-web build build-go build-web run clean install
+.PHONY: help test test-go test-web lint lint-go lint-web build build-go build-web run clean install rekognition-test
 
 # Default target
 .DEFAULT_GOAL := help
@@ -51,6 +51,10 @@ test-web-watch: ## Run frontend tests in watch mode
 test-web-cover: ## Run frontend tests with coverage
 	@echo "$(CYAN)Running frontend tests with coverage...$(RESET)"
 	cd web && npm run test:ci
+
+rekognition-test: ## Run Rekognition moderation test against a local image (IMAGE=./path.jpg)
+	@echo "$(CYAN)Running Rekognition moderation test...$(RESET)"
+	cd server && IMAGE=$(IMAGE) go run ./cmd/rekognition-test -image "$(IMAGE)"
 
 ## Linting
 lint: lint-go lint-web ## Run all linters

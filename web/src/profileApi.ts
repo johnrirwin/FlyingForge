@@ -51,17 +51,52 @@ export async function updateProfile(params: UpdateProfileParams): Promise<UserPr
   return response.json();
 }
 
-// Upload custom avatar
-export async function uploadAvatar(file: File): Promise<AvatarUploadResponse> {
-  const formData = new FormData();
-  formData.append('avatar', file);
+export type ModerationStatus = 'APPROVED' | 'REJECTED' | 'PENDING_REVIEW';
 
-  const response = await fetch(`${API_BASE}/api/me/avatar`, {
+export interface ImageModerationResponse {
+  status: ModerationStatus;
+  reason?: string;
+  uploadId?: string;
+}
+
+// Upload image for moderation (does not persist avatar yet)
+export async function moderateImageUpload(
+  file: File,
+  entityType: 'avatar' | 'aircraft' | 'gear' | 'other' = 'avatar'
+): Promise<ImageModerationResponse> {
+  const formData = new FormData();
+  formData.append('image', file);
+  formData.append('entityType', entityType);
+
+  const response = await fetch(`${API_BASE}/api/images/upload`, {
     method: 'POST',
     headers: {
       ...getAuthHeader(),
     },
     body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Failed to moderate image' }));
+    throw new Error(error.message || error.reason || 'Failed to moderate image');
+  }
+
+  return response.json();
+}
+
+// Persist custom avatar after moderation returned APPROVED
+export async function uploadAvatar(uploadId: string): Promise<AvatarUploadResponse> {
+  if (!uploadId) {
+    throw new Error('uploadId is required');
+  }
+
+  const response = await fetch(`${API_BASE}/api/users/avatar`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeader(),
+    },
+    body: JSON.stringify({ uploadId }),
   });
 
   if (!response.ok) {

@@ -73,6 +73,7 @@ type User struct {
 	GoogleAvatarURL string     `json:"googleAvatarUrl,omitempty"`
 	AvatarType      AvatarType `json:"avatarType,omitempty"`
 	CustomAvatarURL string     `json:"customAvatarUrl,omitempty"`
+	AvatarImageID   string     `json:"avatarImageAssetId,omitempty"`
 
 	// Social settings
 	SocialSettings SocialSettings `json:"socialSettings"`
@@ -80,6 +81,9 @@ type User struct {
 
 // EffectiveAvatarURL returns the avatar URL to use based on AvatarType
 func (u *User) EffectiveAvatarURL() string {
+	if u.AvatarType == AvatarTypeCustom && u.AvatarImageID != "" {
+		return "/api/images/" + u.AvatarImageID
+	}
 	if u.AvatarType == AvatarTypeCustom && u.CustomAvatarURL != "" {
 		return u.CustomAvatarURL
 	}
@@ -166,6 +170,7 @@ type UpdateUserParams struct {
 	GoogleAvatarURL *string     `json:"googleAvatarUrl,omitempty"`
 	AvatarType      *AvatarType `json:"avatarType,omitempty"`
 	CustomAvatarURL *string     `json:"customAvatarUrl,omitempty"`
+	AvatarImageID   *string     `json:"avatarImageAssetId,omitempty"`
 }
 
 // AdminUpdateUserParams represents admin-only user updates

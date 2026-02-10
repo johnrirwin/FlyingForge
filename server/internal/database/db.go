@@ -117,6 +117,7 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationInventoryCatalogUnique,    // Adds unique constraint on (user_id, catalog_id)
 		migrationDropInventoryPurchaseDate, // Drops unused purchase_date column
 		migrationDropInventoryCondition,    // Drops unused condition column
+		migrationImageAssets,               // Adds centralized image asset storage + references
 	}
 
 	for i, migration := range migrations {
@@ -729,4 +730,61 @@ ALTER TABLE inventory_items DROP COLUMN IF EXISTS purchase_date;
 const migrationDropInventoryCondition = `
 DROP INDEX IF EXISTS idx_inventory_condition;
 ALTER TABLE inventory_items DROP COLUMN IF EXISTS condition;
+`
+
+// Migration to add centralized image asset storage for moderated user uploads.
+const migrationImageAssets = `
+CREATE TABLE IF NOT EXISTS image_assets (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    owner_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    entity_type VARCHAR(20) NOT NULL,
+    entity_id UUID,
+    image_bytes BYTEA NOT NULL,
+    status VARCHAR(20) NOT NULL CHECK (status IN ('APPROVED', 'REJECTED')),
+    moderation_labels JSONB NOT NULL DEFAULT '[]',
+    moderation_max_confidence DOUBLE PRECISION NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_image_assets_owner ON image_assets(owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_image_assets_entity ON image_assets(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_image_assets_status ON image_assets(status);
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_image_asset_id UUID;
+ALTER TABLE aircraft ADD COLUMN IF NOT EXISTS image_asset_id UUID;
+ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS image_asset_id UUID;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'fk_users_avatar_image_asset'
+    ) THEN
+        ALTER TABLE users
+        ADD CONSTRAINT fk_users_avatar_image_asset
+        FOREIGN KEY (avatar_image_asset_id) REFERENCES image_assets(id) ON DELETE SET NULL;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'fk_aircraft_image_asset'
+    ) THEN
+        ALTER TABLE aircraft
+        ADD CONSTRAINT fk_aircraft_image_asset
+        FOREIGN KEY (image_asset_id) REFERENCES image_assets(id) ON DELETE SET NULL;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'fk_gear_catalog_image_asset'
+    ) THEN
+        ALTER TABLE gear_catalog
+        ADD CONSTRAINT fk_gear_catalog_image_asset
+        FOREIGN KEY (image_asset_id) REFERENCES image_assets(id) ON DELETE SET NULL;
+    END IF;
+END $$;
 `

@@ -407,6 +407,9 @@ func (api *GearCatalogAPI) getGearImage(w http.ResponseWriter, r *http.Request, 
 		http.Error(w, "No image for this gear item", http.StatusNotFound)
 		return
 	}
+	if imageType == "" {
+		imageType = http.DetectContentType(imageData)
+	}
 
 	// Set caching headers (images cached for 60 seconds - allows quick refresh after admin updates)
 	w.Header().Set("Cache-Control", "public, max-age=60")

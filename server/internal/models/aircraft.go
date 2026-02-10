@@ -35,17 +35,18 @@ const (
 
 // Aircraft represents a user's aircraft/drone
 type Aircraft struct {
-	ID          string       `json:"id"`
-	UserID      string       `json:"userId,omitempty"`
-	Name        string       `json:"name"`
-	Nickname    string       `json:"nickname,omitempty"`
-	Type        AircraftType `json:"type,omitempty"`
-	HasImage    bool         `json:"hasImage"`
-	ImageType   string       `json:"-"` // MIME type: image/jpeg or image/png
-	ImageData   []byte       `json:"-"` // Binary image data, not serialized to JSON
-	Description string       `json:"description,omitempty"`
-	CreatedAt   time.Time    `json:"createdAt"`
-	UpdatedAt   time.Time    `json:"updatedAt"`
+	ID           string       `json:"id"`
+	UserID       string       `json:"userId,omitempty"`
+	Name         string       `json:"name"`
+	Nickname     string       `json:"nickname,omitempty"`
+	Type         AircraftType `json:"type,omitempty"`
+	HasImage     bool         `json:"hasImage"`
+	ImageAssetID string       `json:"-"`
+	ImageType    string       `json:"-"` // MIME type: image/jpeg or image/png
+	ImageData    []byte       `json:"-"` // Binary image data, not serialized to JSON
+	Description  string       `json:"description,omitempty"`
+	CreatedAt    time.Time    `json:"createdAt"`
+	UpdatedAt    time.Time    `json:"updatedAt"`
 
 	// Related data (populated on details fetch)
 	Components       []AircraftComponent       `json:"components,omitempty"`
@@ -158,8 +159,9 @@ type UpdateAircraftParams struct {
 // SetAircraftImageParams defines parameters for uploading an aircraft image
 type SetAircraftImageParams struct {
 	AircraftID string
-	ImageType  string // "image/jpeg" or "image/png"
+	ImageType  string // "image/jpeg", "image/png", or "image/webp"
 	ImageData  []byte
+	UploadID   string // approved token from /api/images/upload
 }
 
 // SetComponentParams defines parameters for setting a component on an aircraft

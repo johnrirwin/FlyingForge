@@ -14,6 +14,7 @@ A complete drone news aggregator featuring an MCP (Model Context Protocol) serve
 - **Tag Inference**: Automatic tagging based on content keywords (FAA, DJI, FPV, etc.)
 - **Graceful Failure**: Partial results when individual sources fail
 - **Structured Logging**: JSON-formatted logs for easy parsing
+- **Synchronous Image Moderation**: Rekognition byte-based moderation gates avatar/aircraft/gear uploads before persistence
 
 ### Web App (React + TypeScript)
 - **Modern UI**: Clean, dark-themed interface with Tailwind CSS
@@ -119,6 +120,11 @@ The web app will be available at `http://localhost:5173`.
 | `RATE_LIMIT` | `1s` | Min delay between requests to same host |
 | `LOG_LEVEL` | `info` | Log level (debug, info, warn, error) |
 | `CORS_ORIGIN` | `*` | CORS allowed origin |
+| `IMAGE_MODERATION_ENABLED` | `true` | Enable synchronous Rekognition moderation pipeline |
+| `AWS_REGION` | (required) | AWS region for Rekognition |
+| `MODERATION_REJECT_CONFIDENCE` | `70` | Reject threshold for moderation labels |
+| `MODERATION_TIMEOUT` | `5s` | Per-image moderation timeout |
+| `MODERATION_PENDING_TTL` | `10m` | TTL for approved-but-not-yet-saved upload tokens |
 
 ### Web Environment Variables
 
@@ -153,6 +159,24 @@ Force refresh feeds. Request body:
 ```json
 {
   "sources": ["dronelife", "reddit-drones"]
+}
+```
+
+#### POST /api/images/upload
+Moderates an uploaded image (multipart/form-data `image`) synchronously and returns:
+```json
+{
+  "status": "APPROVED | REJECTED | PENDING_REVIEW",
+  "reason": "optional user-safe message",
+  "uploadId": "present only when APPROVED"
+}
+```
+
+#### POST /api/users/avatar
+Persists a custom avatar only after moderation approval:
+```json
+{
+  "uploadId": "approved token returned by /api/images/upload"
 }
 ```
 
@@ -200,6 +224,34 @@ Force refresh of feeds.
 ```json
 {
   "sources": ["dronelife", "dronedj"]
+}
+```
+
+## Image Moderation Notes
+
+- User-uploaded avatar, aircraft, and gear images are moderated synchronously with Rekognition `DetectModerationLabels` using raw bytes (no S3 required).
+- If moderation fails or times out, the API returns `PENDING_REVIEW`; frontend must treat this as not approved.
+- Unapproved bytes are never persisted.
+- Approved bytes are stored through a storage abstraction backed by `image_assets` (DB), so storage can be swapped to S3 later without changing moderation/UI flow.
+
+### Local Rekognition smoke test
+
+```bash
+AWS_PROFILE=dev AWS_REGION=us-east-1 make rekognition-test IMAGE=./testdata/avatar_safe.jpg
+```
+
+### IAM (least privilege)
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "rekognition:DetectModerationLabels",
+      "Resource": "*"
+    }
+  ]
 }
 ```
 

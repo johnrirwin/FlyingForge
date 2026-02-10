@@ -14,6 +14,7 @@ import (
 	"github.com/johnrirwin/flyingforge/internal/battery"
 	"github.com/johnrirwin/flyingforge/internal/database"
 	"github.com/johnrirwin/flyingforge/internal/equipment"
+	"github.com/johnrirwin/flyingforge/internal/images"
 	"github.com/johnrirwin/flyingforge/internal/inventory"
 	"github.com/johnrirwin/flyingforge/internal/logging"
 	"github.com/johnrirwin/flyingforge/internal/models"
@@ -35,12 +36,13 @@ type Server struct {
 	fcConfigStore    *database.FCConfigStore
 	inventoryStore   *database.InventoryStore
 	gearCatalogStore *database.GearCatalogStore
+	imageSvc         *images.Service
 	logger           *logging.Logger
 	server           *http.Server
 	refreshLimiter   ratelimit.RateLimiter
 }
 
-func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, radioSvc *radio.Service, batterySvc *battery.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, userStore *database.UserStore, aircraftStore *database.AircraftStore, fcConfigStore *database.FCConfigStore, inventoryStore *database.InventoryStore, gearCatalogStore *database.GearCatalogStore, refreshLimiter ratelimit.RateLimiter, logger *logging.Logger) *Server {
+func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, radioSvc *radio.Service, batterySvc *battery.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, userStore *database.UserStore, aircraftStore *database.AircraftStore, fcConfigStore *database.FCConfigStore, inventoryStore *database.InventoryStore, gearCatalogStore *database.GearCatalogStore, imageSvc *images.Service, refreshLimiter ratelimit.RateLimiter, logger *logging.Logger) *Server {
 	return &Server{
 		agg:              agg,
 		equipmentSvc:     equipmentSvc,
@@ -55,6 +57,7 @@ func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventoryS
 		fcConfigStore:    fcConfigStore,
 		inventoryStore:   inventoryStore,
 		gearCatalogStore: gearCatalogStore,
+		imageSvc:         imageSvc,
 		logger:           logger,
 		refreshLimiter:   refreshLimiter,
 	}
@@ -97,9 +100,15 @@ func (s *Server) Start(addr string) error {
 	}
 
 	// Profile routes (user profile management)
-	if s.userStore != nil && s.authMiddleware != nil {
-		profileAPI := NewProfileAPI(s.userStore, s.authMiddleware, s.logger)
+	if s.userStore != nil && s.authMiddleware != nil && s.imageSvc != nil {
+		profileAPI := NewProfileAPI(s.userStore, s.imageSvc, s.authMiddleware, s.logger)
 		profileAPI.RegisterRoutes(mux, s.corsMiddleware)
+	}
+
+	// Generic image moderation + serving endpoints
+	if s.authMiddleware != nil && s.imageSvc != nil {
+		imageAPI := NewImageAPI(s.imageSvc, s.authMiddleware, s.logger)
+		imageAPI.RegisterRoutes(mux, s.corsMiddleware)
 	}
 
 	// Pilot routes (social/pilot directory)
@@ -127,8 +136,8 @@ func (s *Server) Start(addr string) error {
 	}
 
 	// Admin routes (gear moderation, etc.)
-	if s.gearCatalogStore != nil && s.userStore != nil && s.authMiddleware != nil {
-		adminAPI := NewAdminAPI(s.gearCatalogStore, s.userStore, s.authMiddleware, s.logger)
+	if s.gearCatalogStore != nil && s.userStore != nil && s.authMiddleware != nil && s.imageSvc != nil {
+		adminAPI := NewAdminAPI(s.gearCatalogStore, s.userStore, s.imageSvc, s.authMiddleware, s.logger)
 		adminAPI.RegisterRoutes(mux, s.corsMiddleware)
 	}
 

@@ -32,14 +32,14 @@ func (s *UserStore) Create(ctx context.Context, params models.CreateUserParams) 
 		INSERT INTO users (email, display_name, call_sign, avatar_url, status, google_name, google_avatar_url, avatar_type)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id, email, display_name, avatar_url, status, created_at, updated_at, last_login_at,
-		          call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url
+		          call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url, avatar_image_asset_id
 	`
 
 	// Default avatar type to google
 	avatarType := models.AvatarTypeGoogle
 
 	user := &models.User{}
-	var avatarURL, callSign, googleName, googleAvatarURL, customAvatarURL, avatarTypeStr sql.NullString
+	var avatarURL, callSign, googleName, googleAvatarURL, customAvatarURL, avatarTypeStr, avatarImageAssetID sql.NullString
 	var lastLoginAt sql.NullTime
 
 	err := s.db.QueryRowContext(ctx, query,
@@ -48,7 +48,7 @@ func (s *UserStore) Create(ctx context.Context, params models.CreateUserParams) 
 	).Scan(
 		&user.ID, &user.Email, &user.DisplayName, &avatarURL,
 		&user.Status, &user.CreatedAt, &user.UpdatedAt, &lastLoginAt,
-		&callSign, &googleName, &googleAvatarURL, &avatarTypeStr, &customAvatarURL,
+		&callSign, &googleName, &googleAvatarURL, &avatarTypeStr, &customAvatarURL, &avatarImageAssetID,
 	)
 
 	if err != nil {
@@ -79,6 +79,9 @@ func (s *UserStore) Create(ctx context.Context, params models.CreateUserParams) 
 	if customAvatarURL.Valid {
 		user.CustomAvatarURL = customAvatarURL.String
 	}
+	if avatarImageAssetID.Valid {
+		user.AvatarImageID = avatarImageAssetID.String
+	}
 
 	return user, nil
 }
@@ -87,7 +90,7 @@ func (s *UserStore) Create(ctx context.Context, params models.CreateUserParams) 
 func (s *UserStore) GetByID(ctx context.Context, id string) (*models.User, error) {
 	query := `
 		SELECT id, email, display_name, avatar_url, status, created_at, updated_at, last_login_at,
-		       call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url,
+		       call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url, avatar_image_asset_id,
 		       profile_visibility, show_aircraft, allow_search, COALESCE(is_admin, FALSE), COALESCE(is_gear_admin, FALSE)
 		FROM users
 		WHERE id = $1
@@ -101,7 +104,7 @@ func (s *UserStore) GetByEmail(ctx context.Context, email string) (*models.User,
 	email = strings.ToLower(strings.TrimSpace(email))
 	query := `
 		SELECT id, email, display_name, avatar_url, status, created_at, updated_at, last_login_at,
-		       call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url,
+		       call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url, avatar_image_asset_id,
 		       profile_visibility, show_aircraft, allow_search, COALESCE(is_admin, FALSE), COALESCE(is_gear_admin, FALSE)
 		FROM users
 		WHERE LOWER(email) = $1
@@ -115,7 +118,7 @@ func (s *UserStore) GetByCallSign(ctx context.Context, callSign string) (*models
 	callSign = strings.ToLower(strings.TrimSpace(callSign))
 	query := `
 		SELECT id, email, display_name, avatar_url, status, created_at, updated_at, last_login_at,
-		       call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url,
+		       call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url, avatar_image_asset_id,
 		       profile_visibility, show_aircraft, allow_search, COALESCE(is_admin, FALSE), COALESCE(is_gear_admin, FALSE)
 		FROM users
 		WHERE LOWER(call_sign) = $1
@@ -170,6 +173,15 @@ func (s *UserStore) Update(ctx context.Context, id string, params models.UpdateU
 		args = append(args, *params.CustomAvatarURL)
 		argIdx++
 	}
+	if params.AvatarImageID != nil {
+		sets = append(sets, fmt.Sprintf("avatar_image_asset_id = $%d", argIdx))
+		if *params.AvatarImageID == "" {
+			args = append(args, nil)
+		} else {
+			args = append(args, *params.AvatarImageID)
+		}
+		argIdx++
+	}
 
 	if len(sets) == 0 {
 		return s.GetByID(ctx, id)
@@ -182,7 +194,7 @@ func (s *UserStore) Update(ctx context.Context, id string, params models.UpdateU
 		UPDATE users SET %s
 		WHERE id = $%d
 		RETURNING id, email, display_name, avatar_url, status, created_at, updated_at, last_login_at,
-		          call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url,
+		          call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url, avatar_image_asset_id,
 		          profile_visibility, show_aircraft, allow_search, COALESCE(is_admin, FALSE), COALESCE(is_gear_admin, FALSE)
 	`, strings.Join(sets, ", "), argIdx)
 
@@ -222,7 +234,7 @@ func (s *UserStore) AdminUpdate(ctx context.Context, id string, params models.Ad
 		UPDATE users SET %s
 		WHERE id = $%d
 		RETURNING id, email, display_name, avatar_url, status, created_at, updated_at, last_login_at,
-		          call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url,
+		          call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url, avatar_image_asset_id,
 		          profile_visibility, show_aircraft, allow_search, COALESCE(is_admin, FALSE), COALESCE(is_gear_admin, FALSE)
 	`, strings.Join(sets, ", "), argIdx)
 
@@ -236,11 +248,12 @@ func (s *UserStore) AdminClearAvatar(ctx context.Context, id string) (*models.Us
 		SET avatar_url = NULL,
 		    google_avatar_url = NULL,
 		    custom_avatar_url = NULL,
+		    avatar_image_asset_id = NULL,
 		    avatar_type = $1,
 		    updated_at = NOW()
 		WHERE id = $2
 		RETURNING id, email, display_name, avatar_url, status, created_at, updated_at, last_login_at,
-		          call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url,
+		          call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url, avatar_image_asset_id,
 		          profile_visibility, show_aircraft, allow_search, COALESCE(is_admin, FALSE), COALESCE(is_gear_admin, FALSE)
 	`
 
@@ -291,7 +304,7 @@ func (s *UserStore) SearchPilots(ctx context.Context, params models.PilotSearchP
 	// Search by callsign or display name (if set)
 	// Require callsign to be set for social visibility
 	sqlQuery := `
-		SELECT id, call_sign, display_name, google_name, avatar_url, google_avatar_url, avatar_type, custom_avatar_url
+		SELECT id, call_sign, display_name, google_name, avatar_url, google_avatar_url, avatar_type, custom_avatar_url, avatar_image_asset_id
 		FROM users
 		WHERE status = 'active' 
 		  AND call_sign IS NOT NULL 
@@ -310,16 +323,18 @@ func (s *UserStore) SearchPilots(ctx context.Context, params models.PilotSearchP
 
 	var results []models.PilotSearchResult
 	for rows.Next() {
-		var callSign, displayName, googleName, avatarURL, googleAvatarURL, avatarType, customAvatarURL sql.NullString
+		var callSign, displayName, googleName, avatarURL, googleAvatarURL, avatarType, customAvatarURL, avatarImageAssetID sql.NullString
 		var id string
 
-		if err := rows.Scan(&id, &callSign, &displayName, &googleName, &avatarURL, &googleAvatarURL, &avatarType, &customAvatarURL); err != nil {
+		if err := rows.Scan(&id, &callSign, &displayName, &googleName, &avatarURL, &googleAvatarURL, &avatarType, &customAvatarURL, &avatarImageAssetID); err != nil {
 			return nil, err
 		}
 
 		// Compute effective avatar URL
 		effectiveAvatarURL := ""
-		if avatarType.Valid && avatarType.String == string(models.AvatarTypeCustom) && customAvatarURL.Valid {
+		if avatarType.Valid && avatarType.String == string(models.AvatarTypeCustom) && avatarImageAssetID.Valid {
+			effectiveAvatarURL = "/api/images/" + avatarImageAssetID.String
+		} else if avatarType.Valid && avatarType.String == string(models.AvatarTypeCustom) && customAvatarURL.Valid {
 			effectiveAvatarURL = customAvatarURL.String
 		} else if googleAvatarURL.Valid {
 			effectiveAvatarURL = googleAvatarURL.String
@@ -386,7 +401,7 @@ func (s *UserStore) List(ctx context.Context, params models.UserFilterParams) (*
 	args = append(args, limit, offset)
 	query := fmt.Sprintf(`
 		SELECT id, email, display_name, avatar_url, status, created_at, updated_at, last_login_at,
-		       call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url,
+		       call_sign, google_name, google_avatar_url, avatar_type, custom_avatar_url, avatar_image_asset_id,
 		       profile_visibility, show_aircraft, allow_search, COALESCE(is_admin, FALSE), COALESCE(is_gear_admin, FALSE)
 		FROM users %s
 		ORDER BY created_at DESC
@@ -420,7 +435,7 @@ func (s *UserStore) List(ctx context.Context, params models.UserFilterParams) (*
 
 func (s *UserStore) scanUser(row *sql.Row) (*models.User, error) {
 	user := &models.User{}
-	var avatarURL, callSign, googleName, googleAvatarURL, avatarType, customAvatarURL sql.NullString
+	var avatarURL, callSign, googleName, googleAvatarURL, avatarType, customAvatarURL, avatarImageAssetID sql.NullString
 	var profileVisibility sql.NullString
 	var showAircraft, allowSearch sql.NullBool
 	var lastLoginAt sql.NullTime
@@ -429,7 +444,7 @@ func (s *UserStore) scanUser(row *sql.Row) (*models.User, error) {
 	err := row.Scan(
 		&user.ID, &user.Email, &user.DisplayName, &avatarURL,
 		&user.Status, &user.CreatedAt, &user.UpdatedAt, &lastLoginAt,
-		&callSign, &googleName, &googleAvatarURL, &avatarType, &customAvatarURL,
+		&callSign, &googleName, &googleAvatarURL, &avatarType, &customAvatarURL, &avatarImageAssetID,
 		&profileVisibility, &showAircraft, &allowSearch, &isAdmin, &isGearAdmin,
 	)
 
@@ -463,6 +478,9 @@ func (s *UserStore) scanUser(row *sql.Row) (*models.User, error) {
 	if customAvatarURL.Valid {
 		user.CustomAvatarURL = customAvatarURL.String
 	}
+	if avatarImageAssetID.Valid {
+		user.AvatarImageID = avatarImageAssetID.String
+	}
 
 	// Set social settings with defaults
 	user.SocialSettings = models.DefaultSocialSettings()
@@ -481,7 +499,7 @@ func (s *UserStore) scanUser(row *sql.Row) (*models.User, error) {
 
 func (s *UserStore) scanUserFromRows(rows *sql.Rows) (*models.User, error) {
 	user := &models.User{}
-	var avatarURL, callSign, googleName, googleAvatarURL, avatarType, customAvatarURL sql.NullString
+	var avatarURL, callSign, googleName, googleAvatarURL, avatarType, customAvatarURL, avatarImageAssetID sql.NullString
 	var profileVisibility sql.NullString
 	var showAircraft, allowSearch sql.NullBool
 	var lastLoginAt sql.NullTime
@@ -490,7 +508,7 @@ func (s *UserStore) scanUserFromRows(rows *sql.Rows) (*models.User, error) {
 	err := rows.Scan(
 		&user.ID, &user.Email, &user.DisplayName, &avatarURL,
 		&user.Status, &user.CreatedAt, &user.UpdatedAt, &lastLoginAt,
-		&callSign, &googleName, &googleAvatarURL, &avatarType, &customAvatarURL,
+		&callSign, &googleName, &googleAvatarURL, &avatarType, &customAvatarURL, &avatarImageAssetID,
 		&profileVisibility, &showAircraft, &allowSearch, &isAdmin, &isGearAdmin,
 	)
 
@@ -520,6 +538,9 @@ func (s *UserStore) scanUserFromRows(rows *sql.Rows) (*models.User, error) {
 	}
 	if customAvatarURL.Valid {
 		user.CustomAvatarURL = customAvatarURL.String
+	}
+	if avatarImageAssetID.Valid {
+		user.AvatarImageID = avatarImageAssetID.String
 	}
 
 	// Set social settings with defaults
@@ -859,7 +880,7 @@ func (s *UserStore) GetFollowers(ctx context.Context, userID string, limit, offs
 
 	// Get follower user details - only users with callsigns for privacy
 	query := `
-		SELECT follower.id, follower.call_sign, follower.display_name, follower.avatar_url, follower.google_avatar_url, follower.avatar_type, follower.custom_avatar_url
+		SELECT follower.id, follower.call_sign, follower.display_name, follower.avatar_url, follower.google_avatar_url, follower.avatar_type, follower.custom_avatar_url, follower.avatar_image_asset_id
 		FROM follows f
 		JOIN users follower ON follower.id = f.follower_user_id
 		WHERE f.followed_user_id = $1
@@ -877,21 +898,13 @@ func (s *UserStore) GetFollowers(ctx context.Context, userID string, limit, offs
 	var pilots []models.PilotSummary
 	for rows.Next() {
 		var id string
-		var callSign, displayName, avatarURL, googleAvatarURL, avatarType, customAvatarURL sql.NullString
+		var callSign, displayName, avatarURL, googleAvatarURL, avatarType, customAvatarURL, avatarImageAssetID sql.NullString
 
-		if err := rows.Scan(&id, &callSign, &displayName, &avatarURL, &googleAvatarURL, &avatarType, &customAvatarURL); err != nil {
+		if err := rows.Scan(&id, &callSign, &displayName, &avatarURL, &googleAvatarURL, &avatarType, &customAvatarURL, &avatarImageAssetID); err != nil {
 			return nil, err
 		}
 
-		// Compute effective avatar URL
-		effectiveAvatarURL := ""
-		if avatarType.Valid && avatarType.String == string(models.AvatarTypeCustom) && customAvatarURL.Valid {
-			effectiveAvatarURL = customAvatarURL.String
-		} else if googleAvatarURL.Valid {
-			effectiveAvatarURL = googleAvatarURL.String
-		} else if avatarURL.Valid {
-			effectiveAvatarURL = avatarURL.String
-		}
+		effectiveAvatarURL := effectiveAvatarURLFromFields(avatarType, customAvatarURL, avatarImageAssetID, googleAvatarURL, avatarURL)
 
 		pilots = append(pilots, models.PilotSummary{
 			ID:                 id,
@@ -929,7 +942,7 @@ func (s *UserStore) GetFollowing(ctx context.Context, userID string, limit, offs
 
 	// Get following user details - only users with callsigns for privacy
 	query := `
-		SELECT followed.id, followed.call_sign, followed.display_name, followed.avatar_url, followed.google_avatar_url, followed.avatar_type, followed.custom_avatar_url
+		SELECT followed.id, followed.call_sign, followed.display_name, followed.avatar_url, followed.google_avatar_url, followed.avatar_type, followed.custom_avatar_url, followed.avatar_image_asset_id
 		FROM follows f
 		JOIN users followed ON followed.id = f.followed_user_id
 		WHERE f.follower_user_id = $1
@@ -947,21 +960,13 @@ func (s *UserStore) GetFollowing(ctx context.Context, userID string, limit, offs
 	var pilots []models.PilotSummary
 	for rows.Next() {
 		var id string
-		var callSign, displayName, avatarURL, googleAvatarURL, avatarType, customAvatarURL sql.NullString
+		var callSign, displayName, avatarURL, googleAvatarURL, avatarType, customAvatarURL, avatarImageAssetID sql.NullString
 
-		if err := rows.Scan(&id, &callSign, &displayName, &avatarURL, &googleAvatarURL, &avatarType, &customAvatarURL); err != nil {
+		if err := rows.Scan(&id, &callSign, &displayName, &avatarURL, &googleAvatarURL, &avatarType, &customAvatarURL, &avatarImageAssetID); err != nil {
 			return nil, err
 		}
 
-		// Compute effective avatar URL
-		effectiveAvatarURL := ""
-		if avatarType.Valid && avatarType.String == string(models.AvatarTypeCustom) && customAvatarURL.Valid {
-			effectiveAvatarURL = customAvatarURL.String
-		} else if googleAvatarURL.Valid {
-			effectiveAvatarURL = googleAvatarURL.String
-		} else if avatarURL.Valid {
-			effectiveAvatarURL = avatarURL.String
-		}
+		effectiveAvatarURL := effectiveAvatarURLFromFields(avatarType, customAvatarURL, avatarImageAssetID, googleAvatarURL, avatarURL)
 
 		pilots = append(pilots, models.PilotSummary{
 			ID:                 id,
@@ -996,7 +1001,7 @@ func (s *UserStore) GetFeaturedPilots(ctx context.Context, excludeUserID string,
 	// Get most followed pilots (with public profiles and callsigns)
 	// Respect privacy settings: only show active users who allow search
 	popularQuery := `
-		SELECT u.id, u.call_sign, u.display_name, u.avatar_url, u.google_avatar_url, u.avatar_type, u.custom_avatar_url,
+		SELECT u.id, u.call_sign, u.display_name, u.avatar_url, u.google_avatar_url, u.avatar_type, u.custom_avatar_url, u.avatar_image_asset_id,
 			   COALESCE(follower_counts.cnt, 0) as follower_count
 		FROM users u
 		LEFT JOIN (
@@ -1023,21 +1028,14 @@ func (s *UserStore) GetFeaturedPilots(ctx context.Context, excludeUserID string,
 	var popular []models.PilotSummaryWithFollowers
 	for rows.Next() {
 		var id string
-		var callSign, displayName, avatarURL, googleAvatarURL, avatarType, customAvatarURL sql.NullString
+		var callSign, displayName, avatarURL, googleAvatarURL, avatarType, customAvatarURL, avatarImageAssetID sql.NullString
 		var followerCount int
 
-		if err := rows.Scan(&id, &callSign, &displayName, &avatarURL, &googleAvatarURL, &avatarType, &customAvatarURL, &followerCount); err != nil {
+		if err := rows.Scan(&id, &callSign, &displayName, &avatarURL, &googleAvatarURL, &avatarType, &customAvatarURL, &avatarImageAssetID, &followerCount); err != nil {
 			return nil, err
 		}
 
-		effectiveAvatarURL := ""
-		if avatarType.Valid && avatarType.String == string(models.AvatarTypeCustom) && customAvatarURL.Valid {
-			effectiveAvatarURL = customAvatarURL.String
-		} else if googleAvatarURL.Valid {
-			effectiveAvatarURL = googleAvatarURL.String
-		} else if avatarURL.Valid {
-			effectiveAvatarURL = avatarURL.String
-		}
+		effectiveAvatarURL := effectiveAvatarURLFromFields(avatarType, customAvatarURL, avatarImageAssetID, googleAvatarURL, avatarURL)
 
 		popular = append(popular, models.PilotSummaryWithFollowers{
 			PilotSummary: models.PilotSummary{
@@ -1057,7 +1055,7 @@ func (s *UserStore) GetFeaturedPilots(ctx context.Context, excludeUserID string,
 	// Get recently joined pilots (with callsigns)
 	// Respect privacy settings: only show active users who allow search
 	recentQuery := `
-		SELECT u.id, u.call_sign, u.display_name, u.avatar_url, u.google_avatar_url, u.avatar_type, u.custom_avatar_url
+		SELECT u.id, u.call_sign, u.display_name, u.avatar_url, u.google_avatar_url, u.avatar_type, u.custom_avatar_url, u.avatar_image_asset_id
 		FROM users u
 		WHERE u.call_sign IS NOT NULL AND u.call_sign != ''
 		  AND u.status = 'active'
@@ -1076,20 +1074,13 @@ func (s *UserStore) GetFeaturedPilots(ctx context.Context, excludeUserID string,
 	var recent []models.PilotSummary
 	for rows2.Next() {
 		var id string
-		var callSign, displayName, avatarURL, googleAvatarURL, avatarType, customAvatarURL sql.NullString
+		var callSign, displayName, avatarURL, googleAvatarURL, avatarType, customAvatarURL, avatarImageAssetID sql.NullString
 
-		if err := rows2.Scan(&id, &callSign, &displayName, &avatarURL, &googleAvatarURL, &avatarType, &customAvatarURL); err != nil {
+		if err := rows2.Scan(&id, &callSign, &displayName, &avatarURL, &googleAvatarURL, &avatarType, &customAvatarURL, &avatarImageAssetID); err != nil {
 			return nil, err
 		}
 
-		effectiveAvatarURL := ""
-		if avatarType.Valid && avatarType.String == string(models.AvatarTypeCustom) && customAvatarURL.Valid {
-			effectiveAvatarURL = customAvatarURL.String
-		} else if googleAvatarURL.Valid {
-			effectiveAvatarURL = googleAvatarURL.String
-		} else if avatarURL.Valid {
-			effectiveAvatarURL = avatarURL.String
-		}
+		effectiveAvatarURL := effectiveAvatarURLFromFields(avatarType, customAvatarURL, avatarImageAssetID, googleAvatarURL, avatarURL)
 
 		recent = append(recent, models.PilotSummary{
 			ID:                 id,
@@ -1132,4 +1123,20 @@ func (s *UserStore) HardDelete(ctx context.Context, userID string) error {
 	}
 
 	return nil
+}
+
+func effectiveAvatarURLFromFields(avatarType, customAvatarURL, avatarImageAssetID, googleAvatarURL, avatarURL sql.NullString) string {
+	if avatarType.Valid && avatarType.String == string(models.AvatarTypeCustom) && avatarImageAssetID.Valid {
+		return "/api/images/" + avatarImageAssetID.String
+	}
+	if avatarType.Valid && avatarType.String == string(models.AvatarTypeCustom) && customAvatarURL.Valid {
+		return customAvatarURL.String
+	}
+	if googleAvatarURL.Valid {
+		return googleAvatarURL.String
+	}
+	if avatarURL.Valid {
+		return avatarURL.String
+	}
+	return ""
 }

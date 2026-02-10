@@ -120,7 +120,7 @@ func (s *GearCatalogStore) Get(ctx context.Context, id string) (*models.GearCata
 	query := `
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key,
-			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
 			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
@@ -180,7 +180,7 @@ func (s *GearCatalogStore) GetByCanonicalKey(ctx context.Context, canonicalKey s
 	query := `
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key,
-			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
 			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
@@ -312,7 +312,7 @@ func (s *GearCatalogStore) Search(ctx context.Context, params models.GearCatalog
 	query := fmt.Sprintf(`
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key,
-			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
 			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
@@ -391,7 +391,7 @@ func (s *GearCatalogStore) FindNearMatches(ctx context.Context, gearType models.
 	query := `
 		SELECT id, gear_type, brand, model, variant, specs, source,
 			   created_by_user_id, status, canonical_key,
-			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM updated_at)*1000)::bigint ELSE NULL END as image_url,
+			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM updated_at)*1000)::bigint ELSE NULL END as image_url,
 			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
@@ -452,7 +452,7 @@ func (s *GearCatalogStore) findNearMatchesFallback(ctx context.Context, gearType
 	query := `
 		SELECT id, gear_type, brand, model, variant, specs, source,
 			   created_by_user_id, status, canonical_key,
-			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
 			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count
@@ -539,7 +539,7 @@ func (s *GearCatalogStore) GetPopular(ctx context.Context, gearType models.GearT
 	query := `
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key,
-			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
 			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
@@ -744,7 +744,7 @@ func (s *GearCatalogStore) AdminSearch(ctx context.Context, params models.AdminG
 	query := fmt.Sprintf(`
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key,
-			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
 			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
@@ -922,6 +922,9 @@ func (s *GearCatalogStore) AdminUpdate(ctx context.Context, id string, adminUser
 		argIdx++
 		// Update image curation fields
 		if *params.ImageURL != "" {
+			sets = append(sets, "image_asset_id = NULL")
+			sets = append(sets, "image_data = NULL")
+			sets = append(sets, "image_type = NULL")
 			sets = append(sets, fmt.Sprintf("image_status = $%d", argIdx))
 			args = append(args, models.ImageStatusApproved)
 			argIdx++
@@ -936,6 +939,7 @@ func (s *GearCatalogStore) AdminUpdate(ctx context.Context, id string, adminUser
 			argIdx++
 			sets = append(sets, "image_curated_by_user_id = NULL")
 			sets = append(sets, "image_curated_at = NULL")
+			sets = append(sets, "image_asset_id = NULL")
 			sets = append(sets, "image_data = NULL")
 			sets = append(sets, "image_type = NULL")
 		}
@@ -961,11 +965,21 @@ func (s *GearCatalogStore) AdminUpdate(ctx context.Context, id string, adminUser
 	return s.Get(ctx, id)
 }
 
-// SetImage stores the binary image data for a gear catalog item (admin only)
-func (s *GearCatalogStore) SetImage(ctx context.Context, id string, adminUserID string, imageType string, imageData []byte) error {
+// SetImage stores an approved image asset reference for a gear catalog item (admin only).
+// Returns any previous image asset ID for cleanup.
+func (s *GearCatalogStore) SetImage(ctx context.Context, id string, adminUserID string, imageType string, imageAssetID string) (string, error) {
+	var previousAssetID sql.NullString
+	if err := s.db.QueryRowContext(ctx, `SELECT image_asset_id FROM gear_catalog WHERE id = $1`, id).Scan(&previousAssetID); err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("gear catalog item not found")
+		}
+		return "", fmt.Errorf("failed to fetch existing gear image reference: %w", err)
+	}
+
 	query := `
 		UPDATE gear_catalog 
-		SET image_data = $1, 
+		SET image_asset_id = $1,
+		    image_data = NULL,
 		    image_type = $2, 
 		    image_url = NULL,
 		    image_status = $3,
@@ -974,28 +988,32 @@ func (s *GearCatalogStore) SetImage(ctx context.Context, id string, adminUserID 
 		    updated_at = NOW()
 		WHERE id = $5
 	`
-	result, err := s.db.ExecContext(ctx, query, imageData, imageType, models.ImageStatusApproved, adminUserID, id)
+	result, err := s.db.ExecContext(ctx, query, imageAssetID, imageType, models.ImageStatusApproved, adminUserID, id)
 	if err != nil {
-		return fmt.Errorf("failed to set gear image: %w", err)
+		return "", fmt.Errorf("failed to set gear image: %w", err)
 	}
 
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
-		return fmt.Errorf("gear catalog item not found")
+		return "", fmt.Errorf("gear catalog item not found")
 	}
 
-	return nil
+	if previousAssetID.Valid {
+		return previousAssetID.String, nil
+	}
+	return "", nil
 }
 
 // GetImage retrieves the binary image data for a gear catalog item
 func (s *GearCatalogStore) GetImage(ctx context.Context, id string) ([]byte, string, error) {
 	query := `
-		SELECT image_data, image_type 
-		FROM gear_catalog 
-		WHERE id = $1 AND image_data IS NOT NULL
+		SELECT COALESCE(ia.image_bytes, gc.image_data), gc.image_type
+		FROM gear_catalog gc
+		LEFT JOIN image_assets ia ON ia.id = gc.image_asset_id AND ia.status = 'APPROVED'
+		WHERE gc.id = $1 AND ((gc.image_asset_id IS NOT NULL AND ia.id IS NOT NULL) OR gc.image_data IS NOT NULL)
 	`
 	var imageData []byte
-	var imageType string
+	var imageType sql.NullString
 	err := s.db.QueryRowContext(ctx, query, id).Scan(&imageData, &imageType)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -1004,12 +1022,24 @@ func (s *GearCatalogStore) GetImage(ctx context.Context, id string) ([]byte, str
 		return nil, "", fmt.Errorf("failed to get gear image: %w", err)
 	}
 
-	return imageData, imageType, nil
+	return imageData, imageType.String, nil
 }
 
 // HasImage checks if a gear catalog item has an uploaded image
 func (s *GearCatalogStore) HasImage(ctx context.Context, id string) (bool, error) {
-	query := `SELECT image_data IS NOT NULL FROM gear_catalog WHERE id = $1`
+	query := `
+		SELECT (
+			image_data IS NOT NULL
+			OR EXISTS (
+				SELECT 1
+				FROM image_assets ia
+				WHERE ia.id = gear_catalog.image_asset_id
+				  AND ia.status = 'APPROVED'
+			)
+		)
+		FROM gear_catalog
+		WHERE id = $1
+	`
 	var hasImage bool
 	err := s.db.QueryRowContext(ctx, query, id).Scan(&hasImage)
 	if err != nil {
@@ -1021,11 +1051,21 @@ func (s *GearCatalogStore) HasImage(ctx context.Context, id string) (bool, error
 	return hasImage, nil
 }
 
-// DeleteImage removes the image from a gear catalog item (admin only)
-func (s *GearCatalogStore) DeleteImage(ctx context.Context, id string) error {
+// DeleteImage removes the image from a gear catalog item (admin only).
+// Returns previous image asset ID for cleanup.
+func (s *GearCatalogStore) DeleteImage(ctx context.Context, id string) (string, error) {
+	var previousAssetID sql.NullString
+	if err := s.db.QueryRowContext(ctx, `SELECT image_asset_id FROM gear_catalog WHERE id = $1`, id).Scan(&previousAssetID); err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("catalog item not found: %s", id)
+		}
+		return "", fmt.Errorf("failed to fetch existing gear image reference: %w", err)
+	}
+
 	query := `
 		UPDATE gear_catalog 
-		SET image_data = NULL, 
+		SET image_asset_id = NULL,
+		    image_data = NULL, 
 		    image_type = NULL, 
 		    image_status = $1,
 		    image_curated_by_user_id = NULL,
@@ -1035,15 +1075,18 @@ func (s *GearCatalogStore) DeleteImage(ctx context.Context, id string) error {
 	`
 	result, err := s.db.ExecContext(ctx, query, models.ImageStatusMissing, id)
 	if err != nil {
-		return fmt.Errorf("failed to delete gear image: %w", err)
+		return "", fmt.Errorf("failed to delete gear image: %w", err)
 	}
 
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
-		return fmt.Errorf("catalog item not found: %s", id)
+		return "", fmt.Errorf("catalog item not found: %s", id)
 	}
 
-	return nil
+	if previousAssetID.Valid {
+		return previousAssetID.String, nil
+	}
+	return "", nil
 }
 
 // AdminDelete permanently deletes a gear catalog item (admin only).

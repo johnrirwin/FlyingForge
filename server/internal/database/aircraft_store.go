@@ -26,7 +26,9 @@ func (s *AircraftStore) Create(ctx context.Context, userID string, params models
 	query := `
 		INSERT INTO aircraft (user_id, name, nickname, type, description)
 		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, user_id, name, nickname, type, image_data IS NOT NULL as has_image, image_type, description, created_at, updated_at
+		RETURNING id, user_id, name, nickname, type,
+		          (image_asset_id IS NOT NULL OR image_data IS NOT NULL) as has_image,
+		          image_asset_id, image_type, description, created_at, updated_at
 	`
 
 	aircraft := &models.Aircraft{}
@@ -45,12 +47,12 @@ func (s *AircraftStore) Create(ctx context.Context, userID string, params models
 		description = sql.NullString{String: params.Description, Valid: true}
 	}
 
-	var scanUserID, scanNickname, scanType, scanImageType, scanDescription sql.NullString
+	var scanUserID, scanNickname, scanType, scanImageAssetID, scanImageType, scanDescription sql.NullString
 	err := s.db.QueryRowContext(ctx, query,
 		userIDNull, params.Name, nickname, aircraftType, description,
 	).Scan(
 		&aircraft.ID, &scanUserID, &aircraft.Name, &scanNickname,
-		&scanType, &aircraft.HasImage, &scanImageType, &scanDescription,
+		&scanType, &aircraft.HasImage, &scanImageAssetID, &scanImageType, &scanDescription,
 		&aircraft.CreatedAt, &aircraft.UpdatedAt,
 	)
 	if err != nil {
@@ -60,6 +62,7 @@ func (s *AircraftStore) Create(ctx context.Context, userID string, params models
 	aircraft.UserID = scanUserID.String
 	aircraft.Nickname = scanNickname.String
 	aircraft.Type = models.AircraftType(scanType.String)
+	aircraft.ImageAssetID = scanImageAssetID.String
 	aircraft.ImageType = scanImageType.String
 	aircraft.Description = scanDescription.String
 
@@ -69,17 +72,19 @@ func (s *AircraftStore) Create(ctx context.Context, userID string, params models
 // Get retrieves an aircraft by ID
 func (s *AircraftStore) Get(ctx context.Context, id string, userID string) (*models.Aircraft, error) {
 	query := `
-		SELECT id, user_id, name, nickname, type, image_data IS NOT NULL as has_image, image_type, description, created_at, updated_at
+		SELECT id, user_id, name, nickname, type,
+		       (image_asset_id IS NOT NULL OR image_data IS NOT NULL) as has_image,
+		       image_asset_id, image_type, description, created_at, updated_at
 		FROM aircraft
 		WHERE id = $1 AND (user_id = $2 OR user_id IS NULL)
 	`
 
 	aircraft := &models.Aircraft{}
-	var scanUserID, scanNickname, scanType, scanImageType, scanDescription sql.NullString
+	var scanUserID, scanNickname, scanType, scanImageAssetID, scanImageType, scanDescription sql.NullString
 
 	err := s.db.QueryRowContext(ctx, query, id, userID).Scan(
 		&aircraft.ID, &scanUserID, &aircraft.Name, &scanNickname,
-		&scanType, &aircraft.HasImage, &scanImageType, &scanDescription,
+		&scanType, &aircraft.HasImage, &scanImageAssetID, &scanImageType, &scanDescription,
 		&aircraft.CreatedAt, &aircraft.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -92,6 +97,7 @@ func (s *AircraftStore) Get(ctx context.Context, id string, userID string) (*mod
 	aircraft.UserID = scanUserID.String
 	aircraft.Nickname = scanNickname.String
 	aircraft.Type = models.AircraftType(scanType.String)
+	aircraft.ImageAssetID = scanImageAssetID.String
 	aircraft.ImageType = scanImageType.String
 	aircraft.Description = scanDescription.String
 
@@ -129,17 +135,19 @@ func (s *AircraftStore) Update(ctx context.Context, userID string, params models
 	query := fmt.Sprintf(`
 		UPDATE aircraft SET %s
 		WHERE id = $%d AND user_id = $%d
-		RETURNING id, user_id, name, nickname, type, image_data IS NOT NULL as has_image, image_type, description, created_at, updated_at
+		RETURNING id, user_id, name, nickname, type,
+		          (image_asset_id IS NOT NULL OR image_data IS NOT NULL) as has_image,
+		          image_asset_id, image_type, description, created_at, updated_at
 	`, joinStrings(setClauses, ", "), argIndex, argIndex+1)
 
 	args = append(args, params.ID, userID)
 
 	aircraft := &models.Aircraft{}
-	var scanUserID, scanNickname, scanType, scanImageType, scanDescription sql.NullString
+	var scanUserID, scanNickname, scanType, scanImageAssetID, scanImageType, scanDescription sql.NullString
 
 	err := s.db.QueryRowContext(ctx, query, args...).Scan(
 		&aircraft.ID, &scanUserID, &aircraft.Name, &scanNickname,
-		&scanType, &aircraft.HasImage, &scanImageType, &scanDescription,
+		&scanType, &aircraft.HasImage, &scanImageAssetID, &scanImageType, &scanDescription,
 		&aircraft.CreatedAt, &aircraft.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -152,6 +160,7 @@ func (s *AircraftStore) Update(ctx context.Context, userID string, params models
 	aircraft.UserID = scanUserID.String
 	aircraft.Nickname = scanNickname.String
 	aircraft.Type = models.AircraftType(scanType.String)
+	aircraft.ImageAssetID = scanImageAssetID.String
 	aircraft.ImageType = scanImageType.String
 	aircraft.Description = scanDescription.String
 
@@ -190,7 +199,9 @@ func (s *AircraftStore) List(ctx context.Context, userID string, params models.A
 
 	// List query
 	query := `
-		SELECT id, user_id, name, nickname, type, image_data IS NOT NULL as has_image, image_type, description, created_at, updated_at
+		SELECT id, user_id, name, nickname, type,
+		       (image_asset_id IS NOT NULL OR image_data IS NOT NULL) as has_image,
+		       image_asset_id, image_type, description, created_at, updated_at
 		FROM aircraft
 		WHERE user_id = $1
 	`
@@ -227,11 +238,11 @@ func (s *AircraftStore) List(ctx context.Context, userID string, params models.A
 	aircraft := []models.Aircraft{}
 	for rows.Next() {
 		var a models.Aircraft
-		var scanUserID, scanNickname, scanType, scanImageType, scanDescription sql.NullString
+		var scanUserID, scanNickname, scanType, scanImageAssetID, scanImageType, scanDescription sql.NullString
 
 		if err := rows.Scan(
 			&a.ID, &scanUserID, &a.Name, &scanNickname,
-			&scanType, &a.HasImage, &scanImageType, &scanDescription,
+			&scanType, &a.HasImage, &scanImageAssetID, &scanImageType, &scanDescription,
 			&a.CreatedAt, &a.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan aircraft: %w", err)
@@ -240,6 +251,7 @@ func (s *AircraftStore) List(ctx context.Context, userID string, params models.A
 		a.UserID = scanUserID.String
 		a.Nickname = scanNickname.String
 		a.Type = models.AircraftType(scanType.String)
+		a.ImageAssetID = scanImageAssetID.String
 		a.ImageType = scanImageType.String
 		a.Description = scanDescription.String
 
@@ -255,7 +267,9 @@ func (s *AircraftStore) List(ctx context.Context, userID string, params models.A
 // ListByUserID returns all aircraft for a user (simplified version for public profiles)
 func (s *AircraftStore) ListByUserID(ctx context.Context, userID string) ([]*models.Aircraft, error) {
 	query := `
-		SELECT id, user_id, name, nickname, type, image_data IS NOT NULL as has_image, image_type, description, created_at, updated_at
+		SELECT id, user_id, name, nickname, type,
+		       (image_asset_id IS NOT NULL OR image_data IS NOT NULL) as has_image,
+		       image_asset_id, image_type, description, created_at, updated_at
 		FROM aircraft
 		WHERE user_id = $1
 		ORDER BY created_at DESC
@@ -270,11 +284,11 @@ func (s *AircraftStore) ListByUserID(ctx context.Context, userID string) ([]*mod
 	var aircraft []*models.Aircraft
 	for rows.Next() {
 		a := &models.Aircraft{}
-		var scanUserID, scanNickname, scanType, scanImageType, scanDescription sql.NullString
+		var scanUserID, scanNickname, scanType, scanImageAssetID, scanImageType, scanDescription sql.NullString
 
 		if err := rows.Scan(
 			&a.ID, &scanUserID, &a.Name, &scanNickname,
-			&scanType, &a.HasImage, &scanImageType, &scanDescription,
+			&scanType, &a.HasImage, &scanImageAssetID, &scanImageType, &scanDescription,
 			&a.CreatedAt, &a.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan aircraft: %w", err)
@@ -283,6 +297,7 @@ func (s *AircraftStore) ListByUserID(ctx context.Context, userID string) ([]*mod
 		a.UserID = scanUserID.String
 		a.Nickname = scanNickname.String
 		a.Type = models.AircraftType(scanType.String)
+		a.ImageAssetID = scanImageAssetID.String
 		a.ImageType = scanImageType.String
 		a.Description = scanDescription.String
 
@@ -547,28 +562,49 @@ func (s *AircraftStore) GetDetails(ctx context.Context, id string, userID string
 	}, nil
 }
 
-// SetImage sets the image data for an aircraft
-func (s *AircraftStore) SetImage(ctx context.Context, id string, userID string, imageType string, imageData []byte) error {
+// SetImage stores a new approved image asset reference for an aircraft.
+// Returns any previous image asset ID so callers can clean up orphaned assets.
+func (s *AircraftStore) SetImage(ctx context.Context, id string, userID string, imageType string, imageAssetID string) (string, error) {
+	var previousAssetID sql.NullString
+	if err := s.db.QueryRowContext(ctx, `SELECT image_asset_id FROM aircraft WHERE id = $1 AND user_id = $2`, id, userID).Scan(&previousAssetID); err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("aircraft not found")
+		}
+		return "", fmt.Errorf("failed to fetch existing aircraft image reference: %w", err)
+	}
+
 	query := `
-		UPDATE aircraft SET image_data = $1, image_type = $2, updated_at = NOW()
+		UPDATE aircraft
+		SET image_asset_id = $1,
+		    image_data = NULL,
+		    image_type = $2,
+		    updated_at = NOW()
 		WHERE id = $3 AND user_id = $4
 	`
-	result, err := s.db.ExecContext(ctx, query, imageData, imageType, id, userID)
+	result, err := s.db.ExecContext(ctx, query, imageAssetID, imageType, id, userID)
 	if err != nil {
-		return fmt.Errorf("failed to set aircraft image: %w", err)
+		return "", fmt.Errorf("failed to set aircraft image: %w", err)
 	}
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
-		return fmt.Errorf("aircraft not found")
+		return "", fmt.Errorf("aircraft not found")
 	}
-	return nil
+
+	if previousAssetID.Valid {
+		return previousAssetID.String, nil
+	}
+	return "", nil
 }
 
 // GetImage retrieves the image data for an aircraft
 func (s *AircraftStore) GetImage(ctx context.Context, id string, userID string) ([]byte, string, error) {
 	query := `
-		SELECT image_data, image_type FROM aircraft
-		WHERE id = $1 AND (user_id = $2 OR user_id IS NULL) AND image_data IS NOT NULL
+		SELECT COALESCE(ia.image_bytes, a.image_data), a.image_type
+		FROM aircraft a
+		LEFT JOIN image_assets ia ON ia.id = a.image_asset_id AND ia.status = 'APPROVED'
+		WHERE a.id = $1
+		  AND (a.user_id = $2 OR a.user_id IS NULL)
+		  AND ((a.image_asset_id IS NOT NULL AND ia.id IS NOT NULL) OR a.image_data IS NOT NULL)
 	`
 	var imageData []byte
 	var imageType sql.NullString
@@ -588,11 +624,12 @@ func (s *AircraftStore) GetImage(ctx context.Context, id string, userID string) 
 // This is used for public pilot profiles - checks owner's social settings
 func (s *AircraftStore) GetPublicImage(ctx context.Context, aircraftID string) ([]byte, string, error) {
 	query := `
-		SELECT a.image_data, a.image_type 
+		SELECT COALESCE(ia.image_bytes, a.image_data), a.image_type 
 		FROM aircraft a
+		LEFT JOIN image_assets ia ON ia.id = a.image_asset_id AND ia.status = 'APPROVED'
 		JOIN users u ON a.user_id = u.id
 		WHERE a.id = $1 
-		  AND a.image_data IS NOT NULL
+		  AND ((a.image_asset_id IS NOT NULL AND ia.id IS NOT NULL) OR a.image_data IS NOT NULL)
 		  AND u.show_aircraft = true
 		  AND u.profile_visibility = 'public'
 	`
@@ -610,21 +647,36 @@ func (s *AircraftStore) GetPublicImage(ctx context.Context, aircraftID string) (
 	return imageData, imageType.String, nil
 }
 
-// DeleteImage removes the image from an aircraft
-func (s *AircraftStore) DeleteImage(ctx context.Context, id string, userID string) error {
+// DeleteImage removes the image from an aircraft and returns the previous asset ID.
+func (s *AircraftStore) DeleteImage(ctx context.Context, id string, userID string) (string, error) {
+	var previousAssetID sql.NullString
+	if err := s.db.QueryRowContext(ctx, `SELECT image_asset_id FROM aircraft WHERE id = $1 AND user_id = $2`, id, userID).Scan(&previousAssetID); err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("aircraft not found")
+		}
+		return "", fmt.Errorf("failed to fetch existing aircraft image reference: %w", err)
+	}
+
 	query := `
-		UPDATE aircraft SET image_data = NULL, image_type = NULL, updated_at = NOW()
+		UPDATE aircraft
+		SET image_asset_id = NULL,
+		    image_data = NULL,
+		    image_type = NULL,
+		    updated_at = NOW()
 		WHERE id = $1 AND user_id = $2
 	`
 	result, err := s.db.ExecContext(ctx, query, id, userID)
 	if err != nil {
-		return fmt.Errorf("failed to delete aircraft image: %w", err)
+		return "", fmt.Errorf("failed to delete aircraft image: %w", err)
 	}
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
-		return fmt.Errorf("aircraft not found")
+		return "", fmt.Errorf("aircraft not found")
 	}
-	return nil
+	if previousAssetID.Valid {
+		return previousAssetID.String, nil
+	}
+	return "", nil
 }
 
 // Helper to join strings
