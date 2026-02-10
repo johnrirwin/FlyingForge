@@ -375,7 +375,7 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
                     role="button"
                     tabIndex={0}
                     aria-label={`Open editor for ${displayName}`}
-                    className={`transition-colors cursor-pointer ${
+                    className={`transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-inset focus-visible:bg-primary-600/20 ${
                       isSelected ? 'bg-primary-600/10' : 'hover:bg-slate-700/30'
                     }`}
                   >
@@ -559,6 +559,8 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const deleteDialogRef = useRef<HTMLDivElement>(null);
+  const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
   
   // Fetch fresh item data when modal opens
   useEffect(() => {
@@ -636,11 +638,75 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
     setImagePreview(null);
   };
 
-  const closeDeleteConfirm = () => {
+  const closeDeleteConfirm = useCallback(() => {
     if (isDeleting) return;
     setShowDeleteConfirm(false);
     setDeleteConfirmText('');
-  };
+  }, [isDeleting]);
+
+  useEffect(() => {
+    if (!showDeleteConfirm) {
+      previouslyFocusedElementRef.current?.focus();
+      previouslyFocusedElementRef.current = null;
+      return;
+    }
+
+    previouslyFocusedElementRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    const dialog = deleteDialogRef.current;
+    if (!dialog) return;
+
+    const getFocusableElements = () =>
+      Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      );
+
+    const initialFocusTarget =
+      dialog.querySelector<HTMLElement>('[data-delete-initial-focus="true"]') ?? getFocusableElements()[0];
+    initialFocusTarget?.focus();
+
+    const handleDialogKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeDeleteConfirm();
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+
+      const focusableElements = getFocusableElements();
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+      const activeElement = document.activeElement;
+
+      if (event.shiftKey) {
+        if (activeElement === firstElement || activeElement === dialog) {
+          event.preventDefault();
+          lastElement.focus();
+        }
+        return;
+      }
+
+      if (activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    };
+
+    dialog.addEventListener('keydown', handleDialogKeyDown);
+    return () => {
+      dialog.removeEventListener('keydown', handleDialogKeyDown);
+    };
+  }, [closeDeleteConfirm, showDeleteConfirm]);
 
   const handleDeleteItem = async () => {
     if (!item) return;
@@ -654,10 +720,12 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
     setError(null);
     try {
       await adminDeleteGear(item.id);
+      setShowDeleteConfirm(false);
+      setDeleteConfirmText('');
+      setIsDeleting(false);
       onDelete();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete gear item');
-    } finally {
       setIsDeleting(false);
     }
   };
@@ -761,7 +829,10 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
       />
 
       {/* Modal */}
-      <div className="relative bg-slate-800 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+      <div
+        className="relative bg-slate-800 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden"
+        aria-hidden={showDeleteConfirm}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700">
           <h2 className="text-lg font-semibold text-white">
@@ -995,7 +1066,15 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
       {showDeleteConfirm && (
         <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/70" onClick={closeDeleteConfirm} />
-          <div className="relative bg-slate-800 rounded-xl p-6 max-w-md w-full shadow-2xl border border-red-500/50">
+          <div
+            ref={deleteDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-gear-dialog-title"
+            aria-describedby="delete-gear-dialog-description"
+            tabIndex={-1}
+            className="relative bg-slate-800 rounded-xl p-6 max-w-md w-full shadow-2xl border border-red-500/50"
+          >
             <div className="flex items-start justify-between gap-3 mb-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
@@ -1003,7 +1082,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
                 </div>
-                <h3 className="text-lg font-semibold text-white">Delete Gear Item?</h3>
+                <h3 id="delete-gear-dialog-title" className="text-lg font-semibold text-white">Delete Gear Item?</h3>
               </div>
               <button
                 onClick={closeDeleteConfirm}
@@ -1017,7 +1096,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
               </button>
             </div>
 
-            <div className="mb-4">
+            <div id="delete-gear-dialog-description" className="mb-4">
               <p className="text-slate-300 mb-3">
                 <strong className="text-red-400">This action cannot be undone.</strong> Deleting this catalog item will permanently remove:
               </p>
@@ -1057,7 +1136,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
                 onChange={(e) => setDeleteConfirmText(e.target.value)}
                 placeholder="Type 'delete' to confirm"
                 className="w-full px-4 py-2 bg-slate-700 border border-red-500/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent mb-4"
-                autoFocus
+                data-delete-initial-focus="true"
                 disabled={isDeleting}
               />
             )}
@@ -1067,6 +1146,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
                 type="button"
                 onClick={closeDeleteConfirm}
                 disabled={isDeleting}
+                data-delete-initial-focus={item.usageCount === 0 ? 'true' : undefined}
                 className="px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
               >
                 Cancel

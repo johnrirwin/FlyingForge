@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { render } from '../test/test-utils';
 import { AdminGearModeration } from './AdminGearModeration';
 import type { GearCatalogItem } from '../gearCatalogTypes';
@@ -76,8 +76,9 @@ describe('AdminGearModeration', () => {
     render(<AdminGearModeration hasGearAdminAccess authLoading={false} />);
 
     expect(await screen.findByText('EMAX')).toBeInTheDocument();
-    expect(screen.getByText('Upload Date')).toBeInTheDocument();
-    expect(screen.getAllByText('Last Edit').length).toBeGreaterThan(0);
+    const table = screen.getByRole('table');
+    expect(within(table).getByRole('columnheader', { name: 'Upload Date' })).toBeInTheDocument();
+    expect(within(table).getByRole('columnheader', { name: 'Last Edit' })).toBeInTheDocument();
 
     const row = screen.getByRole('button', { name: 'Open editor for EMAX ECO II 2207' });
     fireEvent.click(row);
@@ -113,9 +114,9 @@ describe('AdminGearModeration', () => {
     expect(await screen.findByText('Edit Gear Item')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete Item' }));
-    expect(await screen.findByText('Delete Gear Item?')).toBeInTheDocument();
-    const deleteButtons = screen.getAllByRole('button', { name: 'Delete Item' });
-    fireEvent.click(deleteButtons[deleteButtons.length - 1]);
+    const deleteDialog = await screen.findByRole('dialog', { name: 'Delete Gear Item?' });
+    expect(deleteDialog).toHaveAttribute('aria-modal', 'true');
+    fireEvent.click(within(deleteDialog).getByRole('button', { name: 'Delete Item' }));
 
     await waitFor(() => {
       expect(mockAdminDeleteGear).toHaveBeenCalledWith('gear-1');
