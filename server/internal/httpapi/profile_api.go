@@ -332,7 +332,7 @@ func (api *ProfileAPI) handleAvatar(w http.ResponseWriter, r *http.Request) {
 		api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to update avatar")
 		return
 	}
-	if currentUser != nil && currentUser.AvatarImageID != "" && currentUser.AvatarImageID != asset.ID {
+	if currentUser.AvatarImageID != "" && currentUser.AvatarImageID != asset.ID {
 		_ = api.imageSvc.Delete(ctx, currentUser.AvatarImageID)
 	}
 
