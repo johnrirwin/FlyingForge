@@ -164,7 +164,7 @@ export function BuildBuilder({
       <div className="space-y-4">
         <div className="space-y-3 rounded-xl border border-slate-700 bg-slate-800/60 p-4">
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr),260px]">
-            <div className="space-y-3">
+            <div className="min-w-0 space-y-3">
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-300">Build title</label>
                 <input
@@ -189,7 +189,7 @@ export function BuildBuilder({
             </div>
 
             {(onImageAction || imagePreviewUrl) && (
-              <div className="space-y-2 rounded-lg border border-slate-700 bg-slate-900/60 p-3">
+              <div className="min-w-0 space-y-2 rounded-lg border border-slate-700 bg-slate-900/60 p-3">
                 <p className="text-sm font-medium text-slate-300">Build image</p>
                 <div className="aspect-[4/3] w-full overflow-hidden rounded-lg border border-slate-700 bg-slate-800">
                   {imagePreviewUrl ? (

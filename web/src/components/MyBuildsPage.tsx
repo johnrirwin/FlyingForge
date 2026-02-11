@@ -414,8 +414,8 @@ export function MyBuildsPage() {
   }, [editorBuild?.id, editorBuild?.mainImageUrl]);
 
   return (
-    <div className="flex-1 overflow-y-auto p-6">
-      <div className="mx-auto w-full max-w-7xl space-y-6">
+    <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6">
+      <div className="mx-auto w-full max-w-7xl min-w-0 space-y-6">
         <header className="rounded-2xl border border-slate-700 bg-slate-800/70 p-5">
           <h1 className="text-2xl font-semibold text-white">My Builds</h1>
           <p className="mt-1 text-sm text-slate-400">
@@ -426,16 +426,16 @@ export function MyBuildsPage() {
             <button
               type="button"
               onClick={handleCreateDraft}
-              className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-primary-500"
+              className="h-10 rounded-lg bg-primary-600 px-4 text-sm font-medium text-white transition hover:bg-primary-500"
             >
               New Draft
             </button>
 
-            <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 p-1">
+            <div className="flex w-full min-w-0 items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 p-1 sm:w-auto">
               <select
                 value={selectedAircraftId}
                 onChange={(event) => setSelectedAircraftId(event.target.value)}
-                className="h-10 rounded-md border border-slate-600 bg-slate-700 px-3 text-sm text-white focus:border-primary-500 focus:outline-none"
+                className="h-10 min-w-0 flex-1 rounded-md border border-slate-600 bg-slate-700 px-3 text-sm text-white focus:border-primary-500 focus:outline-none sm:w-56"
               >
                 <option value="">Create from aircraft...</option>
                 {aircraft.map((item) => (
@@ -446,7 +446,7 @@ export function MyBuildsPage() {
                 type="button"
                 disabled={!selectedAircraftId}
                 onClick={handleCreateFromAircraft}
-                className="h-10 rounded-md bg-slate-700 px-3 text-sm font-medium text-slate-200 transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="h-10 shrink-0 rounded-md bg-slate-700 px-3 text-sm font-medium text-slate-200 transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Create
               </button>
@@ -460,8 +460,8 @@ export function MyBuildsPage() {
           </div>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-[320px,minmax(0,1fr)]">
-          <aside className="space-y-3 rounded-xl border border-slate-700 bg-slate-800/60 p-4">
+        <div className="grid min-w-0 gap-6 lg:grid-cols-[320px,minmax(0,1fr)]">
+          <aside className="min-w-0 space-y-3 rounded-xl border border-slate-700 bg-slate-800/60 p-4">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Builds</h2>
             {isLoadingList ? (
               <p className="text-sm text-slate-400">Loading builds...</p>
@@ -490,7 +490,7 @@ export function MyBuildsPage() {
             )}
           </aside>
 
-          <section className="space-y-4 rounded-xl border border-slate-700 bg-slate-800/60 p-4">
+          <section className="min-w-0 space-y-4 rounded-xl border border-slate-700 bg-slate-800/60 p-4">
             {!selectedBuildId ? (
               <p className="text-sm text-slate-400">Select a build to edit.</p>
             ) : isLoadingBuild || !editorBuild ? (
