@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -392,8 +393,12 @@ func (api *BuildAPI) getClientIP(r *http.Request) string {
 		return realIP
 	}
 	remoteAddr := strings.TrimSpace(r.RemoteAddr)
-	if idx := strings.LastIndex(remoteAddr, ":"); idx != -1 {
-		return remoteAddr[:idx]
+	if remoteAddr == "" {
+		return ""
+	}
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err == nil && strings.TrimSpace(host) != "" {
+		return host
 	}
 	return remoteAddr
 }

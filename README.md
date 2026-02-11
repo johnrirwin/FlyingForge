@@ -170,6 +170,7 @@ Force refresh feeds. Request body:
 - `POST /api/builds/temp` → creates a 24-hour temporary build URL (`/builds/temp/{token}`)
 - `GET /api/builds/temp/{token}`
 - `PUT /api/builds/temp/{token}`
+- `POST /api/builds/temp/{token}/share` → promotes a temporary build link to non-expiring shared status
 
 #### Authenticated Build Management
 - `GET /api/builds`

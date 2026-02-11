@@ -28,7 +28,7 @@ export function TempBuildPage() {
           parts: response.parts ?? [],
         };
         setBuild(normalized);
-        lastSavedPayloadRef.current = buildPartsPayloadKey(normalized.parts);
+        lastSavedPayloadRef.current = buildPayloadKey(normalized);
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load temporary build'))
       .finally(() => setIsLoading(false));
@@ -43,7 +43,7 @@ export function TempBuildPage() {
   useEffect(() => {
     if (!token || !build) return;
 
-    const payloadKey = buildPartsPayloadKey(build.parts);
+    const payloadKey = buildPayloadKey(build);
     if (payloadKey === lastSavedPayloadRef.current) return;
 
     const timeout = window.setTimeout(async () => {
@@ -207,6 +207,23 @@ function toPartInputs(parts?: BuildPart[]) {
     }));
 }
 
-function buildPartsPayloadKey(parts?: BuildPart[]) {
-  return JSON.stringify(toPartInputs(parts));
+function buildPayloadKey(build: Build) {
+  const sortedParts = [...toPartInputs(build.parts)].sort((a, b) => {
+    if (a.gearType !== b.gearType) {
+      return a.gearType.localeCompare(b.gearType);
+    }
+    if ((a.position ?? 0) !== (b.position ?? 0)) {
+      return (a.position ?? 0) - (b.position ?? 0);
+    }
+    if (a.catalogItemId !== b.catalogItemId) {
+      return a.catalogItemId.localeCompare(b.catalogItemId);
+    }
+    return (a.notes ?? '').localeCompare(b.notes ?? '');
+  });
+
+  return JSON.stringify({
+    title: build.title ?? '',
+    description: build.description ?? '',
+    parts: sortedParts,
+  });
 }
