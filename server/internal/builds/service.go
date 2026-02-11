@@ -466,7 +466,7 @@ func ValidateForPublish(build *models.Build) models.BuildValidationResult {
 	hasAIO := hasPart(build.Parts, models.GearTypeAIO)
 	hasFC := hasPart(build.Parts, models.GearTypeFC)
 	hasESC := hasPart(build.Parts, models.GearTypeESC)
-	if !hasAIO && !(hasFC && hasESC) {
+	if !hasAIO && (!hasFC || !hasESC) {
 		errors = append(errors, models.BuildValidationError{
 			Category: "power-stack",
 			Code:     "missing_required",

@@ -405,9 +405,10 @@ func (s *fakeBuildStore) SetStatus(ctx context.Context, id string, ownerUserID s
 	}
 	build.Status = status
 	now := time.Now().UTC()
-	if status == models.BuildStatusPublished {
+	switch status {
+	case models.BuildStatusPublished:
 		build.PublishedAt = &now
-	} else if status == models.BuildStatusUnpublished {
+	case models.BuildStatusUnpublished:
 		build.PublishedAt = nil
 	}
 	build.UpdatedAt = now
