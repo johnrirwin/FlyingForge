@@ -235,13 +235,36 @@ export const Sidebar = memo(function Sidebar({
             }
           />
 
-          {/* Gear Catalog - always accessible, public like PCPartPicker */}
+          {/* Gear Catalog - always accessible */}
           <NavItem
             section="gear-catalog"
             label="Gear Catalog"
             icon={
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+            }
+          />
+
+          {/* Public Builds - always accessible */}
+          <NavItem
+            section="builds"
+            label="Builds"
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3h6m-6 18h6M5 7h14M5 17h14M7 7v10m10-10v10M9 9h6v6H9V9z" />
+              </svg>
+            }
+          />
+
+          {/* My Builds - requires auth */}
+          <NavItem
+            section="my-builds"
+            label="My Builds"
+            requiresAuth
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18M6 7l1-3h10l1 3M5 7v13h14V7M9 11h6m-6 4h4" />
               </svg>
             }
           />

@@ -348,7 +348,7 @@ func (s *AircraftStore) GetComponents(ctx context.Context, aircraftID string) ([
 	query := `
 		SELECT ac.id, ac.aircraft_id, ac.category, ac.inventory_item_id, ac.notes, ac.created_at, ac.updated_at,
 			   ii.id, ii.name, ii.category, ii.manufacturer, ii.quantity, ii.notes,
-			   ii.purchase_price, ii.image_url, ii.specs
+			   ii.purchase_price, ii.image_url, ii.specs, ii.catalog_id
 		FROM aircraft_components ac
 		LEFT JOIN inventory_items ii ON ac.inventory_item_id = ii.id
 		WHERE ac.aircraft_id = $1
@@ -365,7 +365,7 @@ func (s *AircraftStore) GetComponents(ctx context.Context, aircraftID string) ([
 	for rows.Next() {
 		var c models.AircraftComponent
 		var scanInventoryItemID, scanNotes sql.NullString
-		var invID, invName, invCategory, invManufacturer, invNotes, invImageURL sql.NullString
+		var invID, invName, invCategory, invManufacturer, invNotes, invImageURL, invCatalogID sql.NullString
 		var invQuantity sql.NullInt32
 		var invPrice sql.NullFloat64
 		var invSpecs []byte // Use []byte instead of json.RawMessage to handle NULL
@@ -373,7 +373,7 @@ func (s *AircraftStore) GetComponents(ctx context.Context, aircraftID string) ([
 		if err := rows.Scan(
 			&c.ID, &c.AircraftID, &c.Category, &scanInventoryItemID, &scanNotes, &c.CreatedAt, &c.UpdatedAt,
 			&invID, &invName, &invCategory, &invManufacturer, &invQuantity, &invNotes,
-			&invPrice, &invImageURL, &invSpecs,
+			&invPrice, &invImageURL, &invSpecs, &invCatalogID,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan component: %w", err)
 		}
@@ -391,6 +391,7 @@ func (s *AircraftStore) GetComponents(ctx context.Context, aircraftID string) ([
 				Notes:        invNotes.String,
 				ImageURL:     invImageURL.String,
 				Specs:        json.RawMessage(invSpecs),
+				CatalogID:    invCatalogID.String,
 			}
 			if invPrice.Valid {
 				price := invPrice.Float64

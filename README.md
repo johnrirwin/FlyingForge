@@ -162,6 +162,26 @@ Force refresh feeds. Request body:
 }
 ```
 
+#### Public Builds
+- `GET /api/public/builds?sort=newest&frameFilter=`
+- `GET /api/public/builds/{id}`
+
+#### Temporary Build Builder
+- `POST /api/builds/temp` → creates a 24-hour temporary build URL (`/builds/temp/{token}`)
+- `GET /api/builds/temp/{token}`
+- `PUT /api/builds/temp/{token}`
+- `POST /api/builds/temp/{token}/share` → promotes a temporary build link to non-expiring shared status
+
+#### Authenticated Build Management
+- `GET /api/builds`
+- `POST /api/builds`
+- `POST /api/builds/from-aircraft/{aircraftId}`
+- `GET /api/builds/{id}`
+- `PUT /api/builds/{id}`
+- `DELETE /api/builds/{id}`
+- `POST /api/builds/{id}/publish`
+- `POST /api/builds/{id}/unpublish`
+
 #### POST /api/images/upload
 Moderates an uploaded image (multipart/form-data `image`) synchronously and returns:
 ```json

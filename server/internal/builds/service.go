@@ -1,0 +1,672 @@
+package builds
+
+import (
+	"context"
+	crand "crypto/rand"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/johnrirwin/flyingforge/internal/database"
+	"github.com/johnrirwin/flyingforge/internal/logging"
+	"github.com/johnrirwin/flyingforge/internal/models"
+)
+
+const (
+	tempBuildTTL         = 24 * time.Hour
+	defaultBuildTitle    = "Untitled Build"
+	defaultTempBuildName = "Temporary Build"
+)
+
+// ServiceError represents a build service validation/runtime error.
+type ServiceError struct {
+	Message string
+}
+
+func (e *ServiceError) Error() string {
+	return e.Message
+}
+
+// ValidationError is returned when publish validation fails.
+type ValidationError struct {
+	Validation models.BuildValidationResult
+}
+
+func (e *ValidationError) Error() string {
+	return "build publish validation failed"
+}
+
+type buildStore interface {
+	Create(ctx context.Context, ownerUserID string, status models.BuildStatus, title string, description string, sourceAircraftID string, token string, expiresAt *time.Time, parts []models.BuildPartInput) (*models.Build, error)
+	ListByOwner(ctx context.Context, ownerUserID string, params models.BuildListParams) (*models.BuildListResponse, error)
+	ListPublic(ctx context.Context, params models.BuildListParams) (*models.BuildListResponse, error)
+	GetByID(ctx context.Context, id string) (*models.Build, error)
+	GetForOwner(ctx context.Context, id string, ownerUserID string) (*models.Build, error)
+	GetPublic(ctx context.Context, id string) (*models.Build, error)
+	GetTempByToken(ctx context.Context, token string) (*models.Build, error)
+	Update(ctx context.Context, id string, ownerUserID string, params models.UpdateBuildParams) (*models.Build, error)
+	UpdateTempByToken(ctx context.Context, token string, params models.UpdateBuildParams) (*models.Build, error)
+	ShareTempByToken(ctx context.Context, token string) (*models.Build, error)
+	SetStatus(ctx context.Context, id string, ownerUserID string, status models.BuildStatus) (*models.Build, error)
+	Delete(ctx context.Context, id string, ownerUserID string) (bool, error)
+	DeleteExpiredTemp(ctx context.Context, cutoff time.Time) (int64, error)
+}
+
+type aircraftDetailsReader interface {
+	GetDetails(ctx context.Context, id string, userID string) (*models.AircraftDetailsResponse, error)
+}
+
+type gearCatalogMigrator interface {
+	MigrateInventoryItem(
+		ctx context.Context,
+		inventoryItemID, userID, name, manufacturer string,
+		category models.EquipmentCategory,
+		specs json.RawMessage,
+	) (*models.GearCatalogItem, error)
+}
+
+// Service coordinates build business logic.
+type Service struct {
+	store         buildStore
+	aircraftStore aircraftDetailsReader
+	gearCatalog   gearCatalogMigrator
+	logger        *logging.Logger
+}
+
+// NewService creates a build service.
+func NewService(store *database.BuildStore, aircraftStore *database.AircraftStore, gearCatalogStore *database.GearCatalogStore, logger *logging.Logger) *Service {
+	return &Service{
+		store:         store,
+		aircraftStore: aircraftStore,
+		gearCatalog:   gearCatalogStore,
+		logger:        logger,
+	}
+}
+
+// NewServiceWithDeps is exposed for testing.
+func NewServiceWithDeps(store buildStore, aircraftStore aircraftDetailsReader, gearCatalog gearCatalogMigrator, logger *logging.Logger) *Service {
+	return &Service{
+		store:         store,
+		aircraftStore: aircraftStore,
+		gearCatalog:   gearCatalog,
+		logger:        logger,
+	}
+}
+
+// ListPublic returns published builds.
+func (s *Service) ListPublic(ctx context.Context, params models.BuildListParams) (*models.BuildListResponse, error) {
+	resp, err := s.store.ListPublic(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+	for i := range resp.Builds {
+		resp.Builds[i].Verified = isBuildVerified(&resp.Builds[i])
+	}
+	return resp, nil
+}
+
+// GetPublic fetches one published build.
+func (s *Service) GetPublic(ctx context.Context, id string) (*models.Build, error) {
+	build, err := s.store.GetPublic(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if build == nil {
+		return nil, nil
+	}
+	build.Verified = isBuildVerified(build)
+	return build, nil
+}
+
+// CreateTemp creates a temporary anonymous build and returns share metadata.
+func (s *Service) CreateTemp(ctx context.Context, ownerUserID string, params models.CreateBuildParams) (*models.TempBuildCreateResponse, error) {
+	parts := normalizeParts(params.Parts)
+	title := strings.TrimSpace(params.Title)
+	if title == "" {
+		title = defaultTempBuildName
+	}
+	description := strings.TrimSpace(params.Description)
+
+	token, err := generateTempToken()
+	if err != nil {
+		return nil, err
+	}
+	expiresAt := time.Now().UTC().Add(tempBuildTTL)
+
+	build, err := s.store.Create(
+		ctx,
+		ownerUserID,
+		models.BuildStatusTemp,
+		title,
+		description,
+		"",
+		token,
+		&expiresAt,
+		parts,
+	)
+	if err != nil {
+		return nil, err
+	}
+	build.Verified = isBuildVerified(build)
+	build.Token = ""
+
+	return &models.TempBuildCreateResponse{
+		Build: build,
+		Token: token,
+		URL:   "/builds/temp/" + token,
+	}, nil
+}
+
+// GetTempByToken returns a temp build if token is valid.
+func (s *Service) GetTempByToken(ctx context.Context, token string) (*models.Build, error) {
+	build, err := s.store.GetTempByToken(ctx, strings.TrimSpace(token))
+	if err != nil {
+		return nil, err
+	}
+	if build == nil {
+		return nil, nil
+	}
+	build.Verified = isBuildVerified(build)
+	build.Token = ""
+	return build, nil
+}
+
+// UpdateTempByToken updates editable temp fields.
+func (s *Service) UpdateTempByToken(ctx context.Context, token string, params models.UpdateBuildParams) (*models.Build, error) {
+	if params.Title != nil {
+		title := strings.TrimSpace(*params.Title)
+		params.Title = &title
+	}
+	if params.Description != nil {
+		desc := strings.TrimSpace(*params.Description)
+		params.Description = &desc
+	}
+	if params.Parts != nil {
+		params.Parts = normalizeParts(params.Parts)
+	}
+
+	build, err := s.store.UpdateTempByToken(ctx, strings.TrimSpace(token), params)
+	if err != nil {
+		return nil, err
+	}
+	if build == nil {
+		return nil, nil
+	}
+	build.Verified = isBuildVerified(build)
+	build.Token = ""
+	return build, nil
+}
+
+// ShareTempByToken promotes a temporary build link so it no longer expires.
+func (s *Service) ShareTempByToken(ctx context.Context, token string) (*models.Build, error) {
+	build, err := s.store.ShareTempByToken(ctx, strings.TrimSpace(token))
+	if err != nil {
+		return nil, err
+	}
+	if build == nil {
+		return nil, nil
+	}
+	build.Verified = isBuildVerified(build)
+	build.Token = ""
+	return build, nil
+}
+
+// ListByOwner returns authenticated user's builds.
+func (s *Service) ListByOwner(ctx context.Context, ownerUserID string, params models.BuildListParams) (*models.BuildListResponse, error) {
+	resp, err := s.store.ListByOwner(ctx, ownerUserID, params)
+	if err != nil {
+		return nil, err
+	}
+	for i := range resp.Builds {
+		resp.Builds[i].Verified = isBuildVerified(&resp.Builds[i])
+	}
+	return resp, nil
+}
+
+// CreateDraft creates a new draft build for a user.
+func (s *Service) CreateDraft(ctx context.Context, ownerUserID string, params models.CreateBuildParams) (*models.Build, error) {
+	title := strings.TrimSpace(params.Title)
+	if title == "" {
+		title = defaultBuildTitle
+	}
+	build, err := s.store.Create(
+		ctx,
+		ownerUserID,
+		models.BuildStatusDraft,
+		title,
+		strings.TrimSpace(params.Description),
+		strings.TrimSpace(params.SourceAircraftID),
+		"",
+		nil,
+		normalizeParts(params.Parts),
+	)
+	if err != nil {
+		return nil, err
+	}
+	build.Verified = isBuildVerified(build)
+	return build, nil
+}
+
+// CreateDraftFromAircraft creates a draft build pre-filled from aircraft components.
+func (s *Service) CreateDraftFromAircraft(ctx context.Context, ownerUserID string, aircraftID string) (*models.Build, error) {
+	aircraftID = strings.TrimSpace(aircraftID)
+	if aircraftID == "" {
+		return nil, &ServiceError{Message: "aircraft id is required"}
+	}
+	if s.aircraftStore == nil {
+		return nil, &ServiceError{Message: "aircraft service unavailable"}
+	}
+
+	details, err := s.aircraftStore.GetDetails(ctx, aircraftID, ownerUserID)
+	if err != nil {
+		return nil, err
+	}
+	if details == nil || details.Aircraft.ID == "" {
+		return nil, nil
+	}
+
+	parts := make([]models.BuildPartInput, 0)
+	for _, component := range details.Components {
+		if component.InventoryItem == nil {
+			continue
+		}
+		gearType := aircraftComponentToGearType(component.Category)
+		if gearType == "" {
+			continue
+		}
+		catalogID := strings.TrimSpace(component.InventoryItem.CatalogID)
+		if catalogID == "" && s.gearCatalog != nil {
+			category := component.InventoryItem.Category
+			if category == "" {
+				category = componentCategoryToEquipmentCategory(component.Category)
+			}
+			if category != "" {
+				catalogItem, err := s.gearCatalog.MigrateInventoryItem(
+					ctx,
+					component.InventoryItem.ID,
+					ownerUserID,
+					component.InventoryItem.Name,
+					component.InventoryItem.Manufacturer,
+					category,
+					component.InventoryItem.Specs,
+				)
+				if err != nil {
+					s.logger.Warn("Failed to backfill catalog entry while creating build from aircraft",
+						logging.WithFields(map[string]interface{}{
+							"aircraft_id": details.Aircraft.ID,
+							"component":   component.Category,
+							"error":       err.Error(),
+						}))
+				} else if catalogItem != nil {
+					catalogID = strings.TrimSpace(catalogItem.ID)
+				}
+			}
+		}
+		if catalogID == "" {
+			continue
+		}
+		parts = append(parts, models.BuildPartInput{
+			GearType:      gearType,
+			CatalogItemID: catalogID,
+		})
+	}
+
+	title := strings.TrimSpace(details.Aircraft.Name)
+	if title == "" {
+		title = defaultBuildTitle
+	}
+	if !strings.Contains(strings.ToLower(title), "build") {
+		title += " Build"
+	}
+
+	build, err := s.store.Create(
+		ctx,
+		ownerUserID,
+		models.BuildStatusDraft,
+		title,
+		"",
+		details.Aircraft.ID,
+		"",
+		nil,
+		normalizeParts(parts),
+	)
+	if err != nil {
+		return nil, err
+	}
+	build.Verified = isBuildVerified(build)
+	return build, nil
+}
+
+// GetByOwner fetches one build for owner.
+func (s *Service) GetByOwner(ctx context.Context, id string, ownerUserID string) (*models.Build, error) {
+	build, err := s.store.GetForOwner(ctx, strings.TrimSpace(id), ownerUserID)
+	if err != nil {
+		return nil, err
+	}
+	if build == nil {
+		return nil, nil
+	}
+	build.Verified = isBuildVerified(build)
+	return build, nil
+}
+
+// UpdateByOwner updates an owned build.
+func (s *Service) UpdateByOwner(ctx context.Context, id string, ownerUserID string, params models.UpdateBuildParams) (*models.Build, error) {
+	if params.Title != nil {
+		title := strings.TrimSpace(*params.Title)
+		params.Title = &title
+	}
+	if params.Description != nil {
+		desc := strings.TrimSpace(*params.Description)
+		params.Description = &desc
+	}
+	if params.Parts != nil {
+		params.Parts = normalizeParts(params.Parts)
+	}
+
+	build, err := s.store.Update(ctx, strings.TrimSpace(id), ownerUserID, params)
+	if err != nil {
+		return nil, err
+	}
+	if build == nil {
+		return nil, nil
+	}
+	build.Verified = isBuildVerified(build)
+	return build, nil
+}
+
+// Publish validates and publishes a build.
+func (s *Service) Publish(ctx context.Context, id string, ownerUserID string) (*models.Build, models.BuildValidationResult, error) {
+	build, err := s.store.GetForOwner(ctx, strings.TrimSpace(id), ownerUserID)
+	if err != nil {
+		return nil, models.BuildValidationResult{}, err
+	}
+	if build == nil {
+		return nil, models.BuildValidationResult{}, nil
+	}
+
+	validation := ValidateForPublish(build)
+	if !validation.Valid {
+		return nil, validation, &ValidationError{Validation: validation}
+	}
+
+	updated, err := s.store.SetStatus(ctx, build.ID, ownerUserID, models.BuildStatusPublished)
+	if err != nil {
+		return nil, validation, err
+	}
+	if updated == nil {
+		return nil, validation, nil
+	}
+	updated.Verified = isBuildVerified(updated)
+	return updated, validation, nil
+}
+
+// Unpublish removes a build from public listings.
+func (s *Service) Unpublish(ctx context.Context, id string, ownerUserID string) (*models.Build, error) {
+	updated, err := s.store.SetStatus(ctx, strings.TrimSpace(id), ownerUserID, models.BuildStatusUnpublished)
+	if err != nil {
+		return nil, err
+	}
+	if updated == nil {
+		return nil, nil
+	}
+	updated.Verified = isBuildVerified(updated)
+	return updated, nil
+}
+
+// DeleteByOwner deletes an owned non-temp build regardless of draft/publication status.
+func (s *Service) DeleteByOwner(ctx context.Context, id string, ownerUserID string) (bool, error) {
+	return s.store.Delete(ctx, strings.TrimSpace(id), ownerUserID)
+}
+
+// CleanupExpiredTemp deletes expired temp builds.
+func (s *Service) CleanupExpiredTemp(ctx context.Context) (int64, error) {
+	return s.store.DeleteExpiredTemp(ctx, time.Now().UTC())
+}
+
+// ValidateForPublish enforces public-eligibility rules.
+func ValidateForPublish(build *models.Build) models.BuildValidationResult {
+	if build == nil {
+		return models.BuildValidationResult{
+			Valid: false,
+			Errors: []models.BuildValidationError{{
+				Category: "build",
+				Code:     "missing_build",
+				Message:  "Build not found",
+			}},
+		}
+	}
+
+	errors := make([]models.BuildValidationError, 0)
+
+	required := []struct {
+		gearType models.GearType
+		label    string
+		category string
+	}{
+		{models.GearTypeFrame, "Frame", "frame"},
+		{models.GearTypeMotor, "Motors", "motor"},
+		{models.GearTypeReceiver, "Receiver", "receiver"},
+		{models.GearTypeVTX, "VTX", "vtx"},
+	}
+
+	for _, req := range required {
+		if !hasPart(build.Parts, req.gearType) {
+			errors = append(errors, models.BuildValidationError{
+				Category: req.category,
+				Code:     "missing_required",
+				Message:  req.label + " is required",
+			})
+		}
+	}
+
+	hasAIO := hasPart(build.Parts, models.GearTypeAIO)
+	hasFC := hasPart(build.Parts, models.GearTypeFC)
+	hasESC := hasPart(build.Parts, models.GearTypeESC)
+	if !hasAIO && (!hasFC || !hasESC) {
+		errors = append(errors, models.BuildValidationError{
+			Category: "power-stack",
+			Code:     "missing_required",
+			Message:  "Power stack requires either an AIO or both FC and ESC",
+		})
+	}
+
+	if build.SourceAircraftID != "" {
+		checkPublished := []struct {
+			gearType models.GearType
+			label    string
+			category string
+		}{
+			{models.GearTypeFrame, "Frame", "frame"},
+			{models.GearTypeMotor, "Motors", "motor"},
+			{models.GearTypeReceiver, "Receiver", "receiver"},
+			{models.GearTypeVTX, "VTX", "vtx"},
+		}
+		if hasAIO {
+			checkPublished = append(checkPublished, struct {
+				gearType models.GearType
+				label    string
+				category string
+			}{models.GearTypeAIO, "AIO", "aio"})
+		} else {
+			checkPublished = append(checkPublished,
+				struct {
+					gearType models.GearType
+					label    string
+					category string
+				}{models.GearTypeFC, "Flight Controller", "fc"},
+				struct {
+					gearType models.GearType
+					label    string
+					category string
+				}{models.GearTypeESC, "ESC", "esc"},
+			)
+		}
+
+		for _, part := range checkPublished {
+			p := findFirstPart(build.Parts, part.gearType)
+			if p == nil {
+				continue
+			}
+			if p.CatalogItem == nil || models.NormalizeCatalogStatus(p.CatalogItem.Status) != models.CatalogStatusPublished {
+				name := part.label
+				if p.CatalogItem != nil {
+					if displayName := p.CatalogItem.DisplayName(); displayName != "" {
+						name = displayName
+					}
+				}
+				errors = append(errors, models.BuildValidationError{
+					Category: part.category,
+					Code:     "not_published",
+					Message:  fmt.Sprintf("%s is not a published catalog item", name),
+				})
+			}
+		}
+	}
+
+	return models.BuildValidationResult{
+		Valid:  len(errors) == 0,
+		Errors: errors,
+	}
+}
+
+func normalizeParts(parts []models.BuildPartInput) []models.BuildPartInput {
+	if parts == nil {
+		return nil
+	}
+
+	type key struct {
+		gearType models.GearType
+		position int
+	}
+
+	normalized := make(map[key]models.BuildPartInput)
+	for _, part := range parts {
+		part.GearType = models.GearType(strings.TrimSpace(string(part.GearType)))
+		part.CatalogItemID = strings.TrimSpace(part.CatalogItemID)
+		part.Notes = strings.TrimSpace(part.Notes)
+		if part.GearType == "" || part.CatalogItemID == "" {
+			continue
+		}
+		if part.Position < 0 {
+			part.Position = 0
+		}
+		normalized[key{gearType: part.GearType, position: part.Position}] = part
+	}
+
+	result := make([]models.BuildPartInput, 0, len(normalized))
+	for _, part := range normalized {
+		result = append(result, part)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].GearType == result[j].GearType {
+			return result[i].Position < result[j].Position
+		}
+		return result[i].GearType < result[j].GearType
+	})
+	return result
+}
+
+func hasPart(parts []models.BuildPart, gearType models.GearType) bool {
+	for _, part := range parts {
+		if part.GearType == gearType && strings.TrimSpace(part.CatalogItemID) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func findFirstPart(parts []models.BuildPart, gearType models.GearType) *models.BuildPart {
+	for i := range parts {
+		if parts[i].GearType == gearType {
+			return &parts[i]
+		}
+	}
+	return nil
+}
+
+func isBuildVerified(build *models.Build) bool {
+	if build == nil {
+		return false
+	}
+	if len(build.Parts) == 0 {
+		return false
+	}
+	for _, part := range build.Parts {
+		if strings.TrimSpace(part.CatalogItemID) == "" {
+			return false
+		}
+		if part.CatalogItem == nil {
+			return false
+		}
+		if models.NormalizeCatalogStatus(part.CatalogItem.Status) != models.CatalogStatusPublished {
+			return false
+		}
+	}
+	return true
+}
+
+func aircraftComponentToGearType(category models.ComponentCategory) models.GearType {
+	switch category {
+	case models.ComponentCategoryFrame:
+		return models.GearTypeFrame
+	case models.ComponentCategoryMotors:
+		return models.GearTypeMotor
+	case models.ComponentCategoryAIO:
+		return models.GearTypeAIO
+	case models.ComponentCategoryFC:
+		return models.GearTypeFC
+	case models.ComponentCategoryESC:
+		return models.GearTypeESC
+	case models.ComponentCategoryReceiver:
+		return models.GearTypeReceiver
+	case models.ComponentCategoryVTX:
+		return models.GearTypeVTX
+	case models.ComponentCategoryCamera:
+		return models.GearTypeCamera
+	case models.ComponentCategoryProps:
+		return models.GearTypeProp
+	case models.ComponentCategoryAntenna:
+		return models.GearTypeAntenna
+	default:
+		return ""
+	}
+}
+
+func componentCategoryToEquipmentCategory(category models.ComponentCategory) models.EquipmentCategory {
+	switch category {
+	case models.ComponentCategoryFrame:
+		return models.CategoryFrames
+	case models.ComponentCategoryMotors:
+		return models.CategoryMotors
+	case models.ComponentCategoryAIO:
+		return models.CategoryAIO
+	case models.ComponentCategoryFC:
+		return models.CategoryFC
+	case models.ComponentCategoryESC:
+		return models.CategoryESC
+	case models.ComponentCategoryReceiver:
+		return models.CategoryReceivers
+	case models.ComponentCategoryVTX:
+		return models.CategoryVTX
+	case models.ComponentCategoryCamera:
+		return models.CategoryCameras
+	case models.ComponentCategoryProps:
+		return models.CategoryPropellers
+	case models.ComponentCategoryAntenna:
+		return models.CategoryAntennas
+	default:
+		return ""
+	}
+}
+
+func generateTempToken() (string, error) {
+	buf := make([]byte, 32)
+	if _, err := crand.Read(buf); err != nil {
+		return "", fmt.Errorf("failed to generate temp token: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}

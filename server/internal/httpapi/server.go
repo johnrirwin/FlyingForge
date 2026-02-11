@@ -12,6 +12,7 @@ import (
 	"github.com/johnrirwin/flyingforge/internal/aircraft"
 	"github.com/johnrirwin/flyingforge/internal/auth"
 	"github.com/johnrirwin/flyingforge/internal/battery"
+	"github.com/johnrirwin/flyingforge/internal/builds"
 	"github.com/johnrirwin/flyingforge/internal/database"
 	"github.com/johnrirwin/flyingforge/internal/equipment"
 	"github.com/johnrirwin/flyingforge/internal/images"
@@ -27,6 +28,7 @@ type Server struct {
 	equipmentSvc     *equipment.Service
 	inventorySvc     inventory.InventoryManager
 	aircraftSvc      *aircraft.Service
+	buildSvc         *builds.Service
 	radioSvc         *radio.Service
 	batterySvc       *battery.Service
 	authSvc          *auth.Service
@@ -40,14 +42,16 @@ type Server struct {
 	logger           *logging.Logger
 	server           *http.Server
 	refreshLimiter   ratelimit.RateLimiter
+	tempBuildLimiter ratelimit.RateLimiter
 }
 
-func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, radioSvc *radio.Service, batterySvc *battery.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, userStore *database.UserStore, aircraftStore *database.AircraftStore, fcConfigStore *database.FCConfigStore, inventoryStore *database.InventoryStore, gearCatalogStore *database.GearCatalogStore, imageSvc *images.Service, refreshLimiter ratelimit.RateLimiter, logger *logging.Logger) *Server {
+func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, buildSvc *builds.Service, radioSvc *radio.Service, batterySvc *battery.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, userStore *database.UserStore, aircraftStore *database.AircraftStore, fcConfigStore *database.FCConfigStore, inventoryStore *database.InventoryStore, gearCatalogStore *database.GearCatalogStore, imageSvc *images.Service, refreshLimiter ratelimit.RateLimiter, logger *logging.Logger) *Server {
 	return &Server{
 		agg:              agg,
 		equipmentSvc:     equipmentSvc,
 		inventorySvc:     inventorySvc,
 		aircraftSvc:      aircraftSvc,
+		buildSvc:         buildSvc,
 		radioSvc:         radioSvc,
 		batterySvc:       batterySvc,
 		authSvc:          authSvc,
@@ -60,6 +64,7 @@ func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventoryS
 		imageSvc:         imageSvc,
 		logger:           logger,
 		refreshLimiter:   refreshLimiter,
+		tempBuildLimiter: ratelimit.New(10 * time.Second),
 	}
 }
 
@@ -85,6 +90,12 @@ func (s *Server) Start(addr string) error {
 	if s.aircraftSvc != nil && s.authMiddleware != nil {
 		aircraftAPI := NewAircraftAPI(s.aircraftSvc, s.authMiddleware, s.logger)
 		aircraftAPI.RegisterRoutes(mux, s.corsMiddleware)
+	}
+
+	// Build routes (public browsing + temp + authenticated drafts/publication)
+	if s.buildSvc != nil && s.authMiddleware != nil {
+		buildAPI := NewBuildAPI(s.buildSvc, s.authMiddleware, s.tempBuildLimiter, s.logger)
+		buildAPI.RegisterRoutes(mux, s.corsMiddleware)
 	}
 
 	// Radio routes

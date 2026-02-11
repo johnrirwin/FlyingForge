@@ -282,7 +282,7 @@ export function GearCatalogPage({ onAddToInventory }: GearCatalogPageProps) {
           <div>
             <h1 className="text-xl font-semibold text-white">Gear Catalog</h1>
             <p className="text-sm text-slate-400">
-              Browse community-contributed FPV gear • Like PCPartPicker for drones
+              Browse community-contributed FPV gear
             </p>
           </div>
           {!isAuthenticated && (

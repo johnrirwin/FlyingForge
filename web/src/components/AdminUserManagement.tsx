@@ -395,14 +395,14 @@ export function AdminUserManagement({ isAdmin, currentUserId, authLoading }: Adm
             }
           }}
           placeholder="Search by email, display name, or callsign..."
-          className="flex-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+          className="w-full md:flex-1 h-11 px-3 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
         />
         <select
           value={statusFilter}
           onChange={(e) => {
             setStatusFilter(e.target.value as AdminUserStatus | '');
           }}
-          className="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+          className="h-11 px-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
         >
           <option value="">All statuses</option>
           <option value="active">Active</option>
@@ -656,7 +656,7 @@ export function AdminUserManagement({ isAdmin, currentUserId, authLoading }: Adm
                         value={profileStatus}
                         onChange={(e) => setProfileStatus(e.target.value as AdminUserStatus)}
                         disabled={isSavingProfile || isProfileSelf}
-                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60"
+                        className="w-full h-11 px-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60"
                       >
                         <option value="active">Active</option>
                         <option value="disabled">Disabled</option>

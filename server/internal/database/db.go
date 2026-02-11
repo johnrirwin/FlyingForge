@@ -121,6 +121,7 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationGearCatalogImageScanned,                   // Marks moderated user uploads as scanned for admin review
 		migrationGearCatalogPublishedStatus,                // Normalizes catalog status to published/pending/removed
 		migrationGearCatalogPublishAutoApproveScannedImage, // Aligns published items to approved image status
+		migrationBuilds,                                    // Adds user/public/temp builds with part mappings
 	}
 
 	for i, migration := range migrations {
@@ -844,4 +845,54 @@ WHERE status = 'published'
     OR image_data IS NOT NULL
     OR (image_url IS NOT NULL AND image_url != '')
   );
+`
+
+// Migration to add reusable build definitions (public, draft, and temporary).
+const migrationBuilds = `
+CREATE TABLE IF NOT EXISTS builds (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    owner_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
+    token VARCHAR(128),
+    expires_at TIMESTAMPTZ,
+    title VARCHAR(255) NOT NULL DEFAULT 'Untitled Build',
+    description TEXT,
+    source_aircraft_id UUID REFERENCES aircraft(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    published_at TIMESTAMPTZ
+);
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'chk_builds_status'
+    ) THEN
+        ALTER TABLE builds DROP CONSTRAINT chk_builds_status;
+    END IF;
+END $$;
+
+ALTER TABLE builds
+ADD CONSTRAINT chk_builds_status
+CHECK (status IN ('TEMP', 'SHARED', 'DRAFT', 'PUBLISHED', 'UNPUBLISHED'));
+
+CREATE TABLE IF NOT EXISTS build_parts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    build_id UUID NOT NULL REFERENCES builds(id) ON DELETE CASCADE,
+    gear_type VARCHAR(20) NOT NULL,
+    catalog_item_id UUID REFERENCES gear_catalog(id) ON DELETE SET NULL,
+    position INTEGER NOT NULL DEFAULT 0,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(build_id, gear_type, position)
+);
+
+CREATE INDEX IF NOT EXISTS idx_builds_owner_updated ON builds(owner_user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_builds_status_published ON builds(status, published_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_builds_token_unique ON builds(token) WHERE token IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_builds_expires_at ON builds(expires_at);
+CREATE INDEX IF NOT EXISTS idx_build_parts_build ON build_parts(build_id);
+CREATE INDEX IF NOT EXISTS idx_build_parts_catalog ON build_parts(catalog_item_id);
 `

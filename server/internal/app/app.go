@@ -9,6 +9,7 @@ import (
 	"github.com/johnrirwin/flyingforge/internal/aircraft"
 	"github.com/johnrirwin/flyingforge/internal/auth"
 	"github.com/johnrirwin/flyingforge/internal/battery"
+	"github.com/johnrirwin/flyingforge/internal/builds"
 	"github.com/johnrirwin/flyingforge/internal/cache"
 	"github.com/johnrirwin/flyingforge/internal/config"
 	"github.com/johnrirwin/flyingforge/internal/crypto"
@@ -37,6 +38,7 @@ type App struct {
 	EquipmentSvc     *equipment.Service
 	InventorySvc     inventory.InventoryManager
 	AircraftSvc      *aircraft.Service
+	BuildSvc         *builds.Service
 	RadioSvc         *radio.Service
 	BatterySvc       *battery.Service
 	AuthService      *auth.Service
@@ -48,6 +50,7 @@ type App struct {
 	aircraftStore    *database.AircraftStore
 	fcConfigStore    *database.FCConfigStore
 	inventoryStore   *database.InventoryStore
+	buildStore       *database.BuildStore
 	gearCatalogStore *database.GearCatalogStore
 	imageAssetStore  *database.ImageAssetStore
 	imageSvc         *images.Service
@@ -253,6 +256,10 @@ func (a *App) initDatabaseServices() {
 	a.aircraftStore = database.NewAircraftStore(db, encryptor)
 	a.AircraftSvc = aircraft.NewService(a.aircraftStore, a.InventorySvc, a.gearCatalogStore, a.imageSvc, a.Logger)
 
+	// Initialize builds service (public builds + draft/temp builder)
+	a.buildStore = database.NewBuildStore(db)
+	a.BuildSvc = builds.NewService(a.buildStore, a.aircraftStore, a.gearCatalogStore, a.Logger)
+
 	// Initialize radio
 	radioStore := database.NewRadioStore(db)
 	a.RadioSvc = radio.NewService(radioStore, "", a.Logger) // Empty string uses default storage dir
@@ -274,7 +281,7 @@ func (a *App) initDatabaseServices() {
 
 func (a *App) initServers() {
 	// Initialize HTTP server with auth, aircraft, radio, battery, fc-config, gear-catalog, and profile/pilot support
-	a.HTTPServer = httpapi.New(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.AircraftSvc, a.RadioSvc, a.BatterySvc, a.AuthService, a.AuthMiddleware, a.userStore, a.aircraftStore, a.fcConfigStore, a.inventoryStore, a.gearCatalogStore, a.imageSvc, a.refreshLimiter, a.Logger)
+	a.HTTPServer = httpapi.New(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.AircraftSvc, a.BuildSvc, a.RadioSvc, a.BatterySvc, a.AuthService, a.AuthMiddleware, a.userStore, a.aircraftStore, a.fcConfigStore, a.inventoryStore, a.gearCatalogStore, a.imageSvc, a.refreshLimiter, a.Logger)
 
 	// Initialize MCP server
 	mcpHandler := mcp.NewHandler(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.Logger)
@@ -322,5 +329,37 @@ func (a *App) runHTTPMode(ctx context.Context) error {
 		a.Logger.Info("Initial fetch complete")
 	}()
 
+	if a.BuildSvc != nil {
+		go a.runTempBuildCleanup(ctx)
+	}
+
 	return a.HTTPServer.Start(a.Config.Server.HTTPAddr)
+}
+
+func (a *App) runTempBuildCleanup(ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Minute)
+	defer ticker.Stop()
+
+	cleanup := func() {
+		deleted, err := a.BuildSvc.CleanupExpiredTemp(ctx)
+		if err != nil {
+			a.Logger.Warn("Temp build cleanup failed", logging.WithField("error", err.Error()))
+			return
+		}
+		if deleted > 0 {
+			a.Logger.Info("Removed expired temp builds", logging.WithField("count", deleted))
+		}
+	}
+
+	// Run once at startup, then periodically.
+	cleanup()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			cleanup()
+		}
+	}
 }

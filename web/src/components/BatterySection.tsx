@@ -408,7 +408,7 @@ export function BatterySection({ onError }: BatterySectionProps) {
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Name or battery code..."
-              className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-500"
+              className="w-full h-10 px-3 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-500"
             />
           </div>
           <div>
@@ -416,7 +416,7 @@ export function BatterySection({ onError }: BatterySectionProps) {
             <select
               value={filterChemistry}
               onChange={e => setFilterChemistry(e.target.value as BatteryChemistry | '')}
-              className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-primary-500"
+              className="h-10 px-3 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-primary-500"
             >
               <option value="">All</option>
               {BATTERY_CHEMISTRY_OPTIONS.map(opt => (
@@ -429,7 +429,7 @@ export function BatterySection({ onError }: BatterySectionProps) {
             <select
               value={filterCells}
               onChange={e => setFilterCells(e.target.value ? parseInt(e.target.value, 10) : '')}
-              className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-primary-500"
+              className="h-10 px-3 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-primary-500"
             >
               <option value="">All</option>
               {CELL_COUNT_OPTIONS.map(count => (
@@ -442,7 +442,7 @@ export function BatterySection({ onError }: BatterySectionProps) {
             <select
               value={sortBy}
               onChange={e => setSortBy(e.target.value as typeof sortBy)}
-              className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-primary-500"
+              className="h-10 px-3 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-primary-500"
             >
               <option value="created_at">Date Added</option>
               <option value="name">Name</option>
@@ -583,7 +583,7 @@ export function BatterySection({ onError }: BatterySectionProps) {
             <select
               value={formState.chemistry}
               onChange={e => setFormState(prev => ({ ...prev, chemistry: e.target.value as BatteryChemistry }))}
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
+              className="w-full h-11 px-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
             >
               {BATTERY_CHEMISTRY_OPTIONS.map(opt => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -595,7 +595,7 @@ export function BatterySection({ onError }: BatterySectionProps) {
             <select
               value={formState.cells}
               onChange={e => setFormState(prev => ({ ...prev, cells: parseInt(e.target.value, 10) }))}
-              className={`w-full px-3 py-2 bg-slate-900 border rounded-lg text-white focus:outline-none focus:border-primary-500 ${formErrors.cells ? 'border-red-500' : 'border-slate-700'}`}
+              className={`w-full h-11 px-3 bg-slate-900 border rounded-lg text-white focus:outline-none focus:border-primary-500 ${formErrors.cells ? 'border-red-500' : 'border-slate-700'}`}
             >
               {CELL_COUNT_OPTIONS.map(count => (
                 <option key={count} value={count}>{count}S</option>

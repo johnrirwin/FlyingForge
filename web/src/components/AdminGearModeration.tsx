@@ -305,7 +305,7 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Search brand or model..."
-              className="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="w-full h-11 pl-10 pr-4 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
           </div>
           <button
@@ -328,7 +328,7 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
           <select
             value={gearType}
             onChange={(e) => setGearType(e.target.value as GearType | '')}
-            className="w-full min-w-0 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="w-full min-w-0 h-11 px-3 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
             <option value="">All Types</option>
             {GEAR_TYPES.map((type) => (
@@ -341,7 +341,7 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
           <select
             value={catalogStatus}
             onChange={(e) => setCatalogStatus(e.target.value as CatalogItemStatus | '')}
-            className="w-full min-w-0 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="w-full min-w-0 h-11 px-3 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
             <option value="">All Statuses</option>
             <option value="pending">Pending</option>
@@ -352,7 +352,7 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
           <select
             value={imageStatus}
             onChange={(e) => setImageStatus(e.target.value as ImageStatusFilter | '')}
-            className="w-full min-w-0 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="w-full min-w-0 h-11 px-3 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
             <option value="">Needs Work</option>
             <option value="all">All Records</option>
@@ -1050,7 +1050,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as CatalogItemStatus)}
-              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
+              className="w-full h-11 px-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
             >
               <option value="pending">Pending</option>
               <option value="published">Published</option>
@@ -1069,7 +1069,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
             <select
               value={selectedImageStatus}
               onChange={(e) => setSelectedImageStatus(e.target.value as GearCatalogItem['imageStatus'])}
-              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
+              className="w-full h-11 px-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
             >
               {willHaveImage ? (
                 <>
