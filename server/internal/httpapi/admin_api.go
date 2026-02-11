@@ -623,19 +623,19 @@ func (api *AdminAPI) handleGearImage(w http.ResponseWriter, r *http.Request, id 
 }
 
 // uploadGearImage handles POST /api/admin/gear/{id}/image
-// Max file size: 1MB, accepts JPEG/PNG/WebP only
+// Max file size: 2MB, accepts JPEG/PNG/WebP only
 func (api *AdminAPI) uploadGearImage(w http.ResponseWriter, r *http.Request, id string) {
 	userID := auth.GetUserID(r.Context())
 
-	// Limit request body to 1.5MB (slightly more than 1MB limit to account for multipart overhead)
-	maxSize := int64(1.5 * 1024 * 1024)
+	// Limit request body to 3MB (slightly more than 2MB limit to account for multipart overhead)
+	maxSize := int64(3 * 1024 * 1024)
 	r.Body = http.MaxBytesReader(w, r.Body, maxSize)
 
 	// Parse multipart form
 	if err := r.ParseMultipartForm(maxSize); err != nil {
 		api.logger.Error("Failed to parse multipart form", logging.WithField("error", err.Error()))
 		api.writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "File too large. Maximum size is 1MB.",
+			"error": "File too large. Maximum size is 2MB.",
 		})
 		return
 	}
@@ -659,9 +659,9 @@ func (api *AdminAPI) uploadGearImage(w http.ResponseWriter, r *http.Request, id 
 		})
 		return
 	}
-	if len(imageData) > 1024*1024 {
+	if len(imageData) > 2*1024*1024 {
 		api.writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "File too large. Maximum size is 1MB.",
+			"error": "File too large. Maximum size is 2MB.",
 		})
 		return
 	}

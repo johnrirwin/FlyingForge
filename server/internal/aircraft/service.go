@@ -321,10 +321,10 @@ func (s *Service) SetImage(ctx context.Context, userID string, params models.Set
 			return nil, &ServiceError{Message: "image must be JPEG, PNG, or WebP"}
 		}
 
-		// Validate file size (max 5MB)
-		const maxImageSize = 5 * 1024 * 1024
+		// Validate file size (max 2MB)
+		const maxImageSize = 2 * 1024 * 1024
 		if len(params.ImageData) > maxImageSize {
-			return nil, &ServiceError{Message: "image must be less than 5MB"}
+			return nil, &ServiceError{Message: "image must be less than 2MB"}
 		}
 
 		decision, asset, err = s.imageSvc.ModerateAndPersist(ctx, images.SaveRequest{

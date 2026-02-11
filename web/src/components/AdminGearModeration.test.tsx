@@ -126,4 +126,26 @@ describe('AdminGearModeration', () => {
       expect(mockAdminSearchGear).toHaveBeenCalledTimes(2);
     });
   });
+
+  it('shows an in-modal validation error when uploaded image exceeds 2MB', async () => {
+    render(<AdminGearModeration hasGearAdminAccess authLoading={false} />);
+
+    const row = await screen.findByRole('button', { name: 'Open editor for EMAX ECO II 2207' });
+    fireEvent.click(row);
+    expect(await screen.findByText('Edit Gear Item')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Image' }));
+    expect(await screen.findByText('Edit Gear Image')).toBeInTheDocument();
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    expect(fileInput).toBeTruthy();
+
+    const oversizedFile = new File([new Uint8Array((2 * 1024 * 1024) + 1)], 'too-large.jpg', {
+      type: 'image/jpeg',
+    });
+
+    fireEvent.change(fileInput, { target: { files: [oversizedFile] } });
+
+    expect(await screen.findByText('Image file is too large. Maximum size is 2MB.')).toBeInTheDocument();
+  });
 });

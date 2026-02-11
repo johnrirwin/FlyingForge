@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, useRef, type FormEvent, type ChangeEvent } from 'react';
+import { useState, useEffect, useCallback, useRef, type FormEvent } from 'react';
 import type { GearCatalogItem, GearType, ImageStatusFilter, AdminUpdateGearCatalogParams, DroneType, CatalogItemStatus } from '../gearCatalogTypes';
 import { GEAR_TYPES, DRONE_TYPES } from '../gearCatalogTypes';
 import { adminSearchGear, adminUpdateGear, adminUploadGearImage, adminDeleteGearImage, adminDeleteGear, adminGetGear, getAdminGearImageUrl } from '../adminApi';
 import { CatalogSearchModal } from './CatalogSearchModal';
 import { MobileFloatingControls } from './MobileFloatingControls';
+import { ImageUploadModal } from './ImageUploadModal';
 
 interface AdminGearModerationProps {
   hasGearAdminAccess: boolean;
@@ -640,6 +641,10 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
   const [selectedImageStatus, setSelectedImageStatus] = useState<GearCatalogItem['imageStatus']>('missing');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [modalImageFile, setModalImageFile] = useState<File | null>(null);
+  const [modalImagePreview, setModalImagePreview] = useState<string | null>(null);
+  const [imageModalError, setImageModalError] = useState<string | null>(null);
   const [deleteImage, setDeleteImage] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -699,46 +704,65 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
     });
   }, [willHaveImage]);
 
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) {
-      setImageFile(null);
-      setImagePreview(null);
-      return;
-    }
-    
-    // Validate file size (1MB max)
-    if (file.size > 1024 * 1024) {
-      setError('Image file is too large. Maximum size is 1MB.');
-      e.target.value = '';
+  const handleFileChange = (file: File) => {
+    // Validate file size (2MB max)
+    if (file.size > 2 * 1024 * 1024) {
+      setImageModalError('Image file is too large. Maximum size is 2MB.');
       return;
     }
     
     // Validate file type
     const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!validTypes.includes(file.type)) {
-      setError('Invalid image type. Please use JPEG, PNG, or WebP.');
-      e.target.value = '';
+      setImageModalError('Invalid image type. Please use JPEG, PNG, or WebP.');
       return;
     }
     
     setError(null);
-    setDeleteImage(false);
-    setImageFile(file);
-    setSelectedImageStatus('scanned');
+    setImageModalError(null);
+    setModalImageFile(file);
     
     // Create preview
     const reader = new FileReader();
     reader.onload = (event) => {
-      setImagePreview(event.target?.result as string);
+      setModalImagePreview(event.target?.result as string);
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleOpenImageModal = () => {
+    setShowImageModal(true);
+    setImageModalError(null);
+    setModalImageFile(imageFile);
+    setModalImagePreview(imagePreview);
+  };
+
+  const handleCloseImageModal = () => {
+    setShowImageModal(false);
+    setModalImageFile(null);
+    setModalImagePreview(null);
+    setImageModalError(null);
+  };
+
+  const handleSaveImageSelection = () => {
+    if (!modalImageFile || !modalImagePreview) return;
+
+    setDeleteImage(false);
+    setImageFile(modalImageFile);
+    setImagePreview(modalImagePreview);
+    setSelectedImageStatus('scanned');
+    setError(null);
+    setImageModalError(null);
+    handleCloseImageModal();
   };
 
   const handleDeleteImage = () => {
     setDeleteImage(true);
     setImageFile(null);
     setImagePreview(null);
+    setModalImageFile(null);
+    setModalImagePreview(null);
+    setImageModalError(null);
     setSelectedImageStatus('missing');
   };
 
@@ -1170,7 +1194,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">
               Product Image
-              <span className="ml-2 text-xs text-primary-400">(Max 1MB, JPEG/PNG/WebP)</span>
+              <span className="ml-2 text-xs text-primary-400">(Max 2MB, JPEG/PNG/WebP)</span>
             </label>
             
             {/* Show existing image or new preview */}
@@ -1213,19 +1237,23 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
               </div>
             )}
             
-            {/* File input */}
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              onChange={handleFileChange}
-              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-primary-600 file:text-white hover:file:bg-primary-700 file:cursor-pointer cursor-pointer"
-            />
+            <button
+              type="button"
+              onClick={handleOpenImageModal}
+              className="px-3 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-sm text-white transition-colors"
+            >
+              {(imagePreview || (!deleteImage && existingImageUrl)) ? 'Change Image' : 'Add Image'}
+            </button>
             
             {deleteImage && hasExistingImage && (
               <p className="mt-2 text-sm text-amber-400">
                 Image will be removed when you save.
               </p>
             )}
+
+            <p className="mt-2 text-xs text-slate-500">
+              Use the image modal to choose a file. JPEG, PNG, or WebP. Max 2MB.
+            </p>
 
           </div>
 
@@ -1263,6 +1291,22 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
           </button>
         </div>
       </div>
+
+      <ImageUploadModal
+        isOpen={showImageModal}
+        title="Edit Gear Image"
+        previewUrl={modalImagePreview || (!deleteImage ? (imagePreview || existingImageUrl || null) : null)}
+        previewAlt={modalImagePreview ? 'Gear preview' : 'Current gear image'}
+        placeholder="📦"
+        accept="image/jpeg,image/png,image/webp"
+        helperText="JPEG, PNG, or WebP. Max 2MB."
+        selectButtonLabel={modalImagePreview ? 'Choose Different' : 'Select Image'}
+        onSelectFile={handleFileChange}
+        onClose={handleCloseImageModal}
+        onSave={handleSaveImageSelection}
+        disableSave={!modalImageFile || !modalImagePreview}
+        errorMessage={imageModalError}
+      />
 
       {showDeleteConfirm && (
         <div className="absolute inset-0 z-10 flex items-center justify-center p-4">

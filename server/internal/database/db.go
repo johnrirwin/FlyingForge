@@ -669,7 +669,7 @@ CREATE INDEX IF NOT EXISTS idx_users_is_gear_admin ON users(is_gear_admin) WHERE
 
 // Migration to add binary image storage to gear_catalog
 const migrationGearCatalogImageData = `
--- Add image_data column for storing actual image binary (max 1MB enforced by app)
+-- Add image_data column for storing actual image binary (max 2MB enforced by app)
 ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS image_data BYTEA;
 ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS image_type VARCHAR(50);
 

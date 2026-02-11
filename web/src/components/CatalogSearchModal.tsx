@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { GearCatalogItem, GearType, CreateGearCatalogParams, DroneType } from '../gearCatalogTypes';
 import { GEAR_TYPES, DRONE_TYPES, getCatalogItemDisplayName } from '../gearCatalogTypes';
 import { searchGearCatalog, createGearCatalogItem, findNearMatches, getPopularGear } from '../gearCatalogApi';
+import { ImageUploadModal } from './ImageUploadModal';
 
 type ModerationStatus = 'APPROVED' | 'REJECTED' | 'PENDING_REVIEW';
 
@@ -381,7 +382,7 @@ function CreateCatalogItemForm({
   const [isImageUploading, setIsImageUploading] = useState(false);
   const [imageStatusText, setImageStatusText] = useState<string | null>(null);
   const [imageStatusTone, setImageStatusTone] = useState<'neutral' | 'success' | 'error'>('neutral');
-  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [imageModalError, setImageModalError] = useState<string | null>(null);
 
   type SelectedCatalogImage = {
     file?: File;
@@ -441,27 +442,20 @@ function CreateCatalogItemForm({
     };
   }, []);
 
-  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) {
-      return;
-    }
-    if (imageInputRef.current) {
-      imageInputRef.current.value = '';
-    }
-
+  const handleImageFileChange = async (file: File) => {
     // Keep validation aligned with gear catalog image endpoint.
-    if (file.size > 1024 * 1024) {
-      setError('Image file is too large. Maximum size is 1MB.');
+    if (file.size > 2 * 1024 * 1024) {
+      setImageModalError('Image file is too large. Maximum size is 2MB.');
       return;
     }
 
     const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!validTypes.includes(file.type)) {
-      setError('Invalid image type. Please use JPEG, PNG, or WebP.');
+      setImageModalError('Invalid image type. Please use JPEG, PNG, or WebP.');
       return;
     }
 
+    setImageModalError(null);
     setError(null);
     const previewUrl = URL.createObjectURL(file);
     if (modalImage?.previewUrl && modalImage.previewUrl !== selectedImage?.previewUrl) {
@@ -512,13 +506,15 @@ function CreateCatalogItemForm({
         setImageStatusText('Unable to verify right now');
       }
     } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to verify image right now';
       setModalImage({
         previewUrl,
         moderationStatus: 'PENDING_REVIEW',
       });
       setImageStatusTone('error');
       setImageStatusText('Unable to verify right now');
-      setError(err instanceof Error ? err.message : 'Unable to verify image right now');
+      setImageModalError(message);
+      setError(message);
     } finally {
       setIsImageUploading(false);
     }
@@ -526,6 +522,7 @@ function CreateCatalogItemForm({
 
   const handleOpenImageModal = () => {
     setShowImageModal(true);
+    setImageModalError(null);
     setImageStatusText(null);
     setImageStatusTone('neutral');
     if (selectedImage) {
@@ -543,10 +540,8 @@ function CreateCatalogItemForm({
     setModalImage(null);
     setImageStatusText(null);
     setImageStatusTone('neutral');
+    setImageModalError(null);
     setIsImageUploading(false);
-    if (imageInputRef.current) {
-      imageInputRef.current.value = '';
-    }
   };
 
   const handleSaveImageSelection = () => {
@@ -562,6 +557,7 @@ function CreateCatalogItemForm({
     setModalImage(null);
     setImageStatusText(null);
     setImageStatusTone('neutral');
+    setImageModalError(null);
   };
 
   const handleRemoveImage = () => {
@@ -576,9 +572,7 @@ function CreateCatalogItemForm({
     setImageStatusText(null);
     setImageStatusTone('neutral');
     setError(null);
-    if (imageInputRef.current) {
-      imageInputRef.current.value = '';
-    }
+    setImageModalError(null);
   };
 
   // Check for duplicates
@@ -818,7 +812,7 @@ function CreateCatalogItemForm({
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">
               Catalog Image (optional)
-              <span className="ml-2 text-xs text-primary-400">(Max 1MB, JPEG/PNG/WebP)</span>
+              <span className="ml-2 text-xs text-primary-400">(Max 2MB, JPEG/PNG/WebP)</span>
             </label>
 
             <div className="flex items-start gap-3">
@@ -891,92 +885,29 @@ function CreateCatalogItemForm({
         </button>
       </div>
 
-      {showImageModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[70] p-4">
-          <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full shadow-2xl border border-slate-700">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white">Edit Gear Image</h3>
-              <button
-                type="button"
-                onClick={handleCloseImageModal}
-                className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="flex flex-col items-center gap-4 mb-4">
-              <div className="w-36 h-36 rounded-lg overflow-hidden border-2 border-slate-600 bg-slate-700">
-                {modalImage?.previewUrl ? (
-                  <img src={modalImage.previewUrl} alt="Gear preview" className="w-full h-full object-cover" />
-                ) : selectedImage?.previewUrl ? (
-                  <img src={selectedImage.previewUrl} alt="Current gear image" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-slate-500 text-4xl">📦</div>
-                )}
-              </div>
-
-              <input
-                ref={imageInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={handleImageFileChange}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={() => imageInputRef.current?.click()}
-                disabled={isImageUploading}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
-              >
-                {modalImage?.previewUrl ? 'Choose Different' : 'Select Image'}
-              </button>
-              <p className="text-xs text-slate-500">JPEG, PNG, or WebP. Max 1MB.</p>
-            </div>
-
-            {usesModerationFlow && imageStatusText && (
-              <div
-                className={`mb-4 p-3 rounded-lg text-sm border ${
-                  imageStatusTone === 'success'
-                    ? 'bg-green-500/10 border-green-500/30 text-green-400'
-                    : imageStatusTone === 'error'
-                      ? 'bg-red-500/10 border-red-500/30 text-red-400'
-                      : 'bg-slate-700/50 border-slate-600 text-slate-300'
-                }`}
-              >
-                <p>{imageStatusText}</p>
-                {modalImage?.moderationReason && imageStatusTone !== 'success' && (
-                  <p className="mt-1 text-xs text-slate-300">{modalImage.moderationReason}</p>
-                )}
-              </div>
-            )}
-
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleCloseImageModal}
-                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveImageSelection}
-                disabled={
-                  isImageUploading ||
-                  !modalImage ||
-                  (usesModerationFlow && (!modalImage.uploadId || modalImage.moderationStatus !== 'APPROVED'))
-                }
-                className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ImageUploadModal
+        isOpen={showImageModal}
+        title="Edit Gear Image"
+        previewUrl={modalImage?.previewUrl || selectedImage?.previewUrl || null}
+        previewAlt={modalImage?.previewUrl ? 'Gear preview' : 'Current gear image'}
+        placeholder="📦"
+        accept="image/jpeg,image/png,image/webp"
+        helperText="JPEG, PNG, or WebP. Max 2MB."
+        selectButtonLabel={modalImage?.previewUrl ? 'Choose Different' : 'Select Image'}
+        onSelectFile={handleImageFileChange}
+        onClose={handleCloseImageModal}
+        onSave={handleSaveImageSelection}
+        disableSelect={isImageUploading}
+        disableSave={
+          isImageUploading ||
+          !modalImage ||
+          (usesModerationFlow && (!modalImage.uploadId || modalImage.moderationStatus !== 'APPROVED'))
+        }
+        statusText={usesModerationFlow ? imageStatusText : null}
+        statusTone={imageStatusTone}
+        statusReason={modalImage?.moderationReason}
+        errorMessage={imageModalError}
+      />
     </form>
   );
 }

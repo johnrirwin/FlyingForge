@@ -155,8 +155,8 @@ export function AircraftForm({ isOpen, aircraft, onClose, onSubmit }: AircraftFo
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Image must be less than 5MB');
+    if (file.size > 2 * 1024 * 1024) {
+      setError('Image must be less than 2MB');
       return;
     }
 
@@ -406,7 +406,7 @@ export function AircraftForm({ isOpen, aircraft, onClose, onSubmit }: AircraftFo
               )}
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              JPEG, PNG, or WebP. Max 5MB. {selectedImage?.uploadId ? 'Approved image ready to save.' : 'Use image modal to run safety checks.'}
+              JPEG, PNG, or WebP. Max 2MB. {selectedImage?.uploadId ? 'Approved image ready to save.' : 'Use image modal to run safety checks.'}
             </p>
           </div>
 
@@ -490,7 +490,7 @@ export function AircraftForm({ isOpen, aircraft, onClose, onSubmit }: AircraftFo
               >
                 {modalImage?.previewUrl ? 'Choose Different' : 'Select Image'}
               </button>
-              <p className="text-xs text-slate-500">JPEG, PNG, or WebP. Max 5MB.</p>
+              <p className="text-xs text-slate-500">JPEG, PNG, or WebP. Max 2MB.</p>
             </div>
 
             {imageStatusText && (
