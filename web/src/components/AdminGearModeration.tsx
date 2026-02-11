@@ -408,7 +408,7 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
         }}
       >
         {/* Items table - desktop */}
-        <div className="hidden md:block bg-slate-800 rounded-lg overflow-hidden">
+        <div className="hidden md:block border border-slate-800 rounded-xl overflow-hidden bg-slate-900/40">
           {isLoading ? (
             <div className="p-8 text-center">
               <div className="w-8 h-8 border-2 border-primary-500/30 border-t-primary-500 rounded-full animate-spin mx-auto" />
@@ -419,36 +419,36 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
               <p className="text-slate-400">No items found</p>
             </div>
           ) : (
-            <table className="w-full">
-            <thead className="bg-slate-700/50">
-              <tr>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">
+            <table className="w-full text-sm">
+            <thead className="sticky top-0 z-10 bg-slate-900 text-slate-400">
+              <tr className="border-b border-slate-800">
+                <th className="px-4 py-3 text-left font-medium">
                   Upload Date
                 </th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">
+                <th className="px-4 py-3 text-left font-medium">
                   Last Edit
                 </th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">
+                <th className="px-4 py-3 text-left font-medium">
                   Type
                 </th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">
+                <th className="px-4 py-3 text-left font-medium">
                   Brand
                 </th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">
+                <th className="px-4 py-3 text-left font-medium">
                   Model
                 </th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">
+                <th className="px-4 py-3 text-left font-medium">
                   Variant
                 </th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">
+                <th className="px-4 py-3 text-left font-medium">
                   Image
                 </th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-300">
+                <th className="px-4 py-3 text-left font-medium">
                   Status
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-700">
+            <tbody>
               {items.map((item) => {
                 const displayName = `${item.brand} ${item.model}${item.variant ? ` ${item.variant}` : ''}`.trim();
                 const isSelected = editingItemId === item.id;
@@ -465,8 +465,8 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
                     role="button"
                     tabIndex={0}
                     aria-label={`Open editor for ${displayName}`}
-                    className={`transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-inset focus-visible:bg-primary-600/20 ${
-                      isSelected ? 'bg-primary-600/10' : 'hover:bg-slate-700/30'
+                    className={`border-t border-slate-800 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-inset focus-visible:bg-primary-600/20 ${
+                      isSelected ? 'bg-primary-600/10' : 'bg-slate-900/40 hover:bg-slate-800/50'
                     }`}
                   >
                     <td className="px-4 py-3 text-sm text-slate-400">
@@ -476,7 +476,7 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
                       {formatDate(item.updatedAt)}
                     </td>
                     <td className="px-4 py-3 text-sm text-slate-300">
-                      <span className="px-2 py-0.5 bg-slate-700 rounded text-xs">
+                      <span className="px-2 py-0.5 bg-slate-700/70 text-slate-300 rounded text-xs">
                         {item.gearType}
                       </span>
                     </td>
@@ -510,12 +510,12 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
       {/* Items cards - mobile */}
       <div className="md:hidden space-y-3">
         {isLoading ? (
-          <div className="p-8 text-center bg-slate-800 rounded-lg">
+          <div className="p-8 text-center border border-slate-800 bg-slate-900/40 rounded-xl">
             <div className="w-8 h-8 border-2 border-primary-500/30 border-t-primary-500 rounded-full animate-spin mx-auto" />
             <p className="text-slate-400 mt-4">Loading...</p>
           </div>
         ) : items.length === 0 ? (
-          <div className="p-8 text-center bg-slate-800 rounded-lg">
+          <div className="p-8 text-center border border-slate-800 bg-slate-900/40 rounded-xl">
             <p className="text-slate-400">No items found</p>
           </div>
         ) : (
@@ -524,10 +524,10 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
               type="button"
               key={item.id}
               onClick={() => handleEditClick(item)}
-              className={`w-full text-left bg-slate-800 rounded-lg p-4 transition-colors border ${
+              className={`w-full text-left rounded-xl p-4 transition-colors border ${
                 editingItemId === item.id
                   ? 'border-primary-500/50 bg-primary-600/10'
-                  : 'border-slate-700 hover:bg-slate-700/60'
+                  : 'border-slate-800 bg-slate-900/40 hover:bg-slate-800/50'
               }`}
             >
               <div className="flex items-start justify-between gap-3">
