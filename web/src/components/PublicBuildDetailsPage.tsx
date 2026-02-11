@@ -60,7 +60,19 @@ export function PublicBuildDetailsPage() {
   ];
 
   const handleBuildYourOwn = useCallback(async () => {
+    if (!build) return;
+
+    const clonedParts = (build.parts || [])
+      .filter((part) => part.catalogItemId)
+      .map((part) => ({
+        gearType: part.gearType,
+        catalogItemId: part.catalogItemId,
+        position: part.position,
+        notes: part.notes,
+      }));
+
     if (isAuthenticated) {
+      // TODO: support pre-populating authenticated drafts from public builds.
       navigate('/me/builds?new=1');
       return;
     }
@@ -68,14 +80,18 @@ export function PublicBuildDetailsPage() {
     setIsCreatingTemp(true);
     setError(null);
     try {
-      const temp = await createTempBuild({ title: 'Temporary Build' });
+      const temp = await createTempBuild({
+        title: build.title ? `${build.title} Copy` : 'Temporary Build',
+        description: build.description || '',
+        parts: clonedParts,
+      });
       navigate(temp.url);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create temporary build');
     } finally {
       setIsCreatingTemp(false);
     }
-  }, [isAuthenticated, navigate]);
+  }, [build, isAuthenticated, navigate]);
 
   if (isLoading) {
     return (
