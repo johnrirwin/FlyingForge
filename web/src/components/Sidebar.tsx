@@ -112,9 +112,9 @@ export const Sidebar = memo(function Sidebar({
         </div>
 
         {/* Section Switcher */}
-        <div className="px-4 pt-1 pb-4 md:p-4 border-b border-slate-800">
+        <div className="px-4 pt-1 pb-4 md:p-4">
         <nav className="flex flex-col gap-1">
-          {/* Home - only shown when NOT authenticated */}
+          {/* Public sections */}
           {!isAuthenticated && (
             <NavItem
               section="home"
@@ -127,7 +127,6 @@ export const Sidebar = memo(function Sidebar({
             />
           )}
 
-          {/* Taking Off - only shown when NOT authenticated */}
           {!isAuthenticated && (
             <NavItem
               section="getting-started"
@@ -140,7 +139,49 @@ export const Sidebar = memo(function Sidebar({
             />
           )}
 
-          {/* Dashboard - only shown when authenticated */}
+          <NavItem
+            section="news"
+            label="News Feed"
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+              </svg>
+            }
+          />
+
+          <NavItem
+            section="equipment"
+            label="Shop"
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+              </svg>
+            }
+          />
+
+          <NavItem
+            section="gear-catalog"
+            label="Gear Catalog"
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+            }
+          />
+
+          <NavItem
+            section="builds"
+            label="Builds"
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3h6m-6 18h6M5 7h14M5 17h14M7 7v10m10-10v10M9 9h6v6H9V9z" />
+              </svg>
+            }
+          />
+
+          {/* Authenticated sections */}
+          <div className="my-2 border-t border-slate-800" />
+
           {isAuthenticated && (
             <NavItem
               section="dashboard"
@@ -153,7 +194,6 @@ export const Sidebar = memo(function Sidebar({
             />
           )}
 
-          {/* Social / Pilot Directory - requires auth */}
           <NavItem
             section="social"
             label="Social"
@@ -165,18 +205,6 @@ export const Sidebar = memo(function Sidebar({
             }
           />
 
-          {/* News Feed - always accessible */}
-          <NavItem
-            section="news"
-            label="News Feed"
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
-              </svg>
-            }
-          />
-
-          {/* My Inventory - requires auth */}
           <NavItem
             section="inventory"
             label="My Inventory"
@@ -188,7 +216,6 @@ export const Sidebar = memo(function Sidebar({
             }
           />
 
-          {/* My Aircraft - requires auth */}
           <NavItem
             section="aircraft"
             label="My Aircraft"
@@ -200,7 +227,6 @@ export const Sidebar = memo(function Sidebar({
             }
           />
 
-          {/* My Radio - requires auth */}
           <NavItem
             section="radio"
             label="My Radio"
@@ -212,7 +238,6 @@ export const Sidebar = memo(function Sidebar({
             }
           />
 
-          {/* My Batteries - requires auth */}
           <NavItem
             section="batteries"
             label="My Batteries"
@@ -224,40 +249,6 @@ export const Sidebar = memo(function Sidebar({
             }
           />
 
-          {/* Shop - always accessible */}
-          <NavItem
-            section="equipment"
-            label="Shop"
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-              </svg>
-            }
-          />
-
-          {/* Gear Catalog - always accessible */}
-          <NavItem
-            section="gear-catalog"
-            label="Gear Catalog"
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
-            }
-          />
-
-          {/* Public Builds - always accessible */}
-          <NavItem
-            section="builds"
-            label="Builds"
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3h6m-6 18h6M5 7h14M5 17h14M7 7v10m10-10v10M9 9h6v6H9V9z" />
-              </svg>
-            }
-          />
-
-          {/* My Builds - requires auth */}
           <NavItem
             section="my-builds"
             label="My Builds"
@@ -269,7 +260,9 @@ export const Sidebar = memo(function Sidebar({
             }
           />
 
-          {/* Admin: Gear Moderation - shown to admins and gear admins */}
+          {/* Admin sections */}
+          {(user?.isAdmin || user?.isGearAdmin) && <div className="my-2 border-t border-slate-800" />}
+
           {(user?.isAdmin || user?.isGearAdmin) && (
             <NavItem
               section="admin-gear"
