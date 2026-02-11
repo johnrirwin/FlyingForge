@@ -18,7 +18,7 @@ export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, ed
   const [name, setName] = useState('');
   const [category, setCategory] = useState<EquipmentCategory>('accessories');
   const [manufacturer, setManufacturer] = useState('');
-  const [quantity, setQuantity] = useState(1);
+  const [quantityInput, setQuantityInput] = useState('1');
   const [purchasePrice, setPurchasePrice] = useState('');
   const [purchaseSeller, setPurchaseSeller] = useState('');
   const [notes, setNotes] = useState('');
@@ -32,14 +32,14 @@ export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, ed
       setManufacturer(equipmentItem.manufacturer || '');
       setPurchasePrice(equipmentItem.price.toFixed(2));
       setPurchaseSeller(equipmentItem.seller);
-      setQuantity(1);
+      setQuantityInput('1');
       setNotes('');
       setBuildId('');
     } else if (editItem) {
       setName(editItem.name);
       setCategory(editItem.category);
       setManufacturer(editItem.manufacturer || '');
-      setQuantity(editItem.quantity);
+      setQuantityInput(String(editItem.quantity));
       setPurchasePrice(editItem.purchasePrice?.toFixed(2) || '');
       setPurchaseSeller(editItem.purchaseSeller || '');
       setNotes(editItem.notes || '');
@@ -49,7 +49,7 @@ export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, ed
       setName('');
       setCategory('accessories');
       setManufacturer('');
-      setQuantity(1);
+      setQuantityInput('1');
       setPurchasePrice('');
       setPurchaseSeller('');
       setNotes('');
@@ -64,11 +64,25 @@ export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, ed
     setError(null);
 
     try {
+      const trimmedQuantity = quantityInput.trim();
+      if (trimmedQuantity.length === 0) {
+        setError('Enter a quantity');
+        setIsSubmitting(false);
+        return;
+      }
+
+      const parsedQuantity = Number(trimmedQuantity);
+      if (!Number.isInteger(parsedQuantity) || parsedQuantity < 0) {
+        setError('Quantity must be a whole number of 0 or more');
+        setIsSubmitting(false);
+        return;
+      }
+
       const params: AddInventoryParams = {
         name: name.trim(),
         category,
         manufacturer: manufacturer.trim() || undefined,
-        quantity,
+        quantity: parsedQuantity,
         purchasePrice: purchasePrice ? parseFloat(purchasePrice) : undefined,
         purchaseSeller: purchaseSeller.trim() || undefined,
         notes: notes.trim() || undefined,
@@ -174,9 +188,16 @@ export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, ed
                 </label>
                 <input
                   type="number"
-                  value={quantity}
-                  onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                  min={1}
+                  value={quantityInput}
+                  onChange={(e) => {
+                    const nextValue = e.target.value;
+                    if (nextValue === '' || /^\d+$/.test(nextValue)) {
+                      setQuantityInput(nextValue);
+                    }
+                  }}
+                  inputMode="numeric"
+                  min={0}
+                  step={1}
                   className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
                 />
               </div>
@@ -247,7 +268,7 @@ export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, ed
           <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-700 bg-slate-800/50">
             <button
               type="submit"
-              disabled={isSubmitting || !name.trim()}
+              disabled={isSubmitting || !name.trim() || quantityInput.trim().length === 0}
               className="px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors flex items-center gap-2"
             >
               {isSubmitting && (
