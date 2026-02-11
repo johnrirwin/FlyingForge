@@ -268,7 +268,7 @@ export function MyBuildsPage() {
               <select
                 value={selectedAircraftId}
                 onChange={(event) => setSelectedAircraftId(event.target.value)}
-                className="rounded-md border border-slate-600 bg-slate-700 px-3 py-1.5 text-sm text-white focus:border-primary-500 focus:outline-none"
+                className="h-10 rounded-md border border-slate-600 bg-slate-700 px-3 text-sm text-white focus:border-primary-500 focus:outline-none"
               >
                 <option value="">Create from aircraft...</option>
                 {aircraft.map((item) => (
@@ -279,7 +279,7 @@ export function MyBuildsPage() {
                 type="button"
                 disabled={!selectedAircraftId}
                 onClick={handleCreateFromAircraft}
-                className="rounded-md bg-slate-700 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="h-10 rounded-md bg-slate-700 px-3 text-sm font-medium text-slate-200 transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Create
               </button>

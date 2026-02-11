@@ -199,7 +199,7 @@ export function CatalogSearchModal({
                 <select
                   value={gearType}
                   onChange={(e) => setGearType(e.target.value as GearType | '')}
-                  className="px-3 py-1.5 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500"
+                  className="h-10 px-3 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500"
                 >
                   <option value="">All Types</option>
                   {GEAR_TYPES.map(type => (
@@ -684,7 +684,7 @@ function CreateCatalogItemForm({
             value={gearType}
             onChange={(e) => setGearType(e.target.value as GearType)}
             required
-            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
+            className="w-full h-11 px-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
           >
             {GEAR_TYPES.map(type => (
               <option key={type.value} value={type.value}>{type.label}</option>

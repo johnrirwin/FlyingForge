@@ -362,7 +362,7 @@ export function AircraftDetail({
                         ) : (
                           <div className="space-y-2">
                             <select
-                              className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500"
+                              className="w-full h-11 px-3 bg-slate-600 border border-slate-500 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500"
                               onChange={(e) => {
                                 if (e.target.value) {
                                   handleAssignComponent(cat.value, e.target.value);
@@ -440,7 +440,7 @@ export function AircraftDetail({
                     <select
                       value={receiverSettings.rate || ''}
                       onChange={(e) => setReceiverSettings({ ...receiverSettings, rate: parseInt(e.target.value) || undefined })}
-                      className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-primary-500"
+                      className="w-full h-11 px-3 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-primary-500"
                     >
                       <option value="">Select rate...</option>
                       <option value="50">50 Hz</option>
@@ -462,7 +462,7 @@ export function AircraftDetail({
                     <select
                       value={receiverSettings.tlm || ''}
                       onChange={(e) => setReceiverSettings({ ...receiverSettings, tlm: parseInt(e.target.value) || undefined })}
-                      className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-primary-500"
+                      className="w-full h-11 px-3 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-primary-500"
                     >
                       <option value="">Select ratio...</option>
                       <option value="0">Off</option>
@@ -484,7 +484,7 @@ export function AircraftDetail({
                     <select
                       value={receiverSettings.power || ''}
                       onChange={(e) => setReceiverSettings({ ...receiverSettings, power: parseInt(e.target.value) || undefined })}
-                      className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-primary-500"
+                      className="w-full h-11 px-3 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-primary-500"
                     >
                       <option value="">Select power...</option>
                       <option value="10">10 mW</option>

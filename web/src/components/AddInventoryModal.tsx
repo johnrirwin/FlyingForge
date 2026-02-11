@@ -177,7 +177,7 @@ export function AddInventoryModal({ isOpen, onClose, onSubmit, equipmentItem, ed
                 value={category}
                 onChange={(e) => setCategory(e.target.value as EquipmentCategory)}
                 required
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
+                className="w-full h-11 px-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
               >
                 {EQUIPMENT_CATEGORIES.map(cat => (
                   <option key={cat.value} value={cat.value}>{cat.label}</option>

@@ -355,7 +355,7 @@ export function RadioSection({ onError }: RadioSectionProps) {
               <select
                 value={editFirmware}
                 onChange={(e) => setEditFirmware(e.target.value as FirmwareFamily | '')}
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
+                className="w-full h-11 px-3 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
               >
                 <option value="">Select firmware...</option>
                 {FIRMWARE_FAMILIES.map(fw => (
@@ -500,7 +500,7 @@ export function RadioSection({ onError }: RadioSectionProps) {
                 <select
                   value={uploadType}
                   onChange={(e) => setUploadType(e.target.value as BackupType)}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
+                  className="w-full h-11 px-3 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
                 >
                   {BACKUP_TYPES.map(type => (
                     <option key={type.value} value={type.value}>{type.label}</option>
