@@ -395,7 +395,7 @@ export function AdminUserManagement({ isAdmin, currentUserId, authLoading }: Adm
             }
           }}
           placeholder="Search by email, display name, or callsign..."
-          className="flex-1 h-11 px-3 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+          className="w-full md:flex-1 h-11 px-3 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
         />
         <select
           value={statusFilter}
