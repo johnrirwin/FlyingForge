@@ -67,7 +67,7 @@ export function PublicBuildsPage() {
 
   const controls = (
     <div className="border-b border-slate-800 bg-slate-900">
-      <div className="mx-auto w-full max-w-6xl px-4 md:px-6 py-4">
+      <div className="mx-auto w-full max-w-6xl px-4 md:px-0 py-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold text-white">Public Builds</h1>
