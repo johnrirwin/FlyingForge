@@ -177,6 +177,7 @@ Force refresh feeds. Request body:
 - `POST /api/builds/from-aircraft/{aircraftId}`
 - `GET /api/builds/{id}`
 - `PUT /api/builds/{id}`
+- `DELETE /api/builds/{id}`
 - `POST /api/builds/{id}/publish`
 - `POST /api/builds/{id}/unpublish`
 

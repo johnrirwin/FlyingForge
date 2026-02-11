@@ -438,6 +438,21 @@ func (s *BuildStore) SetStatus(ctx context.Context, id string, ownerUserID strin
 	return s.GetForOwner(ctx, id, ownerUserID)
 }
 
+// Delete removes a non-temp build for the owner.
+func (s *BuildStore) Delete(ctx context.Context, id string, ownerUserID string) (bool, error) {
+	result, err := s.db.ExecContext(
+		ctx,
+		`DELETE FROM builds WHERE id = $1 AND owner_user_id = $2 AND status != 'TEMP'`,
+		id,
+		ownerUserID,
+	)
+	if err != nil {
+		return false, fmt.Errorf("failed to delete build: %w", err)
+	}
+	rowsAffected, _ := result.RowsAffected()
+	return rowsAffected > 0, nil
+}
+
 // DeleteExpiredTemp deletes temp builds expired at or before cutoff.
 func (s *BuildStore) DeleteExpiredTemp(ctx context.Context, cutoff time.Time) (int64, error) {
 	result, err := s.db.ExecContext(

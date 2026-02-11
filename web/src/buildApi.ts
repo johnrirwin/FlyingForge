@@ -128,6 +128,12 @@ export async function updateMyBuild(id: string, params: UpdateBuildParams): Prom
   });
 }
 
+export async function deleteMyBuild(id: string): Promise<void> {
+  await fetchJSON<void>(`/api/builds/${id}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function publishMyBuild(id: string): Promise<BuildPublishResponse> {
   const token = getAccessToken();
   const headers: HeadersInit = {

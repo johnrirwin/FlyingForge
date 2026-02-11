@@ -4,6 +4,7 @@ import (
 	"context"
 	crand "crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -49,6 +50,7 @@ type buildStore interface {
 	Update(ctx context.Context, id string, ownerUserID string, params models.UpdateBuildParams) (*models.Build, error)
 	UpdateTempByToken(ctx context.Context, token string, params models.UpdateBuildParams) (*models.Build, error)
 	SetStatus(ctx context.Context, id string, ownerUserID string, status models.BuildStatus) (*models.Build, error)
+	Delete(ctx context.Context, id string, ownerUserID string) (bool, error)
 	DeleteExpiredTemp(ctx context.Context, cutoff time.Time) (int64, error)
 }
 
@@ -56,27 +58,39 @@ type aircraftDetailsReader interface {
 	GetDetails(ctx context.Context, id string, userID string) (*models.AircraftDetailsResponse, error)
 }
 
+type gearCatalogMigrator interface {
+	MigrateInventoryItem(
+		ctx context.Context,
+		inventoryItemID, userID, name, manufacturer string,
+		category models.EquipmentCategory,
+		specs json.RawMessage,
+	) (*models.GearCatalogItem, error)
+}
+
 // Service coordinates build business logic.
 type Service struct {
 	store         buildStore
 	aircraftStore aircraftDetailsReader
+	gearCatalog   gearCatalogMigrator
 	logger        *logging.Logger
 }
 
 // NewService creates a build service.
-func NewService(store *database.BuildStore, aircraftStore *database.AircraftStore, logger *logging.Logger) *Service {
+func NewService(store *database.BuildStore, aircraftStore *database.AircraftStore, gearCatalogStore *database.GearCatalogStore, logger *logging.Logger) *Service {
 	return &Service{
 		store:         store,
 		aircraftStore: aircraftStore,
+		gearCatalog:   gearCatalogStore,
 		logger:        logger,
 	}
 }
 
 // NewServiceWithDeps is exposed for testing.
-func NewServiceWithDeps(store buildStore, aircraftStore aircraftDetailsReader, logger *logging.Logger) *Service {
+func NewServiceWithDeps(store buildStore, aircraftStore aircraftDetailsReader, gearCatalog gearCatalogMigrator, logger *logging.Logger) *Service {
 	return &Service{
 		store:         store,
 		aircraftStore: aircraftStore,
+		gearCatalog:   gearCatalog,
 		logger:        logger,
 	}
 }
@@ -244,16 +258,44 @@ func (s *Service) CreateDraftFromAircraft(ctx context.Context, ownerUserID strin
 		if component.InventoryItem == nil {
 			continue
 		}
-		if strings.TrimSpace(component.InventoryItem.CatalogID) == "" {
-			continue
-		}
 		gearType := aircraftComponentToGearType(component.Category)
 		if gearType == "" {
 			continue
 		}
+		catalogID := strings.TrimSpace(component.InventoryItem.CatalogID)
+		if catalogID == "" && s.gearCatalog != nil {
+			category := component.InventoryItem.Category
+			if category == "" {
+				category = componentCategoryToEquipmentCategory(component.Category)
+			}
+			if category != "" {
+				catalogItem, err := s.gearCatalog.MigrateInventoryItem(
+					ctx,
+					component.InventoryItem.ID,
+					ownerUserID,
+					component.InventoryItem.Name,
+					component.InventoryItem.Manufacturer,
+					category,
+					component.InventoryItem.Specs,
+				)
+				if err != nil {
+					s.logger.Warn("Failed to backfill catalog entry while creating build from aircraft",
+						logging.WithFields(map[string]interface{}{
+							"aircraft_id": details.Aircraft.ID,
+							"component":   component.Category,
+							"error":       err.Error(),
+						}))
+				} else if catalogItem != nil {
+					catalogID = strings.TrimSpace(catalogItem.ID)
+				}
+			}
+		}
+		if catalogID == "" {
+			continue
+		}
 		parts = append(parts, models.BuildPartInput{
 			GearType:      gearType,
-			CatalogItemID: component.InventoryItem.CatalogID,
+			CatalogItemID: catalogID,
 		})
 	}
 
@@ -358,6 +400,11 @@ func (s *Service) Unpublish(ctx context.Context, id string, ownerUserID string) 
 	}
 	updated.Verified = isBuildVerified(updated)
 	return updated, nil
+}
+
+// DeleteByOwner deletes an owned non-temp build regardless of draft/publication status.
+func (s *Service) DeleteByOwner(ctx context.Context, id string, ownerUserID string) (bool, error) {
+	return s.store.Delete(ctx, strings.TrimSpace(id), ownerUserID)
 }
 
 // CleanupExpiredTemp deletes expired temp builds.
@@ -569,6 +616,33 @@ func aircraftComponentToGearType(category models.ComponentCategory) models.GearT
 		return models.GearTypeProp
 	case models.ComponentCategoryAntenna:
 		return models.GearTypeAntenna
+	default:
+		return ""
+	}
+}
+
+func componentCategoryToEquipmentCategory(category models.ComponentCategory) models.EquipmentCategory {
+	switch category {
+	case models.ComponentCategoryFrame:
+		return models.CategoryFrames
+	case models.ComponentCategoryMotors:
+		return models.CategoryMotors
+	case models.ComponentCategoryAIO:
+		return models.CategoryAIO
+	case models.ComponentCategoryFC:
+		return models.CategoryFC
+	case models.ComponentCategoryESC:
+		return models.CategoryESC
+	case models.ComponentCategoryReceiver:
+		return models.CategoryReceivers
+	case models.ComponentCategoryVTX:
+		return models.CategoryVTX
+	case models.ComponentCategoryCamera:
+		return models.CategoryCameras
+	case models.ComponentCategoryProps:
+		return models.CategoryPropellers
+	case models.ComponentCategoryAntenna:
+		return models.CategoryAntennas
 	default:
 		return ""
 	}

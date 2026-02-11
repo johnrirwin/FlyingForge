@@ -310,6 +310,18 @@ func (api *BuildAPI) handleBuildItem(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		api.writeJSON(w, http.StatusOK, build)
+	case http.MethodDelete:
+		deleted, err := api.service.DeleteByOwner(r.Context(), buildID, userID)
+		if err != nil {
+			api.logger.Error("Delete build failed", logging.WithField("error", err.Error()))
+			api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to delete build")
+			return
+		}
+		if !deleted {
+			api.writeError(w, http.StatusNotFound, "not_found", "build not found")
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}

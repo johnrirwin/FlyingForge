@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   createBuildFromAircraft,
   createDraftBuild,
+  deleteMyBuild,
   getMyBuild,
   listMyBuilds,
   publishMyBuild,
@@ -175,6 +176,27 @@ export function MyBuildsPage() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!editorBuild) return;
+    const confirmed = window.confirm(`Delete "${editorBuild.title || 'this build'}"? This cannot be undone.`);
+    if (!confirmed) return;
+
+    setIsSaving(true);
+    setError(null);
+    try {
+      await deleteMyBuild(editorBuild.id);
+      const remaining = builds.filter((item) => item.id !== editorBuild.id);
+      setBuilds(remaining);
+      setSelectedBuildId(remaining[0]?.id ?? null);
+      setEditorBuild(null);
+      setValidationErrors([]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete build');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const selectedStatusLabel = useMemo(() => {
     if (!editorBuild) return '';
     switch (editorBuild.status) {
@@ -283,6 +305,14 @@ export function MyBuildsPage() {
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      onClick={handleDelete}
+                      className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Delete
+                    </button>
                     <button
                       type="button"
                       disabled={isSaving}

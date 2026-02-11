@@ -94,7 +94,7 @@ func TestValidateForPublish_FromAircraftRequiresPublishedCatalogParts(t *testing
 func TestTempBuildCreateAndRetrieve(t *testing.T) {
 	ctx := context.Background()
 	store := newFakeBuildStore()
-	svc := NewServiceWithDeps(store, nil, logging.New(logging.LevelError))
+	svc := NewServiceWithDeps(store, nil, nil, logging.New(logging.LevelError))
 
 	created, err := svc.CreateTemp(ctx, "", models.CreateBuildParams{
 		Title: "Visitor Build",
@@ -134,6 +134,33 @@ func TestTempBuildCreateAndRetrieve(t *testing.T) {
 	}
 	if len(fetched.Parts) != 1 || fetched.Parts[0].CatalogItemID != "frame-1" {
 		t.Fatalf("unexpected parts: %+v", fetched.Parts)
+	}
+}
+
+func TestDeleteByOwner(t *testing.T) {
+	ctx := context.Background()
+	store := newFakeBuildStore()
+	svc := NewServiceWithDeps(store, nil, nil, logging.New(logging.LevelError))
+
+	created, err := svc.CreateDraft(ctx, "user-1", models.CreateBuildParams{Title: "To Delete"})
+	if err != nil {
+		t.Fatalf("CreateDraft error: %v", err)
+	}
+
+	deleted, err := svc.DeleteByOwner(ctx, created.ID, "user-1")
+	if err != nil {
+		t.Fatalf("DeleteByOwner error: %v", err)
+	}
+	if !deleted {
+		t.Fatalf("expected build to be deleted")
+	}
+
+	fetched, err := svc.GetByOwner(ctx, created.ID, "user-1")
+	if err != nil {
+		t.Fatalf("GetByOwner error: %v", err)
+	}
+	if fetched != nil {
+		t.Fatalf("expected build to be deleted, got %+v", fetched)
 	}
 }
 
@@ -306,6 +333,18 @@ func (s *fakeBuildStore) SetStatus(ctx context.Context, id string, ownerUserID s
 	}
 	build.UpdatedAt = now
 	return cloneBuild(build), nil
+}
+
+func (s *fakeBuildStore) Delete(ctx context.Context, id string, ownerUserID string) (bool, error) {
+	build := s.byID[id]
+	if build == nil || build.OwnerUserID != ownerUserID || build.Status == models.BuildStatusTemp {
+		return false, nil
+	}
+	delete(s.byID, id)
+	if build.Token != "" {
+		delete(s.byToken, build.Token)
+	}
+	return true, nil
 }
 
 func (s *fakeBuildStore) DeleteExpiredTemp(ctx context.Context, cutoff time.Time) (int64, error) {
