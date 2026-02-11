@@ -834,6 +834,7 @@ CHECK (status IN ('published', 'pending', 'removed'));
 const migrationGearCatalogPublishAutoApproveScannedImage = `
 UPDATE gear_catalog
 SET image_status = 'approved',
+    image_curated_by_user_id = COALESCE(image_curated_by_user_id, created_by_user_id),
     image_curated_at = COALESCE(image_curated_at, NOW()),
     updated_at = NOW()
 WHERE status = 'published'

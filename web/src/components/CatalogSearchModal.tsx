@@ -379,7 +379,6 @@ function CreateCatalogItemForm({
   const [checkingDuplicates, setCheckingDuplicates] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
   const [isImageUploading, setIsImageUploading] = useState(false);
-  const [isImageSaving, setIsImageSaving] = useState(false);
   const [imageStatusText, setImageStatusText] = useState<string | null>(null);
   const [imageStatusTone, setImageStatusTone] = useState<'neutral' | 'success' | 'error'>('neutral');
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -395,6 +394,12 @@ function CreateCatalogItemForm({
   const [selectedImage, setSelectedImage] = useState<SelectedCatalogImage | null>(null);
   const [modalImage, setModalImage] = useState<SelectedCatalogImage | null>(null);
   const usesModerationFlow = !!onModerateCatalogImage && !!onSaveCatalogImageUpload;
+
+  const revokePreviewUrl = (url?: string) => {
+    if (typeof url === 'string' && url.startsWith('blob:')) {
+      URL.revokeObjectURL(url);
+    }
+  };
 
   // Parse initial query into brand/model if possible
   const parseInitialQuery = () => {
@@ -415,6 +420,26 @@ function CreateCatalogItemForm({
   const [bestFor, setBestFor] = useState<DroneType[]>([]);
   const [msrp, setMsrp] = useState('');
   const [description, setDescription] = useState('');
+
+  const selectedImageRef = useRef<SelectedCatalogImage | null>(null);
+  const modalImageRef = useRef<SelectedCatalogImage | null>(null);
+
+  useEffect(() => {
+    selectedImageRef.current = selectedImage;
+  }, [selectedImage]);
+
+  useEffect(() => {
+    modalImageRef.current = modalImage;
+  }, [modalImage]);
+
+  useEffect(() => {
+    return () => {
+      const previewUrls = new Set<string>();
+      if (selectedImageRef.current?.previewUrl) previewUrls.add(selectedImageRef.current.previewUrl);
+      if (modalImageRef.current?.previewUrl) previewUrls.add(modalImageRef.current.previewUrl);
+      previewUrls.forEach((url) => revokePreviewUrl(url));
+    };
+  }, []);
 
   const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -439,6 +464,9 @@ function CreateCatalogItemForm({
 
     setError(null);
     const previewUrl = URL.createObjectURL(file);
+    if (modalImage?.previewUrl && modalImage.previewUrl !== selectedImage?.previewUrl) {
+      revokePreviewUrl(modalImage.previewUrl);
+    }
 
     if (!usesModerationFlow || !onModerateCatalogImage) {
       setModalImage({ file, previewUrl });
@@ -509,11 +537,13 @@ function CreateCatalogItemForm({
 
   const handleCloseImageModal = () => {
     setShowImageModal(false);
+    if (modalImage?.previewUrl && modalImage.previewUrl !== selectedImage?.previewUrl) {
+      revokePreviewUrl(modalImage.previewUrl);
+    }
     setModalImage(null);
     setImageStatusText(null);
     setImageStatusTone('neutral');
     setIsImageUploading(false);
-    setIsImageSaving(false);
     if (imageInputRef.current) {
       imageInputRef.current.value = '';
     }
@@ -524,16 +554,23 @@ function CreateCatalogItemForm({
     if (usesModerationFlow && (!modalImage.uploadId || modalImage.moderationStatus !== 'APPROVED')) {
       return;
     }
-    setIsImageSaving(true);
+    if (selectedImage?.previewUrl && selectedImage.previewUrl !== modalImage.previewUrl) {
+      revokePreviewUrl(selectedImage.previewUrl);
+    }
     setSelectedImage(modalImage);
     setShowImageModal(false);
     setModalImage(null);
     setImageStatusText(null);
     setImageStatusTone('neutral');
-    setIsImageSaving(false);
   };
 
   const handleRemoveImage = () => {
+    if (selectedImage?.previewUrl) {
+      revokePreviewUrl(selectedImage.previewUrl);
+    }
+    if (modalImage?.previewUrl && modalImage.previewUrl !== selectedImage?.previewUrl) {
+      revokePreviewUrl(modalImage.previewUrl);
+    }
     setSelectedImage(null);
     setModalImage(null);
     setImageStatusText(null);
@@ -862,7 +899,6 @@ function CreateCatalogItemForm({
               <button
                 type="button"
                 onClick={handleCloseImageModal}
-                disabled={isImageSaving}
                 className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -892,7 +928,7 @@ function CreateCatalogItemForm({
               <button
                 type="button"
                 onClick={() => imageInputRef.current?.click()}
-                disabled={isImageUploading || isImageSaving}
+                disabled={isImageUploading}
                 className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
               >
                 {modalImage?.previewUrl ? 'Choose Different' : 'Select Image'}
@@ -921,7 +957,6 @@ function CreateCatalogItemForm({
               <button
                 type="button"
                 onClick={handleCloseImageModal}
-                disabled={isImageSaving}
                 className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
               >
                 Cancel
@@ -930,7 +965,6 @@ function CreateCatalogItemForm({
                 type="button"
                 onClick={handleSaveImageSelection}
                 disabled={
-                  isImageSaving ||
                   isImageUploading ||
                   !modalImage ||
                   (usesModerationFlow && (!modalImage.uploadId || modalImage.moderationStatus !== 'APPROVED'))

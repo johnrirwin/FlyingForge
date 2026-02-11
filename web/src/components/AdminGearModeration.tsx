@@ -688,14 +688,16 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
   const willHaveImage = imageFile !== null || (!deleteImage && Boolean(hasExistingImage));
 
   useEffect(() => {
-    if (!willHaveImage && selectedImageStatus !== 'missing') {
-      setSelectedImageStatus('missing');
-      return;
-    }
-    if (willHaveImage && selectedImageStatus === 'missing') {
-      setSelectedImageStatus('scanned');
-    }
-  }, [selectedImageStatus, willHaveImage]);
+    setSelectedImageStatus((prevStatus) => {
+      if (!willHaveImage && prevStatus !== 'missing') {
+        return 'missing';
+      }
+      if (willHaveImage && prevStatus === 'missing') {
+        return 'scanned';
+      }
+      return prevStatus;
+    });
+  }, [willHaveImage]);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -723,9 +725,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
     setError(null);
     setDeleteImage(false);
     setImageFile(file);
-    if (selectedImageStatus === 'missing') {
-      setSelectedImageStatus('approved');
-    }
+    setSelectedImageStatus('scanned');
     
     // Create preview
     const reader = new FileReader();

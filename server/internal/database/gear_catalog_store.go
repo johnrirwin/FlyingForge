@@ -1097,15 +1097,23 @@ func (s *GearCatalogStore) SetImage(ctx context.Context, id string, adminUserID 
 // This marks image_status as "scanned" so it remains in the admin moderation queue.
 // Returns previous image asset ID for cleanup.
 func (s *GearCatalogStore) SetUserSubmittedImage(ctx context.Context, id string, imageType string, imageAssetID string) (string, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to begin transaction for user-submitted gear image: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
 	var (
 		previousAssetID sql.NullString
 		imageStatus     models.ImageStatus
 	)
 
-	if err := s.db.QueryRowContext(ctx, `
+	// Lock the row to avoid TOCTOU races with concurrent admin curation.
+	if err := tx.QueryRowContext(ctx, `
 		SELECT image_asset_id, COALESCE(image_status, 'missing')
 		FROM gear_catalog
 		WHERE id = $1
+		FOR UPDATE
 	`, id).Scan(&previousAssetID, &imageStatus); err != nil {
 		if err == sql.ErrNoRows {
 			return "", fmt.Errorf("%w: %s", ErrCatalogItemNotFound, id)
@@ -1129,7 +1137,7 @@ func (s *GearCatalogStore) SetUserSubmittedImage(ctx context.Context, id string,
 		    updated_at = NOW()
 		WHERE id = $4
 	`
-	result, err := s.db.ExecContext(ctx, query, imageAssetID, imageType, models.ImageStatusScanned, id)
+	result, err := tx.ExecContext(ctx, query, imageAssetID, imageType, models.ImageStatusScanned, id)
 	if err != nil {
 		return "", fmt.Errorf("failed to set user-submitted gear image: %w", err)
 	}
@@ -1137,6 +1145,10 @@ func (s *GearCatalogStore) SetUserSubmittedImage(ctx context.Context, id string,
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
 		return "", fmt.Errorf("%w: %s", ErrCatalogItemNotFound, id)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return "", fmt.Errorf("failed to commit user-submitted gear image update: %w", err)
 	}
 
 	if previousAssetID.Valid {
