@@ -6,6 +6,10 @@ import {
   NewsPage,
   ShopSection,
   GearCatalogPage,
+  PublicBuildsPage,
+  PublicBuildDetailsPage,
+  TempBuildPage,
+  MyBuildsPage,
   InventoryPage,
   AircraftPage,
   RadioSection,
@@ -154,6 +158,9 @@ export function AppRoutes({
         }
       />
       <Route path="/shop" element={<ShopSection />} />
+      <Route path="/builds" element={<PublicBuildsPage />} />
+      <Route path="/builds/:id" element={<PublicBuildDetailsPage />} />
+      <Route path="/builds/temp/:token" element={<TempBuildPage />} />
       <Route
         path="/gear-catalog"
         element={
@@ -176,6 +183,16 @@ export function AppRoutes({
             onAddItem={onAddInventoryItem}
             onOpenItem={onOpenInventoryItem}
           />
+        }
+      />
+      <Route
+        path="/me/builds"
+        element={
+          isAuthenticated ? (
+            <MyBuildsPage />
+          ) : (
+            <Navigate to="/" replace />
+          )
         }
       />
       <Route

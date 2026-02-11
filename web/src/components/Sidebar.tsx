@@ -246,6 +246,29 @@ export const Sidebar = memo(function Sidebar({
             }
           />
 
+          {/* Public Builds - always accessible */}
+          <NavItem
+            section="builds"
+            label="Builds"
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3h6m-6 18h6M5 7h14M5 17h14M7 7v10m10-10v10M9 9h6v6H9V9z" />
+              </svg>
+            }
+          />
+
+          {/* My Builds - requires auth */}
+          <NavItem
+            section="my-builds"
+            label="My Builds"
+            requiresAuth
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18M6 7l1-3h10l1 3M5 7v13h14V7M9 11h6m-6 4h4" />
+              </svg>
+            }
+          />
+
           {/* Admin: Gear Moderation - shown to admins and gear admins */}
           {(user?.isAdmin || user?.isGearAdmin) && (
             <NavItem

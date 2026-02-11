@@ -27,6 +27,8 @@ const pathToSection: Record<string, AppSection> = {
   '/news': 'news',
   '/shop': 'equipment',
   '/gear-catalog': 'gear-catalog',
+  '/builds': 'builds',
+  '/me/builds': 'my-builds',
   '/inventory': 'inventory',
   '/aircraft': 'aircraft',
   '/radio': 'radio',
@@ -44,6 +46,8 @@ const sectionToPath: Record<AppSection, string> = {
   'news': '/news',
   'equipment': '/shop',
   'gear-catalog': '/gear-catalog',
+  'builds': '/builds',
+  'my-builds': '/me/builds',
   'inventory': '/inventory',
   'aircraft': '/aircraft',
   'radio': '/radio',
@@ -80,7 +84,11 @@ function App() {
   const [wasAuthenticated, setWasAuthenticated] = useState<boolean | null>(null);
 
   // Derive activeSection from URL path
-  const activeSection: AppSection = pathToSection[location.pathname] || 'home';
+  const activeSection: AppSection = (() => {
+    if (location.pathname.startsWith('/me/builds')) return 'my-builds';
+    if (location.pathname.startsWith('/builds')) return 'builds';
+    return pathToSection[location.pathname] || 'home';
+  })();
 
   // News feed state
   const [items, setItems] = useState<FeedItem[]>([]);
@@ -139,7 +147,7 @@ function App() {
     if (authLoading) return;
     
     // Protected paths that require authentication
-    const protectedPaths = ['/dashboard', '/inventory', '/aircraft', '/radio', '/batteries', '/profile', '/social', '/admin'];
+    const protectedPaths = ['/dashboard', '/me/builds', '/inventory', '/aircraft', '/radio', '/batteries', '/profile', '/social', '/admin'];
     const isProtectedPath = protectedPaths.some(p => location.pathname.startsWith(p));
     
     // On initial load after auth check completes
@@ -646,7 +654,7 @@ function App() {
       return;
     }
     // Protected sections that require authentication
-    const protectedSections = ['dashboard', 'inventory', 'aircraft', 'radio', 'batteries', 'profile', 'social', 'admin-gear', 'admin-users'];
+    const protectedSections = ['dashboard', 'my-builds', 'inventory', 'aircraft', 'radio', 'batteries', 'profile', 'social', 'admin-gear', 'admin-users'];
     if (protectedSections.includes(section) && !isAuthenticated) {
       setAuthModal('login');
       return;
