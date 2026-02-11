@@ -121,7 +121,7 @@ export async function adminUpdateGear(
 }
 
 // Upload an image for a gear item (admin only)
-// Max file size: 1MB, accepts JPEG/PNG/WebP
+// Max file size: 2MB, accepts JPEG/PNG/WebP
 export async function adminUploadGearImage(
   id: string,
   imageFile: File
@@ -131,9 +131,9 @@ export async function adminUploadGearImage(
     throw new Error('Authentication required');
   }
 
-  // Validate file size (1MB max)
-  if (imageFile.size > 1024 * 1024) {
-    throw new Error('Image file is too large. Maximum size is 1MB.');
+  // Validate file size (2MB max)
+  if (imageFile.size > 2 * 1024 * 1024) {
+    throw new Error('Image file is too large. Maximum size is 2MB.');
   }
 
   // Validate file type

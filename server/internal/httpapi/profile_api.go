@@ -255,7 +255,7 @@ func (api *ProfileAPI) handleAvatar(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	default:
-		const maxSize = int64(6 * 1024 * 1024)
+		const maxSize = int64(3 * 1024 * 1024)
 		r.Body = http.MaxBytesReader(w, r.Body, maxSize)
 		if err := r.ParseMultipartForm(maxSize); err != nil {
 			api.writeError(w, http.StatusBadRequest, "invalid_request", "invalid upload payload")
@@ -277,8 +277,8 @@ func (api *ProfileAPI) handleAvatar(w http.ResponseWriter, r *http.Request) {
 			api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to read image")
 			return
 		}
-		if len(imageData) > 5*1024*1024 {
-			api.writeError(w, http.StatusBadRequest, "invalid_request", "image must be less than 5MB")
+		if len(imageData) > 2*1024*1024 {
+			api.writeError(w, http.StatusBadRequest, "invalid_request", "image must be less than 2MB")
 			return
 		}
 		if _, ok := detectAllowedImageContentType(imageData); !ok {

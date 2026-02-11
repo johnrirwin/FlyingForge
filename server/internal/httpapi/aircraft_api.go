@@ -540,11 +540,11 @@ func (api *AircraftAPI) uploadImage(w http.ResponseWriter, r *http.Request, airc
 		return
 	}
 
-	// Limit request body to 6MB (slightly more than our 5MB limit to account for multipart overhead)
-	r.Body = http.MaxBytesReader(w, r.Body, 6*1024*1024)
+	// Limit request body to 3MB (slightly more than our 2MB limit to account for multipart overhead)
+	r.Body = http.MaxBytesReader(w, r.Body, 3*1024*1024)
 
 	// Parse multipart form
-	if err := r.ParseMultipartForm(6 * 1024 * 1024); err != nil {
+	if err := r.ParseMultipartForm(3 * 1024 * 1024); err != nil {
 		api.logger.Error("Failed to parse multipart form", logging.WithField("error", err.Error()))
 		http.Error(w, "File too large or invalid form", http.StatusBadRequest)
 		return
@@ -563,6 +563,12 @@ func (api *AircraftAPI) uploadImage(w http.ResponseWriter, r *http.Request, airc
 	if err != nil {
 		api.logger.Error("Failed to read image data", logging.WithField("error", err.Error()))
 		http.Error(w, "Failed to read image", http.StatusInternalServerError)
+		return
+	}
+	if len(imageData) > 2*1024*1024 {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "Image must be less than 2MB",
+		})
 		return
 	}
 	detectedContentType, ok := detectAllowedImageContentType(imageData)

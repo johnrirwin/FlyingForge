@@ -49,7 +49,7 @@ func (api *ImageAPI) handleUpload(w http.ResponseWriter, r *http.Request) {
 
 	userID := auth.GetUserID(r.Context())
 
-	maxSize := int64(6 * 1024 * 1024)
+	maxSize := int64(3 * 1024 * 1024)
 	r.Body = http.MaxBytesReader(w, r.Body, maxSize)
 	if err := r.ParseMultipartForm(maxSize); err != nil {
 		api.writeJSON(w, http.StatusBadRequest, map[string]string{
@@ -69,10 +69,10 @@ func (api *ImageAPI) handleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	if header.Size > 5*1024*1024 {
+	if header.Size > 2*1024*1024 {
 		api.writeJSON(w, http.StatusBadRequest, map[string]string{
 			"status": "PENDING_REVIEW",
-			"reason": "Image must be less than 5MB",
+			"reason": "Image must be less than 2MB",
 		})
 		return
 	}
@@ -96,6 +96,13 @@ func (api *ImageAPI) handleUpload(w http.ResponseWriter, r *http.Request) {
 		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"status": "PENDING_REVIEW",
 			"reason": "Failed to read image",
+		})
+		return
+	}
+	if len(imageData) > 2*1024*1024 {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{
+			"status": "PENDING_REVIEW",
+			"reason": "Image must be less than 2MB",
 		})
 		return
 	}

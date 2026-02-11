@@ -169,8 +169,8 @@ export async function saveGearCatalogImageUpload(catalogId: string, uploadId: st
  */
 export async function uploadGearCatalogImage(catalogId: string, imageFile: File): Promise<void> {
   // Keep client-side validation aligned with catalog upload UI + backend limits.
-  if (imageFile.size > 1024 * 1024) {
-    throw new Error('Image file is too large. Maximum size is 1MB.');
+  if (imageFile.size > 2 * 1024 * 1024) {
+    throw new Error('Image file is too large. Maximum size is 2MB.');
   }
   const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
   if (!validTypes.includes(imageFile.type)) {
