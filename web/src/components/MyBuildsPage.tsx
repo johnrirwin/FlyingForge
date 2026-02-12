@@ -446,7 +446,11 @@ export function MyBuildsPage() {
                 type="button"
                 disabled={!selectedAircraftId}
                 onClick={handleCreateFromAircraft}
-                className="h-10 shrink-0 rounded-md bg-slate-700 px-3 text-sm font-medium text-slate-200 transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className={`h-10 shrink-0 rounded-md px-3 text-sm font-medium transition disabled:cursor-not-allowed ${
+                  selectedAircraftId
+                    ? 'bg-primary-600 text-white hover:bg-primary-500'
+                    : 'bg-slate-700 text-slate-400 disabled:opacity-70'
+                }`}
               >
                 Create
               </button>
