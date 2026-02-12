@@ -1,6 +1,6 @@
 import type { GearType, CatalogItemStatus } from './gearCatalogTypes';
 
-export type BuildStatus = 'TEMP' | 'SHARED' | 'DRAFT' | 'PUBLISHED' | 'UNPUBLISHED';
+export type BuildStatus = 'TEMP' | 'SHARED' | 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' | 'UNPUBLISHED';
 export type BuildSort = 'newest';
 
 export interface BuildCatalogItem {

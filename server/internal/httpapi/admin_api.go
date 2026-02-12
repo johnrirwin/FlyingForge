@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/johnrirwin/flyingforge/internal/auth"
+	"github.com/johnrirwin/flyingforge/internal/builds"
 	"github.com/johnrirwin/flyingforge/internal/database"
 	"github.com/johnrirwin/flyingforge/internal/images"
 	"github.com/johnrirwin/flyingforge/internal/logging"
@@ -22,16 +23,18 @@ import (
 type AdminAPI struct {
 	catalogStore   *database.GearCatalogStore
 	userStore      *database.UserStore
+	buildSvc       *builds.Service
 	imageSvc       *images.Service
 	authMiddleware *auth.Middleware
 	logger         *logging.Logger
 }
 
 // NewAdminAPI creates a new admin API handler
-func NewAdminAPI(catalogStore *database.GearCatalogStore, userStore *database.UserStore, imageSvc *images.Service, authMiddleware *auth.Middleware, logger *logging.Logger) *AdminAPI {
+func NewAdminAPI(catalogStore *database.GearCatalogStore, userStore *database.UserStore, buildSvc *builds.Service, imageSvc *images.Service, authMiddleware *auth.Middleware, logger *logging.Logger) *AdminAPI {
 	return &AdminAPI{
 		catalogStore:   catalogStore,
 		userStore:      userStore,
+		buildSvc:       buildSvc,
 		imageSvc:       imageSvc,
 		authMiddleware: authMiddleware,
 		logger:         logger,
@@ -45,17 +48,21 @@ func (api *AdminAPI) RegisterRoutes(mux *http.ServeMux, corsMiddleware func(http
 		return
 	}
 
-	// Gear moderation routes: admin OR gear-admin role
-	mux.HandleFunc("/api/admin/gear", corsMiddleware(api.authMiddleware.RequireAuth(api.requireGearModerator(api.handleAdminGear))))
-	mux.HandleFunc("/api/admin/gear/", corsMiddleware(api.authMiddleware.RequireAuth(api.requireGearModerator(api.handleAdminGearByID))))
+	// Content moderation routes: admin OR content-admin role.
+	mux.HandleFunc("/api/admin/gear", corsMiddleware(api.authMiddleware.RequireAuth(api.requireContentModerator(api.handleAdminGear))))
+	mux.HandleFunc("/api/admin/gear/", corsMiddleware(api.authMiddleware.RequireAuth(api.requireContentModerator(api.handleAdminGearByID))))
+	if api.buildSvc != nil {
+		mux.HandleFunc("/api/admin/builds", corsMiddleware(api.authMiddleware.RequireAuth(api.requireContentModerator(api.handleAdminBuilds))))
+		mux.HandleFunc("/api/admin/builds/", corsMiddleware(api.authMiddleware.RequireAuth(api.requireContentModerator(api.handleAdminBuildByID))))
+	}
 
 	// User admin routes: admin role only
 	mux.HandleFunc("/api/admin/users", corsMiddleware(api.authMiddleware.RequireAuth(api.requireAdmin(api.handleAdminUsers))))
 	mux.HandleFunc("/api/admin/users/", corsMiddleware(api.authMiddleware.RequireAuth(api.requireAdmin(api.handleAdminUserByID))))
 }
 
-func canModerateGear(user *models.User) bool {
-	return user != nil && (user.IsAdmin || user.IsGearAdmin)
+func canModerateContent(user *models.User) bool {
+	return user != nil && (user.IsAdmin || user.IsContentAdmin)
 }
 
 func canManageUsers(user *models.User) bool {
@@ -101,9 +108,9 @@ func (api *AdminAPI) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
 	return api.requireRole(next, canManageUsers, "admin access required", "Non-admin user attempted user-admin access")
 }
 
-// requireGearModerator is middleware that allows full admins and gear-admin users.
-func (api *AdminAPI) requireGearModerator(next http.HandlerFunc) http.HandlerFunc {
-	return api.requireRole(next, canModerateGear, "admin or gear-admin access required", "User without gear moderation role attempted admin gear access")
+// requireContentModerator is middleware that allows full admins and content-admin users.
+func (api *AdminAPI) requireContentModerator(next http.HandlerFunc) http.HandlerFunc {
+	return api.requireRole(next, canModerateContent, "admin or content-admin access required", "User without content moderation role attempted admin content access")
 }
 
 // handleAdminGear handles GET /api/admin/gear (list gear for moderation)
@@ -321,6 +328,291 @@ func (api *AdminAPI) handleDeleteGear(w http.ResponseWriter, r *http.Request, id
 	})
 }
 
+// handleAdminBuilds handles GET /api/admin/builds (list builds for moderation).
+func (api *AdminAPI) handleAdminBuilds(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		api.writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	if api.buildSvc == nil {
+		api.writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "build moderation unavailable"})
+		return
+	}
+
+	query := r.URL.Query()
+	status := models.NormalizeBuildStatus(models.BuildStatus(strings.TrimSpace(query.Get("status"))))
+	if status == "" {
+		status = models.BuildStatusPendingReview
+	}
+	switch status {
+	case models.BuildStatusPendingReview, models.BuildStatusDraft, models.BuildStatusPublished, models.BuildStatusUnpublished:
+		// valid
+	default:
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid status"})
+		return
+	}
+
+	params := models.BuildModerationListParams{
+		Query:  strings.TrimSpace(query.Get("query")),
+		Status: status,
+		Limit:  parseIntQuery(query.Get("limit"), 20),
+		Offset: parseIntQuery(query.Get("offset"), 0),
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+
+	response, err := api.buildSvc.ListForModeration(ctx, params)
+	if err != nil {
+		api.logger.Error("Failed to list moderation builds", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list builds"})
+		return
+	}
+
+	api.writeJSON(w, http.StatusOK, response)
+}
+
+// handleAdminBuildByID handles /api/admin/builds/{id} actions.
+func (api *AdminAPI) handleAdminBuildByID(w http.ResponseWriter, r *http.Request) {
+	path := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/admin/builds/"), "/")
+	if path == "" {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "build ID required"})
+		return
+	}
+
+	parts := strings.Split(path, "/")
+	buildID := strings.TrimSpace(parts[0])
+	if buildID == "" {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "build ID required"})
+		return
+	}
+
+	if len(parts) > 1 {
+		switch parts[1] {
+		case "image":
+			api.handleAdminBuildImage(w, r, buildID)
+			return
+		case "publish":
+			if r.Method != http.MethodPost {
+				api.writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+				return
+			}
+			api.handlePublishAdminBuild(w, r, buildID)
+			return
+		default:
+			api.writeJSON(w, http.StatusNotFound, map[string]string{"error": "unknown build action"})
+			return
+		}
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		api.handleGetAdminBuild(w, r, buildID)
+	case http.MethodPut:
+		api.handleUpdateAdminBuild(w, r, buildID)
+	default:
+		api.writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+func (api *AdminAPI) handleGetAdminBuild(w http.ResponseWriter, r *http.Request, buildID string) {
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	build, err := api.buildSvc.GetForModeration(ctx, buildID)
+	if err != nil {
+		api.logger.Error("Failed to get moderation build", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to get build"})
+		return
+	}
+	if build == nil {
+		api.writeJSON(w, http.StatusNotFound, map[string]string{"error": "build not found"})
+		return
+	}
+
+	api.writeJSON(w, http.StatusOK, build)
+}
+
+func (api *AdminAPI) handleUpdateAdminBuild(w http.ResponseWriter, r *http.Request, buildID string) {
+	var params models.UpdateBuildParams
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	updated, err := api.buildSvc.UpdateForModeration(ctx, buildID, params)
+	if err != nil {
+		api.logger.Error("Failed to update moderation build", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update build"})
+		return
+	}
+	if updated == nil {
+		api.writeJSON(w, http.StatusNotFound, map[string]string{"error": "build not found"})
+		return
+	}
+
+	api.writeJSON(w, http.StatusOK, updated)
+}
+
+func (api *AdminAPI) handlePublishAdminBuild(w http.ResponseWriter, r *http.Request, buildID string) {
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	updated, validation, err := api.buildSvc.ApproveForModeration(ctx, buildID)
+	if err != nil {
+		var validationErr *builds.ValidationError
+		if errors.As(err, &validationErr) {
+			api.writeJSON(w, http.StatusBadRequest, models.BuildPublishResponse{Validation: validationErr.Validation})
+			return
+		}
+		var svcErr *builds.ServiceError
+		if errors.As(err, &svcErr) && strings.EqualFold(strings.TrimSpace(svcErr.Message), "build is not pending moderation") {
+			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": svcErr.Message})
+			return
+		}
+		api.logger.Error("Failed to publish moderation build", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to publish build"})
+		return
+	}
+	if updated == nil {
+		api.writeJSON(w, http.StatusNotFound, map[string]string{"error": "build not found"})
+		return
+	}
+
+	api.writeJSON(w, http.StatusOK, models.BuildPublishResponse{
+		Build:      updated,
+		Validation: validation,
+	})
+}
+
+func (api *AdminAPI) handleAdminBuildImage(w http.ResponseWriter, r *http.Request, buildID string) {
+	switch r.Method {
+	case http.MethodGet:
+		api.getAdminBuildImage(w, r, buildID)
+	case http.MethodPost:
+		api.uploadAdminBuildImage(w, r, buildID)
+	case http.MethodDelete:
+		api.deleteAdminBuildImage(w, r, buildID)
+	default:
+		api.writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+func (api *AdminAPI) uploadAdminBuildImage(w http.ResponseWriter, r *http.Request, buildID string) {
+	moderatorID := auth.GetUserID(r.Context())
+
+	maxSize := int64(3 * 1024 * 1024)
+	r.Body = http.MaxBytesReader(w, r.Body, maxSize)
+
+	if err := r.ParseMultipartForm(maxSize); err != nil {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "file too large. maximum size is 2MB"})
+		return
+	}
+
+	file, _, err := r.FormFile("image")
+	if err != nil {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "image file required"})
+		return
+	}
+	defer file.Close()
+
+	imageData, err := io.ReadAll(file)
+	if err != nil {
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to read image"})
+		return
+	}
+	if len(imageData) > 2*1024*1024 {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "file too large. maximum size is 2MB"})
+		return
+	}
+	contentType, ok := detectAllowedImageContentType(imageData)
+	if !ok {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "image must be JPEG, PNG, or WebP"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	decision, err := api.buildSvc.SetImageForModeration(ctx, moderatorID, models.SetBuildImageParams{
+		BuildID:   buildID,
+		ImageType: contentType,
+		ImageData: imageData,
+	})
+	if err != nil {
+		var svcErr *builds.ServiceError
+		if errors.As(err, &svcErr) && strings.EqualFold(strings.TrimSpace(svcErr.Message), "build not found") {
+			api.writeJSON(w, http.StatusNotFound, map[string]string{"error": "build not found"})
+			return
+		}
+		api.logger.Error("Failed to upload moderation build image", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to upload image"})
+		return
+	}
+	if decision == nil {
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to upload image"})
+		return
+	}
+	if decision.Status != models.ImageModerationApproved {
+		statusCode := http.StatusUnprocessableEntity
+		if decision.Status == models.ImageModerationPendingReview {
+			statusCode = http.StatusServiceUnavailable
+		}
+		api.writeJSON(w, statusCode, map[string]string{
+			"status": string(decision.Status),
+			"error":  decision.Reason,
+		})
+		return
+	}
+
+	api.writeJSON(w, http.StatusOK, map[string]string{"message": "Image uploaded successfully"})
+}
+
+func (api *AdminAPI) getAdminBuildImage(w http.ResponseWriter, r *http.Request, buildID string) {
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	imageData, imageType, err := api.buildSvc.GetImageForModeration(ctx, buildID)
+	if err != nil {
+		api.logger.Error("Failed to get moderation build image", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to get image"})
+		return
+	}
+	if len(imageData) == 0 {
+		api.writeJSON(w, http.StatusNotFound, map[string]string{"error": "no image for this build"})
+		return
+	}
+	if imageType == "" {
+		imageType = http.DetectContentType(imageData)
+	}
+
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Content-Type", imageType)
+	w.Header().Set("Content-Length", strconv.Itoa(len(imageData)))
+	_, _ = w.Write(imageData)
+}
+
+func (api *AdminAPI) deleteAdminBuildImage(w http.ResponseWriter, r *http.Request, buildID string) {
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	if err := api.buildSvc.DeleteImageForModeration(ctx, buildID); err != nil {
+		var svcErr *builds.ServiceError
+		if errors.As(err, &svcErr) && strings.EqualFold(strings.TrimSpace(svcErr.Message), "build not found") {
+			api.writeJSON(w, http.StatusNotFound, map[string]string{"error": "build not found"})
+			return
+		}
+		api.logger.Error("Failed to delete moderation build image", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to delete image"})
+		return
+	}
+
+	api.writeJSON(w, http.StatusOK, map[string]string{"message": "Image deleted successfully"})
+}
+
 // handleAdminUsers handles GET /api/admin/users for searching users.
 func (api *AdminAPI) handleAdminUsers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -442,7 +734,7 @@ func (api *AdminAPI) handleUpdateAdminUser(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if params.Status == nil && params.IsAdmin == nil && params.IsGearAdmin == nil {
+	if params.Status == nil && params.IsAdmin == nil && params.IsContentAdmin == nil && params.IsGearAdmin == nil {
 		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "at least one updatable field is required"})
 		return
 	}

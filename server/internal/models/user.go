@@ -56,16 +56,17 @@ func DefaultSocialSettings() SocialSettings {
 
 // User represents a user in the system
 type User struct {
-	ID          string     `json:"id"`
-	Email       string     `json:"email"`
-	DisplayName string     `json:"displayName"`
-	AvatarURL   string     `json:"avatarUrl,omitempty"` // Legacy field, kept for compatibility
-	Status      UserStatus `json:"status"`
-	IsAdmin     bool       `json:"isAdmin"`     // Full admin access (gear moderation + user admin)
-	IsGearAdmin bool       `json:"isGearAdmin"` // Gear moderation access only (unless also admin)
-	CreatedAt   time.Time  `json:"createdAt"`
-	UpdatedAt   time.Time  `json:"updatedAt"`
-	LastLoginAt *time.Time `json:"lastLoginAt,omitempty"`
+	ID             string     `json:"id"`
+	Email          string     `json:"email"`
+	DisplayName    string     `json:"displayName"`
+	AvatarURL      string     `json:"avatarUrl,omitempty"` // Legacy field, kept for compatibility
+	Status         UserStatus `json:"status"`
+	IsAdmin        bool       `json:"isAdmin"`               // Full admin access (content moderation + user admin)
+	IsContentAdmin bool       `json:"isContentAdmin"`        // Content moderation access only (unless also admin)
+	IsGearAdmin    bool       `json:"isGearAdmin,omitempty"` // Deprecated alias kept for compatibility
+	CreatedAt      time.Time  `json:"createdAt"`
+	UpdatedAt      time.Time  `json:"updatedAt"`
+	LastLoginAt    *time.Time `json:"lastLoginAt,omitempty"`
 
 	// Profile fields
 	CallSign        string     `json:"callSign,omitempty"`
@@ -175,9 +176,10 @@ type UpdateUserParams struct {
 
 // AdminUpdateUserParams represents admin-only user updates
 type AdminUpdateUserParams struct {
-	Status      *UserStatus `json:"status,omitempty"`
-	IsAdmin     *bool       `json:"isAdmin,omitempty"`
-	IsGearAdmin *bool       `json:"isGearAdmin,omitempty"`
+	Status         *UserStatus `json:"status,omitempty"`
+	IsAdmin        *bool       `json:"isAdmin,omitempty"`
+	IsContentAdmin *bool       `json:"isContentAdmin,omitempty"`
+	IsGearAdmin    *bool       `json:"isGearAdmin,omitempty"` // Deprecated alias accepted for compatibility
 }
 
 // UpdateProfileParams represents parameters for updating user profile

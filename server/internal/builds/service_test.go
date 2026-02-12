@@ -14,7 +14,9 @@ import (
 
 func TestValidateForPublish_MissingRequiredCategories(t *testing.T) {
 	build := &models.Build{
-		Status: models.BuildStatusDraft,
+		ImageAssetID: "asset-1",
+		Description:  "Test build",
+		Status:       models.BuildStatusDraft,
 		Parts: []models.BuildPart{
 			{GearType: models.GearTypeFrame, CatalogItemID: "frame-1", CatalogItem: publishedCatalog("frame-1", models.GearTypeFrame)},
 		},
@@ -63,7 +65,11 @@ func TestValidateForPublish_PowerStackLogic(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ValidateForPublish(&models.Build{Parts: tt.parts})
+			result := ValidateForPublish(&models.Build{
+				ImageAssetID: "asset-1",
+				Description:  "Test build",
+				Parts:        tt.parts,
+			})
 			if result.Valid != tt.wantValid {
 				t.Fatalf("valid=%v want %v, errors=%v", result.Valid, tt.wantValid, result.Errors)
 			}
@@ -73,6 +79,8 @@ func TestValidateForPublish_PowerStackLogic(t *testing.T) {
 
 func TestValidateForPublish_FromAircraftRequiresPublishedCatalogParts(t *testing.T) {
 	build := &models.Build{
+		ImageAssetID:     "asset-1",
+		Description:      "Test build",
 		SourceAircraftID: "aircraft-1",
 		Parts: []models.BuildPart{
 			{GearType: models.GearTypeFrame, CatalogItemID: "frame-1", CatalogItem: pendingCatalog("frame-1", models.GearTypeFrame)},
@@ -91,6 +99,25 @@ func TestValidateForPublish_FromAircraftRequiresPublishedCatalogParts(t *testing
 	assertHasValidationCode(t, result.Errors, "frame", "not_published")
 	assertHasValidationCode(t, result.Errors, "aio", "not_published")
 	assertHasValidationCode(t, result.Errors, "vtx", "not_published")
+}
+
+func TestValidateForPublish_RequiresDescriptionAndImage(t *testing.T) {
+	build := &models.Build{
+		Parts: []models.BuildPart{
+			{GearType: models.GearTypeFrame, CatalogItemID: "frame-1", CatalogItem: publishedCatalog("frame-1", models.GearTypeFrame)},
+			{GearType: models.GearTypeMotor, CatalogItemID: "motor-1", CatalogItem: publishedCatalog("motor-1", models.GearTypeMotor)},
+			{GearType: models.GearTypeAIO, CatalogItemID: "aio-1", CatalogItem: publishedCatalog("aio-1", models.GearTypeAIO)},
+			{GearType: models.GearTypeReceiver, CatalogItemID: "rx-1", CatalogItem: publishedCatalog("rx-1", models.GearTypeReceiver)},
+			{GearType: models.GearTypeVTX, CatalogItemID: "vtx-1", CatalogItem: publishedCatalog("vtx-1", models.GearTypeVTX)},
+		},
+	}
+
+	result := ValidateForPublish(build)
+	if result.Valid {
+		t.Fatalf("expected validation to fail")
+	}
+	assertHasValidationCode(t, result.Errors, "description", "missing_required")
+	assertHasValidationCode(t, result.Errors, "image", "missing_required")
 }
 
 func TestTempBuildCreateAndRetrieve(t *testing.T) {
@@ -211,6 +238,86 @@ func TestDeleteByOwner(t *testing.T) {
 	}
 	if fetched != nil {
 		t.Fatalf("expected build to be deleted, got %+v", fetched)
+	}
+}
+
+func TestPublish_SubmitsPendingReview(t *testing.T) {
+	ctx := context.Background()
+	store := newFakeBuildStore()
+	svc := NewServiceWithDeps(store, nil, nil, logging.New(logging.LevelError))
+
+	created, err := svc.CreateDraft(ctx, "user-1", models.CreateBuildParams{
+		Title:       "Moderated Build",
+		Description: "Ready for review",
+		Parts: []models.BuildPartInput{
+			{GearType: models.GearTypeFrame, CatalogItemID: "frame-1"},
+			{GearType: models.GearTypeMotor, CatalogItemID: "motor-1"},
+			{GearType: models.GearTypeAIO, CatalogItemID: "aio-1"},
+			{GearType: models.GearTypeReceiver, CatalogItemID: "rx-1"},
+			{GearType: models.GearTypeVTX, CatalogItemID: "vtx-1"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateDraft error: %v", err)
+	}
+	if _, err := store.SetImage(ctx, created.ID, "user-1", "asset-1"); err != nil {
+		t.Fatalf("SetImage setup error: %v", err)
+	}
+
+	updated, validation, err := svc.Publish(ctx, created.ID, "user-1")
+	if err != nil {
+		t.Fatalf("Publish error: %v", err)
+	}
+	if !validation.Valid {
+		t.Fatalf("expected validation to pass, errors=%+v", validation.Errors)
+	}
+	if updated == nil {
+		t.Fatalf("expected updated build")
+	}
+	if updated.Status != models.BuildStatusPendingReview {
+		t.Fatalf("status=%s want PENDING_REVIEW", updated.Status)
+	}
+}
+
+func TestApproveForModeration_PublishesPendingBuild(t *testing.T) {
+	ctx := context.Background()
+	store := newFakeBuildStore()
+	svc := NewServiceWithDeps(store, nil, nil, logging.New(logging.LevelError))
+
+	build := &models.Build{
+		ID:           "build-1",
+		OwnerUserID:  "user-1",
+		Status:       models.BuildStatusPendingReview,
+		Title:        "Queued Build",
+		Description:  "Queued for moderation",
+		ImageAssetID: "asset-1",
+		CreatedAt:    time.Now().UTC(),
+		UpdatedAt:    time.Now().UTC(),
+		Parts: []models.BuildPart{
+			{GearType: models.GearTypeFrame, CatalogItemID: "frame-1", CatalogItem: publishedCatalog("frame-1", models.GearTypeFrame)},
+			{GearType: models.GearTypeMotor, CatalogItemID: "motor-1", CatalogItem: publishedCatalog("motor-1", models.GearTypeMotor)},
+			{GearType: models.GearTypeAIO, CatalogItemID: "aio-1", CatalogItem: publishedCatalog("aio-1", models.GearTypeAIO)},
+			{GearType: models.GearTypeReceiver, CatalogItemID: "rx-1", CatalogItem: publishedCatalog("rx-1", models.GearTypeReceiver)},
+			{GearType: models.GearTypeVTX, CatalogItemID: "vtx-1", CatalogItem: publishedCatalog("vtx-1", models.GearTypeVTX)},
+		},
+	}
+	store.byID[build.ID] = cloneBuild(build)
+
+	updated, validation, err := svc.ApproveForModeration(ctx, build.ID)
+	if err != nil {
+		t.Fatalf("ApproveForModeration error: %v", err)
+	}
+	if !validation.Valid {
+		t.Fatalf("expected validation to pass, errors=%+v", validation.Errors)
+	}
+	if updated == nil {
+		t.Fatalf("expected updated build")
+	}
+	if updated.Status != models.BuildStatusPublished {
+		t.Fatalf("status=%s want PUBLISHED", updated.Status)
+	}
+	if updated.PublishedAt == nil {
+		t.Fatalf("expected publishedAt to be set")
 	}
 }
 
@@ -451,7 +558,7 @@ func (s *fakeBuildStore) ListByOwner(ctx context.Context, ownerUserID string, pa
 	items := make([]models.Build, 0)
 	for _, build := range s.byID {
 		if build.OwnerUserID == ownerUserID &&
-			(build.Status == models.BuildStatusDraft || build.Status == models.BuildStatusPublished || build.Status == models.BuildStatusUnpublished) {
+			(build.Status == models.BuildStatusDraft || build.Status == models.BuildStatusPendingReview || build.Status == models.BuildStatusPublished || build.Status == models.BuildStatusUnpublished) {
 			items = append(items, *cloneBuild(build))
 		}
 	}
@@ -462,6 +569,20 @@ func (s *fakeBuildStore) ListPublic(ctx context.Context, params models.BuildList
 	items := make([]models.Build, 0)
 	for _, build := range s.byID {
 		if build.Status == models.BuildStatusPublished {
+			items = append(items, *cloneBuild(build))
+		}
+	}
+	return &models.BuildListResponse{Builds: items, TotalCount: len(items)}, nil
+}
+
+func (s *fakeBuildStore) ListForModeration(ctx context.Context, params models.BuildModerationListParams) (*models.BuildListResponse, error) {
+	status := models.NormalizeBuildStatus(params.Status)
+	if status == "" {
+		status = models.BuildStatusPendingReview
+	}
+	items := make([]models.Build, 0)
+	for _, build := range s.byID {
+		if build.Status == status {
 			items = append(items, *cloneBuild(build))
 		}
 	}
@@ -490,6 +611,19 @@ func (s *fakeBuildStore) GetPublic(ctx context.Context, id string) (*models.Buil
 		return nil, nil
 	}
 	return cloneBuild(build), nil
+}
+
+func (s *fakeBuildStore) GetForModeration(ctx context.Context, id string) (*models.Build, error) {
+	build := s.byID[id]
+	if build == nil {
+		return nil, nil
+	}
+	switch build.Status {
+	case models.BuildStatusDraft, models.BuildStatusPendingReview, models.BuildStatusPublished, models.BuildStatusUnpublished:
+		return cloneBuild(build), nil
+	default:
+		return nil, nil
+	}
 }
 
 func (s *fakeBuildStore) GetTempByToken(ctx context.Context, token string) (*models.Build, error) {
@@ -553,6 +687,24 @@ func (s *fakeBuildStore) UpdateTempByToken(ctx context.Context, token string, pa
 	return cloneBuild(build), nil
 }
 
+func (s *fakeBuildStore) UpdateForModeration(ctx context.Context, id string, params models.UpdateBuildParams) (*models.Build, error) {
+	build := s.byID[id]
+	if build == nil {
+		return nil, nil
+	}
+	if params.Title != nil {
+		build.Title = *params.Title
+	}
+	if params.Description != nil {
+		build.Description = *params.Description
+	}
+	if params.Parts != nil {
+		build.Parts = convertParts(params.Parts)
+	}
+	build.UpdatedAt = time.Now().UTC()
+	return cloneBuild(build), nil
+}
+
 func (s *fakeBuildStore) ShareTempByToken(ctx context.Context, token string) (*models.Build, error) {
 	id, ok := s.byToken[token]
 	if !ok {
@@ -585,6 +737,8 @@ func (s *fakeBuildStore) SetStatus(ctx context.Context, id string, ownerUserID s
 	build.Status = status
 	now := time.Now().UTC()
 	switch status {
+	case models.BuildStatusPendingReview:
+		build.PublishedAt = nil
 	case models.BuildStatusPublished:
 		build.PublishedAt = &now
 	case models.BuildStatusUnpublished:
@@ -594,9 +748,32 @@ func (s *fakeBuildStore) SetStatus(ctx context.Context, id string, ownerUserID s
 	return cloneBuild(build), nil
 }
 
+func (s *fakeBuildStore) ApproveForModeration(ctx context.Context, id string) (*models.Build, error) {
+	build := s.byID[id]
+	if build == nil || build.Status != models.BuildStatusPendingReview {
+		return nil, nil
+	}
+	now := time.Now().UTC()
+	build.Status = models.BuildStatusPublished
+	build.PublishedAt = &now
+	build.UpdatedAt = now
+	return cloneBuild(build), nil
+}
+
 func (s *fakeBuildStore) SetImage(ctx context.Context, id string, ownerUserID string, imageAssetID string) (string, error) {
 	build := s.byID[id]
 	if build == nil || build.OwnerUserID != ownerUserID {
+		return "", fmt.Errorf("build not found")
+	}
+	prev := build.ImageAssetID
+	build.ImageAssetID = imageAssetID
+	build.UpdatedAt = time.Now().UTC()
+	return prev, nil
+}
+
+func (s *fakeBuildStore) SetImageForModeration(ctx context.Context, id string, imageAssetID string) (string, error) {
+	build := s.byID[id]
+	if build == nil {
 		return "", fmt.Errorf("build not found")
 	}
 	prev := build.ImageAssetID
@@ -621,9 +798,28 @@ func (s *fakeBuildStore) GetPublicImage(ctx context.Context, id string) ([]byte,
 	return []byte("image"), nil
 }
 
+func (s *fakeBuildStore) GetImageForModeration(ctx context.Context, id string) ([]byte, error) {
+	build := s.byID[id]
+	if build == nil || build.ImageAssetID == "" {
+		return nil, nil
+	}
+	return []byte("image"), nil
+}
+
 func (s *fakeBuildStore) DeleteImage(ctx context.Context, id string, ownerUserID string) (string, error) {
 	build := s.byID[id]
 	if build == nil || build.OwnerUserID != ownerUserID {
+		return "", fmt.Errorf("build not found")
+	}
+	prev := build.ImageAssetID
+	build.ImageAssetID = ""
+	build.UpdatedAt = time.Now().UTC()
+	return prev, nil
+}
+
+func (s *fakeBuildStore) DeleteImageForModeration(ctx context.Context, id string) (string, error) {
+	build := s.byID[id]
+	if build == nil {
 		return "", fmt.Errorf("build not found")
 	}
 	prev := build.ImageAssetID
@@ -638,7 +834,9 @@ func (s *fakeBuildStore) Delete(ctx context.Context, id string, ownerUserID stri
 		return false, nil
 	}
 	if build.Status != models.BuildStatusDraft && build.Status != models.BuildStatusPublished && build.Status != models.BuildStatusUnpublished {
-		return false, nil
+		if build.Status != models.BuildStatusPendingReview {
+			return false, nil
+		}
 	}
 	delete(s.byID, id)
 	if build.Token != "" {

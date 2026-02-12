@@ -261,12 +261,12 @@ export const Sidebar = memo(function Sidebar({
           />
 
           {/* Admin sections */}
-          {(user?.isAdmin || user?.isGearAdmin) && <div className="my-2 border-t border-slate-800" />}
+          {(user?.isAdmin || user?.isContentAdmin || user?.isGearAdmin) && <div className="my-2 border-t border-slate-800" />}
 
-          {(user?.isAdmin || user?.isGearAdmin) && (
+          {(user?.isAdmin || user?.isContentAdmin || user?.isGearAdmin) && (
             <NavItem
-              section="admin-gear"
-              label="Gear Moderation"
+              section="admin-content"
+              label="Content Moderation"
               requiresAuth
               icon={
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

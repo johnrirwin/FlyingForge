@@ -35,7 +35,8 @@ const pathToSection: Record<string, AppSection> = {
   '/batteries': 'batteries',
   '/social': 'social',
   '/profile': 'profile',
-  '/admin/gear': 'admin-gear',
+  '/admin/content': 'admin-content',
+  '/admin/gear': 'admin-content',
   '/admin/users': 'admin-users',
 };
 
@@ -55,7 +56,7 @@ const sectionToPath: Record<AppSection, string> = {
   'social': '/social',
   'profile': '/profile',
   'pilot-profile': '/social/pilots', // Dynamic - handled separately
-  'admin-gear': '/admin/gear',
+  'admin-content': '/admin/content',
   'admin-users': '/admin/users',
 };
 
@@ -656,7 +657,7 @@ function App() {
       return;
     }
     // Protected sections that require authentication
-    const protectedSections = ['dashboard', 'my-builds', 'inventory', 'aircraft', 'radio', 'batteries', 'profile', 'social', 'admin-gear', 'admin-users'];
+    const protectedSections = ['dashboard', 'my-builds', 'inventory', 'aircraft', 'radio', 'batteries', 'profile', 'social', 'admin-content', 'admin-users'];
     if (protectedSections.includes(section) && !isAuthenticated) {
       setAuthModal('login');
       return;

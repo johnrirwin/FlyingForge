@@ -9,11 +9,12 @@ import (
 type BuildStatus string
 
 const (
-	BuildStatusTemp        BuildStatus = "TEMP"
-	BuildStatusShared      BuildStatus = "SHARED"
-	BuildStatusDraft       BuildStatus = "DRAFT"
-	BuildStatusPublished   BuildStatus = "PUBLISHED"
-	BuildStatusUnpublished BuildStatus = "UNPUBLISHED"
+	BuildStatusTemp          BuildStatus = "TEMP"
+	BuildStatusShared        BuildStatus = "SHARED"
+	BuildStatusDraft         BuildStatus = "DRAFT"
+	BuildStatusPendingReview BuildStatus = "PENDING_REVIEW"
+	BuildStatusPublished     BuildStatus = "PUBLISHED"
+	BuildStatusUnpublished   BuildStatus = "UNPUBLISHED"
 )
 
 // NormalizeBuildStatus canonicalizes user-provided status values.
@@ -25,6 +26,8 @@ func NormalizeBuildStatus(status BuildStatus) BuildStatus {
 		return BuildStatusShared
 	case string(BuildStatusDraft):
 		return BuildStatusDraft
+	case string(BuildStatusPendingReview):
+		return BuildStatusPendingReview
 	case string(BuildStatusPublished):
 		return BuildStatusPublished
 	case string(BuildStatusUnpublished):
@@ -157,6 +160,14 @@ type BuildListParams struct {
 	FrameFilter string    `json:"frameFilter,omitempty"`
 	Limit       int       `json:"limit,omitempty"`
 	Offset      int       `json:"offset,omitempty"`
+}
+
+// BuildModerationListParams describes admin moderation list query options.
+type BuildModerationListParams struct {
+	Query  string      `json:"query,omitempty"`
+	Status BuildStatus `json:"status,omitempty"`
+	Limit  int         `json:"limit,omitempty"`
+	Offset int         `json:"offset,omitempty"`
 }
 
 // BuildListResponse is returned by build list endpoints.

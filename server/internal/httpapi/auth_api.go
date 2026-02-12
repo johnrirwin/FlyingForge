@@ -153,15 +153,16 @@ func (api *AuthAPI) handleGetMe(w http.ResponseWriter, r *http.Request) {
 
 	// Build response with effective avatar URL
 	response := map[string]interface{}{
-		"id":          user.ID,
-		"email":       user.Email,
-		"displayName": user.DisplayName,
-		"avatarUrl":   user.EffectiveAvatarURL(),
-		"status":      user.Status,
-		"createdAt":   user.CreatedAt,
-		"callSign":    user.CallSign,
-		"isAdmin":     user.IsAdmin,
-		"isGearAdmin": user.IsGearAdmin,
+		"id":             user.ID,
+		"email":          user.Email,
+		"displayName":    user.DisplayName,
+		"avatarUrl":      user.EffectiveAvatarURL(),
+		"status":         user.Status,
+		"createdAt":      user.CreatedAt,
+		"callSign":       user.CallSign,
+		"isAdmin":        user.IsAdmin,
+		"isContentAdmin": user.IsContentAdmin,
+		"isGearAdmin":    user.IsContentAdmin, // Legacy alias for older clients.
 	}
 	if user.LastLoginAt != nil {
 		response["lastLoginAt"] = user.LastLoginAt

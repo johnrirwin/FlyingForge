@@ -28,9 +28,9 @@ function getUserDisplayName(user: Pick<AdminUser, 'displayName'>): string {
   return displayName ? displayName : 'Unnamed User';
 }
 
-function getRoleLabel(user: Pick<AdminUser, 'isAdmin' | 'isGearAdmin'>): string {
+function getRoleLabel(user: Pick<AdminUser, 'isAdmin' | 'isContentAdmin' | 'isGearAdmin'>): string {
   if (user.isAdmin) return 'Admin';
-  if (user.isGearAdmin) return 'Gear Admin';
+  if (user.isContentAdmin || user.isGearAdmin) return 'Content Admin';
   return 'User';
 }
 
@@ -84,7 +84,7 @@ export function AdminUserManagement({ isAdmin, currentUserId, authLoading }: Adm
   const [profileUser, setProfileUser] = useState<AdminUser | null>(null);
   const [profileStatus, setProfileStatus] = useState<AdminUserStatus>('active');
   const [profileIsAdmin, setProfileIsAdmin] = useState(false);
-  const [profileIsGearAdmin, setProfileIsGearAdmin] = useState(false);
+  const [profileIsContentAdmin, setProfileIsContentAdmin] = useState(false);
   const [isProfileLoading, setIsProfileLoading] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isRemovingAvatar, setIsRemovingAvatar] = useState(false);
@@ -210,7 +210,7 @@ export function AdminUserManagement({ isAdmin, currentUserId, authLoading }: Adm
         setProfileUser(user);
         setProfileStatus(user.status);
         setProfileIsAdmin(user.isAdmin);
-        setProfileIsGearAdmin(user.isGearAdmin);
+        setProfileIsContentAdmin(Boolean(user.isContentAdmin ?? user.isGearAdmin));
       })
       .catch((err) => {
         if (cancelled) return;
@@ -250,7 +250,7 @@ export function AdminUserManagement({ isAdmin, currentUserId, authLoading }: Adm
     setProfileUser(user);
     setProfileStatus(user.status);
     setProfileIsAdmin(user.isAdmin);
-    setProfileIsGearAdmin(user.isGearAdmin);
+    setProfileIsContentAdmin(Boolean(user.isContentAdmin ?? user.isGearAdmin));
     setProfileError(null);
   }, []);
 
@@ -276,12 +276,12 @@ export function AdminUserManagement({ isAdmin, currentUserId, authLoading }: Adm
       const updated = await adminUpdateUser(profileUser.id, {
         status: profileStatus,
         isAdmin: profileIsAdmin,
-        isGearAdmin: profileIsGearAdmin,
+        isContentAdmin: profileIsContentAdmin,
       });
       setProfileUser(updated);
       setProfileStatus(updated.status);
       setProfileIsAdmin(updated.isAdmin);
-      setProfileIsGearAdmin(updated.isGearAdmin);
+      setProfileIsContentAdmin(Boolean(updated.isContentAdmin ?? updated.isGearAdmin));
       applyUserUpdateToList(updated);
       setToastMessage('User was updated');
     } catch (err) {
@@ -289,7 +289,7 @@ export function AdminUserManagement({ isAdmin, currentUserId, authLoading }: Adm
     } finally {
       setIsSavingProfile(false);
     }
-  }, [applyUserUpdateToList, profileIsAdmin, profileIsGearAdmin, profileStatus, profileUser]);
+  }, [applyUserUpdateToList, profileIsAdmin, profileIsContentAdmin, profileStatus, profileUser]);
 
   const handleOpenRemoveAvatarModal = useCallback(() => {
     if (!profileUser || !profileAvatarURL || isRemovingAvatar) return;
@@ -678,11 +678,11 @@ export function AdminUserManagement({ isAdmin, currentUserId, authLoading }: Adm
                       <label className="flex items-center gap-2 text-slate-200 mt-2">
                         <input
                           type="checkbox"
-                          checked={profileIsGearAdmin}
+                          checked={profileIsContentAdmin}
                           disabled={isSavingProfile}
-                          onChange={(e) => setProfileIsGearAdmin(e.target.checked)}
+                          onChange={(e) => setProfileIsContentAdmin(e.target.checked)}
                         />
-                        Gear Admin
+                        Content Admin
                       </label>
                     </div>
                   </div>

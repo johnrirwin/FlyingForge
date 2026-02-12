@@ -93,7 +93,7 @@ func (s *BuildStore) ListByOwner(ctx context.Context, ownerUserID string, params
 	countQuery := `
 		SELECT COUNT(*)
 		FROM builds b
-		WHERE b.owner_user_id = $1 AND b.status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED')
+		WHERE b.owner_user_id = $1 AND b.status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')
 	`
 	var totalCount int
 	if err := s.db.QueryRowContext(ctx, countQuery, ownerUserID).Scan(&totalCount); err != nil {
@@ -120,7 +120,7 @@ func (s *BuildStore) ListByOwner(ctx context.Context, ownerUserID string, params
 			COALESCE(u.profile_visibility, 'public') = 'public'
 		FROM builds b
 		LEFT JOIN users u ON b.owner_user_id = u.id
-		WHERE b.owner_user_id = $1 AND b.status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED')
+		WHERE b.owner_user_id = $1 AND b.status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')
 		ORDER BY b.updated_at DESC
 		LIMIT $2 OFFSET $3
 	`
@@ -339,7 +339,7 @@ func (s *BuildStore) Update(ctx context.Context, id string, ownerUserID string, 
 	query := fmt.Sprintf(`
 		UPDATE builds
 		SET %s
-		WHERE id = $%d AND owner_user_id = $%d AND status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED')
+		WHERE id = $%d AND owner_user_id = $%d AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')
 	`, strings.Join(setClauses, ", "), argIndex, argIndex+1)
 	args = append(args, id, ownerUserID)
 
@@ -450,11 +450,17 @@ func (s *BuildStore) SetStatus(ctx context.Context, id string, ownerUserID strin
 	var query string
 
 	switch status {
+	case models.BuildStatusPendingReview:
+		query = `
+			UPDATE builds
+			SET status = 'PENDING_REVIEW', published_at = NULL, updated_at = NOW()
+			WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'UNPUBLISHED')
+		`
 	case models.BuildStatusPublished:
 		query = `
 			UPDATE builds
 			SET status = 'PUBLISHED', published_at = NOW(), updated_at = NOW()
-			WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'UNPUBLISHED')
+			WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'UNPUBLISHED', 'PENDING_REVIEW')
 		`
 	case models.BuildStatusUnpublished:
 		query = `
@@ -484,7 +490,7 @@ func (s *BuildStore) SetImage(ctx context.Context, id string, ownerUserID string
 	var previousAssetID sql.NullString
 	if err := s.db.QueryRowContext(
 		ctx,
-		`SELECT image_asset_id FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED')`,
+		`SELECT image_asset_id FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')`,
 		id,
 		ownerUserID,
 	).Scan(&previousAssetID); err != nil {
@@ -498,7 +504,7 @@ func (s *BuildStore) SetImage(ctx context.Context, id string, ownerUserID string
 		UPDATE builds
 		SET image_asset_id = $1,
 		    updated_at = NOW()
-		WHERE id = $2 AND owner_user_id = $3 AND status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED')
+		WHERE id = $2 AND owner_user_id = $3 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')
 	`
 	result, err := s.db.ExecContext(ctx, query, imageAssetID, id, ownerUserID)
 	if err != nil {
@@ -523,7 +529,7 @@ func (s *BuildStore) GetImageForOwner(ctx context.Context, id string, ownerUserI
 		JOIN image_assets ia ON ia.id = b.image_asset_id AND ia.status = 'APPROVED'
 		WHERE b.id = $1
 		  AND b.owner_user_id = $2
-		  AND b.status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED')
+		  AND b.status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')
 		  AND b.image_asset_id IS NOT NULL
 	`
 
@@ -565,7 +571,7 @@ func (s *BuildStore) DeleteImage(ctx context.Context, id string, ownerUserID str
 	var previousAssetID sql.NullString
 	if err := s.db.QueryRowContext(
 		ctx,
-		`SELECT image_asset_id FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED')`,
+		`SELECT image_asset_id FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')`,
 		id,
 		ownerUserID,
 	).Scan(&previousAssetID); err != nil {
@@ -579,7 +585,7 @@ func (s *BuildStore) DeleteImage(ctx context.Context, id string, ownerUserID str
 		UPDATE builds
 		SET image_asset_id = NULL,
 		    updated_at = NOW()
-		WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED')
+		WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')
 	`
 	result, err := s.db.ExecContext(ctx, query, id, ownerUserID)
 	if err != nil {
@@ -599,7 +605,7 @@ func (s *BuildStore) DeleteImage(ctx context.Context, id string, ownerUserID str
 func (s *BuildStore) Delete(ctx context.Context, id string, ownerUserID string) (bool, error) {
 	result, err := s.db.ExecContext(
 		ctx,
-		`DELETE FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED')`,
+		`DELETE FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')`,
 		id,
 		ownerUserID,
 	)
@@ -622,6 +628,281 @@ func (s *BuildStore) DeleteExpiredTemp(ctx context.Context, cutoff time.Time) (i
 	}
 	rows, _ := result.RowsAffected()
 	return rows, nil
+}
+
+// ListForModeration returns builds for content moderation workflows.
+func (s *BuildStore) ListForModeration(ctx context.Context, params models.BuildModerationListParams) (*models.BuildListResponse, error) {
+	if params.Limit <= 0 {
+		params.Limit = 30
+	}
+	if params.Limit > 100 {
+		params.Limit = 100
+	}
+	if params.Offset < 0 {
+		params.Offset = 0
+	}
+
+	status := models.NormalizeBuildStatus(params.Status)
+	if status == "" {
+		status = models.BuildStatusPendingReview
+	}
+
+	conditions := []string{"b.status = $1"}
+	args := []interface{}{status}
+	argIdx := 2
+
+	search := strings.TrimSpace(params.Query)
+	if search != "" {
+		conditions = append(conditions, fmt.Sprintf(`
+			(
+				LOWER(COALESCE(b.title, '')) LIKE LOWER($%d)
+				OR LOWER(COALESCE(b.description, '')) LIKE LOWER($%d)
+				OR LOWER(COALESCE(u.call_sign, '')) LIKE LOWER($%d)
+				OR LOWER(COALESCE(u.display_name, '')) LIKE LOWER($%d)
+			)
+		`, argIdx, argIdx, argIdx, argIdx))
+		args = append(args, "%"+search+"%")
+		argIdx++
+	}
+
+	whereClause := strings.Join(conditions, " AND ")
+
+	countQuery := fmt.Sprintf(`
+		SELECT COUNT(*)
+		FROM builds b
+		LEFT JOIN users u ON b.owner_user_id = u.id
+		WHERE %s
+	`, whereClause)
+
+	var totalCount int
+	if err := s.db.QueryRowContext(ctx, countQuery, args...).Scan(&totalCount); err != nil {
+		return nil, fmt.Errorf("failed to count moderation builds: %w", err)
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			b.id,
+			b.owner_user_id,
+			b.image_asset_id,
+			b.status,
+			b.token,
+			b.expires_at,
+			b.title,
+			b.description,
+			b.source_aircraft_id,
+			b.created_at,
+			b.updated_at,
+			b.published_at,
+			u.id,
+			u.call_sign,
+			COALESCE(NULLIF(u.display_name, ''), NULLIF(u.google_name, ''), NULLIF(u.call_sign, ''), 'Pilot'),
+			COALESCE(u.profile_visibility, 'public') = 'public'
+		FROM builds b
+		LEFT JOIN users u ON b.owner_user_id = u.id
+		WHERE %s
+		ORDER BY b.updated_at DESC
+		LIMIT $%d OFFSET $%d
+	`, whereClause, argIdx, argIdx+1)
+
+	args = append(args, params.Limit, params.Offset)
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list moderation builds: %w", err)
+	}
+	defer rows.Close()
+
+	builds, err := scanBuildRows(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	buildPtrs := make([]*models.Build, 0, len(builds))
+	for i := range builds {
+		buildPtrs = append(buildPtrs, &builds[i])
+	}
+	if err := s.attachParts(ctx, buildPtrs); err != nil {
+		return nil, err
+	}
+	s.setAdminMainImageURLs(buildPtrs)
+
+	return &models.BuildListResponse{
+		Builds:     builds,
+		TotalCount: totalCount,
+		Sort:       models.BuildSortNewest,
+	}, nil
+}
+
+// GetForModeration returns a build for content moderation workflows.
+func (s *BuildStore) GetForModeration(ctx context.Context, id string) (*models.Build, error) {
+	query := baseBuildSelect + ` WHERE b.id = $1 AND b.status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')`
+	build, err := s.scanBuild(ctx, query, id)
+	if err != nil || build == nil {
+		return build, err
+	}
+	if err := s.attachParts(ctx, []*models.Build{build}); err != nil {
+		return nil, err
+	}
+	s.setAdminMainImageURLs([]*models.Build{build})
+	return build, nil
+}
+
+// UpdateForModeration updates build title/description and optionally parts by moderator.
+func (s *BuildStore) UpdateForModeration(ctx context.Context, id string, params models.UpdateBuildParams) (*models.Build, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	setClauses := []string{"updated_at = NOW()"}
+	args := []interface{}{}
+	argIndex := 1
+
+	if params.Title != nil {
+		setClauses = append(setClauses, fmt.Sprintf("title = $%d", argIndex))
+		args = append(args, strings.TrimSpace(*params.Title))
+		argIndex++
+	}
+	if params.Description != nil {
+		setClauses = append(setClauses, fmt.Sprintf("description = $%d", argIndex))
+		args = append(args, strings.TrimSpace(*params.Description))
+		argIndex++
+	}
+
+	query := fmt.Sprintf(`
+		UPDATE builds
+		SET %s
+		WHERE id = $%d AND status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED')
+	`, strings.Join(setClauses, ", "), argIndex)
+	args = append(args, id)
+
+	result, err := tx.ExecContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update moderation build: %w", err)
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return nil, nil
+	}
+
+	if params.Parts != nil {
+		if err := s.replacePartsTx(ctx, tx, id, params.Parts); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit moderation build update: %w", err)
+	}
+
+	return s.GetForModeration(ctx, id)
+}
+
+// SetImageForModeration stores a new approved image asset reference for a build.
+func (s *BuildStore) SetImageForModeration(ctx context.Context, id string, imageAssetID string) (string, error) {
+	var previousAssetID sql.NullString
+	if err := s.db.QueryRowContext(
+		ctx,
+		`SELECT image_asset_id FROM builds WHERE id = $1 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')`,
+		id,
+	).Scan(&previousAssetID); err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("build not found")
+		}
+		return "", fmt.Errorf("failed to fetch existing build image reference: %w", err)
+	}
+
+	result, err := s.db.ExecContext(
+		ctx,
+		`UPDATE builds SET image_asset_id = $1, updated_at = NOW() WHERE id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')`,
+		imageAssetID,
+		id,
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to set moderation build image: %w", err)
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return "", fmt.Errorf("build not found")
+	}
+
+	if previousAssetID.Valid {
+		return previousAssetID.String, nil
+	}
+	return "", nil
+}
+
+// GetImageForModeration loads approved image bytes for admin moderation views.
+func (s *BuildStore) GetImageForModeration(ctx context.Context, id string) ([]byte, error) {
+	query := `
+		SELECT ia.image_bytes
+		FROM builds b
+		JOIN image_assets ia ON ia.id = b.image_asset_id AND ia.status = 'APPROVED'
+		WHERE b.id = $1
+		  AND b.status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')
+		  AND b.image_asset_id IS NOT NULL
+	`
+
+	var imageData []byte
+	err := s.db.QueryRowContext(ctx, query, id).Scan(&imageData)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get moderation build image: %w", err)
+	}
+	return imageData, nil
+}
+
+// DeleteImageForModeration removes a build image and returns any previous asset ID.
+func (s *BuildStore) DeleteImageForModeration(ctx context.Context, id string) (string, error) {
+	var previousAssetID sql.NullString
+	if err := s.db.QueryRowContext(
+		ctx,
+		`SELECT image_asset_id FROM builds WHERE id = $1 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')`,
+		id,
+	).Scan(&previousAssetID); err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("build not found")
+		}
+		return "", fmt.Errorf("failed to fetch existing build image reference: %w", err)
+	}
+
+	result, err := s.db.ExecContext(
+		ctx,
+		`UPDATE builds SET image_asset_id = NULL, updated_at = NOW() WHERE id = $1 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')`,
+		id,
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to delete moderation build image: %w", err)
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return "", fmt.Errorf("build not found")
+	}
+	if previousAssetID.Valid {
+		return previousAssetID.String, nil
+	}
+	return "", nil
+}
+
+// ApproveForModeration publishes a build from the pending moderation queue.
+func (s *BuildStore) ApproveForModeration(ctx context.Context, id string) (*models.Build, error) {
+	result, err := s.db.ExecContext(
+		ctx,
+		`UPDATE builds SET status = 'PUBLISHED', published_at = NOW(), updated_at = NOW() WHERE id = $1 AND status = 'PENDING_REVIEW'`,
+		id,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to approve moderation build: %w", err)
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return nil, nil
+	}
+
+	return s.GetForModeration(ctx, id)
 }
 
 func (s *BuildStore) replacePartsTx(ctx context.Context, tx *sql.Tx, buildID string, parts []models.BuildPartInput) error {
@@ -802,6 +1083,18 @@ func (s *BuildStore) setMainImageURLs(builds []*models.Build, isPublic bool) {
 		} else {
 			build.MainImageURL = fmt.Sprintf("/api/builds/%s/image?v=%d", build.ID, build.UpdatedAt.UnixMilli())
 		}
+	}
+}
+
+func (s *BuildStore) setAdminMainImageURLs(builds []*models.Build) {
+	for _, build := range builds {
+		if build == nil {
+			continue
+		}
+		if strings.TrimSpace(build.ImageAssetID) == "" {
+			continue
+		}
+		build.MainImageURL = fmt.Sprintf("/api/admin/builds/%s/image?v=%d", build.ID, build.UpdatedAt.UnixMilli())
 	}
 }
 

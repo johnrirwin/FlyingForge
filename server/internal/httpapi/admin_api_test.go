@@ -6,7 +6,7 @@ import (
 	"github.com/johnrirwin/flyingforge/internal/models"
 )
 
-func TestCanModerateGear(t *testing.T) {
+func TestCanModerateContent(t *testing.T) {
 	tests := []struct {
 		name string
 		user *models.User
@@ -23,8 +23,8 @@ func TestCanModerateGear(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "gear admin",
-			user: &models.User{IsGearAdmin: true},
+			name: "content admin",
+			user: &models.User{IsContentAdmin: true},
 			want: true,
 		},
 		{
@@ -36,9 +36,9 @@ func TestCanModerateGear(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := canModerateGear(tt.user)
+			got := canModerateContent(tt.user)
 			if got != tt.want {
-				t.Fatalf("canModerateGear() = %v, want %v", got, tt.want)
+				t.Fatalf("canModerateContent() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -61,8 +61,8 @@ func TestCanManageUsers(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "gear admin",
-			user: &models.User{IsGearAdmin: true},
+			name: "content admin",
+			user: &models.User{IsContentAdmin: true},
 			want: false,
 		},
 		{

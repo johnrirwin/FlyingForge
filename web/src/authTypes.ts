@@ -9,8 +9,9 @@ export interface User {
   avatarUrl?: string;
   status: 'active' | 'disabled' | 'pending';
   emailVerified: boolean;
-  isAdmin: boolean; // Full admin access (gear moderation + user admin)
-  isGearAdmin: boolean; // Gear moderation access
+  isAdmin: boolean; // Full admin access (content moderation + user admin)
+  isContentAdmin: boolean; // Content moderation access
+  isGearAdmin?: boolean; // Deprecated alias
   createdAt: string;
   lastLoginAt?: string;
   // Profile fields

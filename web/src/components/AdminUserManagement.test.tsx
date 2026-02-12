@@ -32,6 +32,7 @@ const mockUser: AdminUser = {
   displayName: 'Pilot One',
   status: 'active',
   isAdmin: false,
+  isContentAdmin: false,
   isGearAdmin: false,
   avatarUrl: 'https://example.com/avatar.jpg',
   createdAt: '2026-01-01T00:00:00Z',
@@ -69,6 +70,7 @@ describe('AdminUserManagement', () => {
     const updatedUser: AdminUser = {
       ...mockUser,
       status: 'disabled',
+      isContentAdmin: true,
       isGearAdmin: true,
     };
     mockAdminUpdateUser.mockResolvedValue(updatedUser);
@@ -85,7 +87,7 @@ describe('AdminUserManagement', () => {
     const statusSelect = screen.getByLabelText('Account Status');
     fireEvent.change(statusSelect, { target: { value: 'disabled' } });
 
-    const gearAdminCheckbox = screen.getByLabelText('Gear Admin');
+    const gearAdminCheckbox = screen.getByLabelText('Content Admin');
     fireEvent.click(gearAdminCheckbox);
 
     fireEvent.click(screen.getByText('Save Changes'));
@@ -94,7 +96,7 @@ describe('AdminUserManagement', () => {
       expect(mockAdminUpdateUser).toHaveBeenCalledWith('user-1', {
         status: 'disabled',
         isAdmin: false,
-        isGearAdmin: true,
+        isContentAdmin: true,
       });
     });
 

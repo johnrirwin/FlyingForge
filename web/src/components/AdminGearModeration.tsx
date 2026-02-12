@@ -1,15 +1,34 @@
 import { useState, useEffect, useCallback, useRef, type FormEvent } from 'react';
 import type { GearCatalogItem, GearType, ImageStatusFilter, AdminUpdateGearCatalogParams, DroneType, CatalogItemStatus } from '../gearCatalogTypes';
 import { GEAR_TYPES, DRONE_TYPES } from '../gearCatalogTypes';
-import { adminSearchGear, adminUpdateGear, adminUploadGearImage, adminDeleteGearImage, adminDeleteGear, adminGetGear, getAdminGearImageUrl } from '../adminApi';
+import type { Build, BuildStatus, BuildValidationError } from '../buildTypes';
+import {
+  adminSearchGear,
+  adminUpdateGear,
+  adminUploadGearImage,
+  adminDeleteGearImage,
+  adminDeleteGear,
+  adminGetGear,
+  adminSearchBuilds,
+  adminGetBuild,
+  adminUpdateBuild,
+  adminPublishBuild,
+  adminUploadBuildImage,
+  adminDeleteBuildImage,
+  getAdminGearImageUrl,
+  getAdminBuildImageUrl,
+} from '../adminApi';
 import { CatalogSearchModal } from './CatalogSearchModal';
 import { MobileFloatingControls } from './MobileFloatingControls';
 import { ImageUploadModal } from './ImageUploadModal';
 
 interface AdminGearModerationProps {
-  hasGearAdminAccess: boolean;
+  hasContentAdminAccess: boolean;
   authLoading?: boolean;
 }
+
+type ModerationTab = 'gear' | 'builds';
+type BuildModerationStatus = 'PENDING_REVIEW' | 'DRAFT' | 'PUBLISHED' | 'UNPUBLISHED';
 
 function formatDate(value?: string): string {
   if (!value) return '—';
@@ -97,7 +116,47 @@ function getCatalogStatusTextClass(status: CatalogItemStatus): string {
   }
 }
 
-export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGearModerationProps) {
+function getBuildStatusLabel(status: BuildStatus): string {
+  switch (status) {
+    case 'PENDING_REVIEW':
+      return 'Pending Review';
+    case 'PUBLISHED':
+      return 'Published';
+    case 'UNPUBLISHED':
+      return 'Unpublished';
+    case 'DRAFT':
+      return 'Draft';
+    case 'SHARED':
+      return 'Shared';
+    case 'TEMP':
+      return 'Temp';
+    default:
+      return status;
+  }
+}
+
+function getBuildStatusClass(status: BuildStatus): string {
+  switch (status) {
+    case 'PENDING_REVIEW':
+      return 'bg-amber-500/20 text-amber-300';
+    case 'PUBLISHED':
+      return 'bg-green-500/20 text-green-400';
+    case 'UNPUBLISHED':
+      return 'bg-red-500/20 text-red-400';
+    case 'DRAFT':
+      return 'bg-slate-500/20 text-slate-300';
+    case 'SHARED':
+      return 'bg-blue-500/20 text-blue-300';
+    case 'TEMP':
+      return 'bg-slate-500/20 text-slate-300';
+    default:
+      return 'bg-slate-500/20 text-slate-300';
+  }
+}
+
+export function AdminGearModeration({ hasContentAdminAccess, authLoading }: AdminGearModerationProps) {
+  const [activeTab, setActiveTab] = useState<ModerationTab>('gear');
+
   const [items, setItems] = useState<GearCatalogItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -107,8 +166,8 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
   const [query, setQuery] = useState('');
   const [appliedQuery, setAppliedQuery] = useState('');
   const [gearType, setGearType] = useState<GearType | ''>('');
-  const [catalogStatus, setCatalogStatus] = useState<CatalogItemStatus | ''>('');
-  const [imageStatus, setImageStatus] = useState<ImageStatusFilter | ''>(''); // Default to "Needs Work"
+  const [catalogStatus, setCatalogStatus] = useState<CatalogItemStatus | ''>('pending');
+  const [imageStatus, setImageStatus] = useState<ImageStatusFilter | ''>(''); // No image status filter by default
   const pageSize = 30;
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -125,8 +184,19 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
   const [showAddGearModal, setShowAddGearModal] = useState(false);
   const [isMobileControlsOpen, setIsMobileControlsOpen] = useState(false);
 
+  // Build moderation list.
+  const [builds, setBuilds] = useState<Build[]>([]);
+  const [buildTotalCount, setBuildTotalCount] = useState(0);
+  const [isLoadingBuilds, setIsLoadingBuilds] = useState(false);
+  const [buildError, setBuildError] = useState<string | null>(null);
+  const [buildQuery, setBuildQuery] = useState('');
+  const [appliedBuildQuery, setAppliedBuildQuery] = useState('');
+  const [buildStatus, setBuildStatus] = useState<BuildModerationStatus>('PENDING_REVIEW');
+  const [editingBuildId, setEditingBuildId] = useState<string | null>(null);
+  const [buildModalKey, setBuildModalKey] = useState(0);
+
   const loadItems = useCallback(async (reset = false, forceRefresh = false) => {
-    if (!hasGearAdminAccess) return;
+    if (!hasContentAdminAccess) return;
     
     // Prevent concurrent loads by default; allow forced resets to supersede in-flight loads.
     if (isLoadingRef.current && !(reset && forceRefresh)) return;
@@ -178,38 +248,80 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
         isLoadingRef.current = false;
       }
     }
-  }, [hasGearAdminAccess, appliedQuery, gearType, catalogStatus, imageStatus]);
+  }, [hasContentAdminAccess, appliedQuery, gearType, catalogStatus, imageStatus]);
 
-  // Initial load and auto-search when filters change
-  useEffect(() => {
-    if (hasGearAdminAccess) {
-      loadItems(true);
+  const loadBuilds = useCallback(async () => {
+    if (!hasContentAdminAccess) return;
+    setIsLoadingBuilds(true);
+    setBuildError(null);
+    try {
+      const response = await adminSearchBuilds({
+        query: appliedBuildQuery || undefined,
+        status: buildStatus,
+        limit: 100,
+        offset: 0,
+      });
+      setBuilds(response.builds ?? []);
+      setBuildTotalCount(response.totalCount ?? response.builds?.length ?? 0);
+    } catch (err) {
+      setBuildError(err instanceof Error ? err.message : 'Failed to load builds');
+    } finally {
+      setIsLoadingBuilds(false);
     }
-  }, [hasGearAdminAccess, loadItems]);
+  }, [hasContentAdminAccess, appliedBuildQuery, buildStatus]);
 
-  // Handle search button click
-  const handleSearch = useCallback(() => {
+  // Initial load and auto-search when gear filters change.
+  useEffect(() => {
+    if (!hasContentAdminAccess) return;
+    void loadItems(true);
+  }, [hasContentAdminAccess, loadItems]);
+
+  // Initial load and auto-search when build filters change.
+  useEffect(() => {
+    if (!hasContentAdminAccess) return;
+    void loadBuilds();
+  }, [hasContentAdminAccess, loadBuilds]);
+
+  const handleGearSearch = useCallback(() => {
     setIsMobileControlsOpen(false);
     setAppliedQuery(query);
   }, [query]);
 
+  const handleBuildSearch = useCallback(() => {
+    setIsMobileControlsOpen(false);
+    setAppliedBuildQuery(buildQuery);
+  }, [buildQuery]);
+
   // Handle enter key in search input
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleGearKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      handleSearch();
+      handleGearSearch();
+    }
+  };
+
+  const handleBuildKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleBuildSearch();
     }
   };
 
   // Handle clearing search
-  const handleClearSearch = () => {
+  const handleGearClearSearch = () => {
     setQuery('');
     setAppliedQuery('');
+  };
+
+  const handleBuildClearSearch = () => {
+    setBuildQuery('');
+    setAppliedBuildQuery('');
   };
 
   // Infinite scroll observer
   // Note: loadItems prevents concurrent calls by default (except forced reset refreshes),
   // so we don't need to check loading state here - just trigger on intersection.
   useEffect(() => {
+    if (activeTab !== 'gear') return;
+
     const element = loadMoreRef.current;
     if (!element || !hasMore) return;
 
@@ -224,7 +336,7 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
 
     observer.observe(element);
     return () => observer.disconnect();
-  }, [hasMore, loadItems]);
+  }, [activeTab, hasMore, loadItems]);
 
   const handleEditClick = (item: GearCatalogItem) => {
     setModalKey(k => k + 1); // Force modal remount to fetch fresh data
@@ -260,6 +372,25 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
     void loadItems(true);
   }, [loadItems]);
 
+  const handleBuildEditClick = useCallback((build: Build) => {
+    setBuildModalKey((prev) => prev + 1);
+    setEditingBuildId(build.id);
+  }, []);
+
+  const handleBuildEditClose = useCallback(() => {
+    setEditingBuildId(null);
+  }, []);
+
+  const handleBuildEditSaved = useCallback(() => {
+    setEditingBuildId(null);
+    void loadBuilds();
+  }, [loadBuilds]);
+
+  const handleBuildPublished = useCallback(() => {
+    setEditingBuildId(null);
+    void loadBuilds();
+  }, [loadBuilds]);
+
   // Show loading while auth state is being determined
   if (authLoading) {
     return (
@@ -270,19 +401,17 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
     );
   }
 
-  if (!hasGearAdminAccess) {
+  if (!hasContentAdminAccess) {
     return (
       <div className="p-8 text-center">
         <h1 className="text-2xl font-bold text-red-400 mb-4">Access Denied</h1>
-        <p className="text-slate-400">You must be an admin or gear admin to access this page.</p>
+        <p className="text-slate-400">You must be an admin or content admin to access this page.</p>
       </div>
     );
   }
 
-  const controls = (
-    <div className="bg-slate-800 border-b border-slate-700 px-4 md:px-6 py-3 md:py-4">
-      <h1 className="text-lg md:text-2xl font-bold text-white mb-3">Gear Moderation</h1>
-
+  const gearControls = (
+    <>
       <div className="flex flex-col gap-3">
         <div className="flex flex-col sm:flex-row gap-2">
           <div className="relative flex-1 min-w-0">
@@ -303,20 +432,20 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
+              onKeyDown={handleGearKeyDown}
               placeholder="Search brand or model..."
               className="w-full h-11 pl-10 pr-4 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
           </div>
           <button
-            onClick={handleSearch}
+            onClick={handleGearSearch}
             className="w-full sm:w-auto shrink-0 px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
           >
             Search
           </button>
           {appliedQuery && (
             <button
-              onClick={handleClearSearch}
+              onClick={handleGearClearSearch}
               className="w-full sm:w-auto shrink-0 px-3 py-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
             >
               Clear
@@ -384,6 +513,106 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
           {error}
         </div>
       )}
+    </>
+  );
+
+  const buildControls = (
+    <>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <div className="relative flex-1 min-w-0">
+            <svg
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+            <input
+              type="text"
+              value={buildQuery}
+              onChange={(e) => setBuildQuery(e.target.value)}
+              onKeyDown={handleBuildKeyDown}
+              placeholder="Search build title, description, or pilot..."
+              className="w-full h-11 pl-10 pr-4 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            />
+          </div>
+          <button
+            onClick={handleBuildSearch}
+            className="w-full sm:w-auto shrink-0 px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            Search
+          </button>
+          {appliedBuildQuery && (
+            <button
+              onClick={handleBuildClearSearch}
+              className="w-full sm:w-auto shrink-0 px-3 py-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <select
+            value={buildStatus}
+            onChange={(e) => setBuildStatus(e.target.value as BuildModerationStatus)}
+            className="w-full min-w-0 h-11 px-3 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            <option value="PENDING_REVIEW">Pending Review</option>
+            <option value="PUBLISHED">Published</option>
+            <option value="DRAFT">Draft</option>
+            <option value="UNPUBLISHED">Unpublished</option>
+          </select>
+        </div>
+
+        <p className="text-slate-400 text-sm">
+          {buildTotalCount} build{buildTotalCount !== 1 ? 's' : ''} found
+        </p>
+      </div>
+
+      {buildError && (
+        <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+          {buildError}
+        </div>
+      )}
+    </>
+  );
+
+  const controls = (
+    <div className="bg-slate-800 border-b border-slate-700 px-4 md:px-6 py-3 md:py-4">
+      <h1 className="text-lg md:text-2xl font-bold text-white mb-3">Content Moderation</h1>
+      <div className="mb-3 inline-flex rounded-lg border border-slate-700 bg-slate-900/60 p-1">
+        <button
+          type="button"
+          onClick={() => setActiveTab('gear')}
+          className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'gear'
+              ? 'bg-primary-600 text-white'
+              : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+          }`}
+        >
+          Gear
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('builds')}
+          className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'builds'
+              ? 'bg-primary-600 text-white'
+              : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+          }`}
+        >
+          Builds
+        </button>
+      </div>
+      {activeTab === 'gear' ? gearControls : buildControls}
     </div>
   );
 
@@ -407,190 +636,279 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
           }
         }}
       >
-        {/* Items table - desktop */}
-        <div className="hidden md:block border border-slate-800 rounded-xl overflow-hidden bg-slate-900/40">
-          {isLoading ? (
-            <div className="p-8 text-center">
-              <div className="w-8 h-8 border-2 border-primary-500/30 border-t-primary-500 rounded-full animate-spin mx-auto" />
-              <p className="text-slate-400 mt-4">Loading...</p>
+        {activeTab === 'gear' ? (
+          <>
+            {/* Gear table - desktop */}
+            <div className="hidden md:block border border-slate-800 rounded-xl overflow-hidden bg-slate-900/40">
+              {isLoading ? (
+                <div className="p-8 text-center">
+                  <div className="w-8 h-8 border-2 border-primary-500/30 border-t-primary-500 rounded-full animate-spin mx-auto" />
+                  <p className="text-slate-400 mt-4">Loading...</p>
+                </div>
+              ) : items.length === 0 ? (
+                <div className="p-8 text-center">
+                  <p className="text-slate-400">No items found</p>
+                </div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 z-10 bg-slate-900 text-slate-400">
+                    <tr className="border-b border-slate-800">
+                      <th className="px-4 py-3 text-left font-medium">Upload Date</th>
+                      <th className="px-4 py-3 text-left font-medium">Last Edit</th>
+                      <th className="px-4 py-3 text-left font-medium">Type</th>
+                      <th className="px-4 py-3 text-left font-medium">Brand</th>
+                      <th className="px-4 py-3 text-left font-medium">Model</th>
+                      <th className="px-4 py-3 text-left font-medium">Variant</th>
+                      <th className="px-4 py-3 text-left font-medium">Image</th>
+                      <th className="px-4 py-3 text-left font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((item) => {
+                      const displayName = `${item.brand} ${item.model}${item.variant ? ` ${item.variant}` : ''}`.trim();
+                      const isSelected = editingItemId === item.id;
+                      return (
+                        <tr
+                          key={item.id}
+                          onClick={() => handleEditClick(item)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault();
+                              handleEditClick(item);
+                            }
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`Open editor for ${displayName}`}
+                          className={`border-t border-slate-800 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-inset focus-visible:bg-primary-600/20 ${
+                            isSelected ? 'bg-primary-600/10' : 'bg-slate-900/40 hover:bg-slate-800/50'
+                          }`}
+                        >
+                          <td className="px-4 py-3 text-sm text-slate-400">{formatDate(item.createdAt)}</td>
+                          <td className="px-4 py-3 text-sm text-slate-400">{formatDate(item.updatedAt)}</td>
+                          <td className="px-4 py-3 text-sm text-slate-300">
+                            <span className="px-2 py-0.5 bg-slate-700/70 text-slate-300 rounded text-xs">
+                              {item.gearType}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-white font-medium">{item.brand}</td>
+                          <td className="px-4 py-3 text-sm text-slate-300">{item.model}</td>
+                          <td className="px-4 py-3 text-sm text-slate-400">{item.variant || '—'}</td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className={`px-2 py-0.5 rounded text-xs ${getImageStatusClass(item.imageStatus)}`}>
+                              {getImageStatusLabel(item.imageStatus)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className={`px-2 py-0.5 rounded text-xs ${getCatalogStatusClass(item.status)}`}>
+                              {getCatalogStatusLabel(item.status)}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
             </div>
-          ) : items.length === 0 ? (
-            <div className="p-8 text-center">
-              <p className="text-slate-400">No items found</p>
-            </div>
-          ) : (
-            <table className="w-full text-sm">
-            <thead className="sticky top-0 z-10 bg-slate-900 text-slate-400">
-              <tr className="border-b border-slate-800">
-                <th className="px-4 py-3 text-left font-medium">
-                  Upload Date
-                </th>
-                <th className="px-4 py-3 text-left font-medium">
-                  Last Edit
-                </th>
-                <th className="px-4 py-3 text-left font-medium">
-                  Type
-                </th>
-                <th className="px-4 py-3 text-left font-medium">
-                  Brand
-                </th>
-                <th className="px-4 py-3 text-left font-medium">
-                  Model
-                </th>
-                <th className="px-4 py-3 text-left font-medium">
-                  Variant
-                </th>
-                <th className="px-4 py-3 text-left font-medium">
-                  Image
-                </th>
-                <th className="px-4 py-3 text-left font-medium">
-                  Status
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => {
-                const displayName = `${item.brand} ${item.model}${item.variant ? ` ${item.variant}` : ''}`.trim();
-                const isSelected = editingItemId === item.id;
-                return (
-                  <tr
+
+            {/* Gear cards - mobile */}
+            <div className="md:hidden space-y-3">
+              {isLoading ? (
+                <div className="p-8 text-center border border-slate-800 bg-slate-900/40 rounded-xl">
+                  <div className="w-8 h-8 border-2 border-primary-500/30 border-t-primary-500 rounded-full animate-spin mx-auto" />
+                  <p className="text-slate-400 mt-4">Loading...</p>
+                </div>
+              ) : items.length === 0 ? (
+                <div className="p-8 text-center border border-slate-800 bg-slate-900/40 rounded-xl">
+                  <p className="text-slate-400">No items found</p>
+                </div>
+              ) : (
+                items.map((item) => (
+                  <button
+                    type="button"
                     key={item.id}
                     onClick={() => handleEditClick(item)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        handleEditClick(item);
-                      }
-                    }}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={`Open editor for ${displayName}`}
-                    className={`border-t border-slate-800 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-inset focus-visible:bg-primary-600/20 ${
-                      isSelected ? 'bg-primary-600/10' : 'bg-slate-900/40 hover:bg-slate-800/50'
+                    className={`w-full text-left rounded-xl p-4 transition-colors border ${
+                      editingItemId === item.id
+                        ? 'border-primary-500/50 bg-primary-600/10'
+                        : 'border-slate-800 bg-slate-900/40 hover:bg-slate-800/50'
                     }`}
                   >
-                    <td className="px-4 py-3 text-sm text-slate-400">
-                      {formatDate(item.createdAt)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-400">
-                      {formatDate(item.updatedAt)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-300">
-                      <span className="px-2 py-0.5 bg-slate-700/70 text-slate-300 rounded text-xs">
-                        {item.gearType}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-white font-medium">
-                      {item.brand}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-300">
-                      {item.model}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-400">
-                      {item.variant || '—'}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      <span className={`px-2 py-0.5 rounded text-xs ${getImageStatusClass(item.imageStatus)}`}>
-                        {getImageStatusLabel(item.imageStatus)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      <span className={`px-2 py-0.5 rounded text-xs ${getCatalogStatusClass(item.status)}`}>
-                        {getCatalogStatusLabel(item.status)}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {/* Items cards - mobile */}
-      <div className="md:hidden space-y-3">
-        {isLoading ? (
-          <div className="p-8 text-center border border-slate-800 bg-slate-900/40 rounded-xl">
-            <div className="w-8 h-8 border-2 border-primary-500/30 border-t-primary-500 rounded-full animate-spin mx-auto" />
-            <p className="text-slate-400 mt-4">Loading...</p>
-          </div>
-        ) : items.length === 0 ? (
-          <div className="p-8 text-center border border-slate-800 bg-slate-900/40 rounded-xl">
-            <p className="text-slate-400">No items found</p>
-          </div>
-        ) : (
-          items.map((item) => (
-            <button
-              type="button"
-              key={item.id}
-              onClick={() => handleEditClick(item)}
-              className={`w-full text-left rounded-xl p-4 transition-colors border ${
-                editingItemId === item.id
-                  ? 'border-primary-500/50 bg-primary-600/10'
-                  : 'border-slate-800 bg-slate-900/40 hover:bg-slate-800/50'
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="px-2 py-0.5 bg-slate-700 rounded text-xs text-slate-300">
-                      {item.gearType}
-                    </span>
-                    <span className={`px-2 py-0.5 rounded text-xs ${getCatalogStatusClass(item.status)}`}>
-                      {getCatalogStatusLabel(item.status)}
-                    </span>
-                    <span className={`px-2 py-0.5 rounded text-xs ${getImageStatusClass(item.imageStatus)}`}>
-                      {getImageStatusLabel(item.imageStatus)}
-                    </span>
-                  </div>
-                  <h3 className="text-white font-medium truncate">
-                    {item.brand} {item.model}
-                  </h3>
-                  {item.variant && (
-                    <p className="text-sm text-slate-400 truncate">{item.variant}</p>
-                  )}
-                  <div className="grid grid-cols-2 gap-3 mt-3 text-xs">
-                    <div>
-                      <p className="text-slate-500 uppercase tracking-wide">Upload</p>
-                      <p className="text-slate-300 mt-0.5">{formatDate(item.createdAt)}</p>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="px-2 py-0.5 bg-slate-700 rounded text-xs text-slate-300">
+                            {item.gearType}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded text-xs ${getCatalogStatusClass(item.status)}`}>
+                            {getCatalogStatusLabel(item.status)}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded text-xs ${getImageStatusClass(item.imageStatus)}`}>
+                            {getImageStatusLabel(item.imageStatus)}
+                          </span>
+                        </div>
+                        <h3 className="text-white font-medium truncate">
+                          {item.brand} {item.model}
+                        </h3>
+                        {item.variant && (
+                          <p className="text-sm text-slate-400 truncate">{item.variant}</p>
+                        )}
+                        <div className="grid grid-cols-2 gap-3 mt-3 text-xs">
+                          <div>
+                            <p className="text-slate-500 uppercase tracking-wide">Upload</p>
+                            <p className="text-slate-300 mt-0.5">{formatDate(item.createdAt)}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-slate-500 uppercase tracking-wide">Last Edit</p>
+                            <p className="text-slate-300 mt-0.5">{formatDate(item.updatedAt)}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-xs text-slate-400 shrink-0">Edit</span>
                     </div>
-                    <div className="text-right">
-                      <p className="text-slate-500 uppercase tracking-wide">Last Edit</p>
-                      <p className="text-slate-300 mt-0.5">{formatDate(item.updatedAt)}</p>
-                    </div>
-                  </div>
-                </div>
-                <span className="text-xs text-slate-400 shrink-0">Edit</span>
-              </div>
-            </button>
-          ))
-        )}
-      </div>
-
-      {/* Infinite scroll loading indicator */}
-      {hasMore && !isLoading && (
-        <div ref={loadMoreRef} className="flex items-center justify-center py-6">
-          {isLoadingMore ? (
-            <div className="flex items-center gap-3">
-              <div className="w-5 h-5 border-2 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" />
-              <span className="text-slate-400">Loading more...</span>
+                  </button>
+                ))
+              )}
             </div>
-          ) : (
-            <span className="text-slate-500 text-sm">Scroll for more</span>
-          )}
-        </div>
-      )}
 
-      {/* End of list indicator */}
-      {!hasMore && items.length > 0 && (
-        <div className="text-center py-4 text-slate-500 text-sm">
-          Showing all {items.length} of {totalCount} items
-        </div>
-      )}
+            {/* Infinite scroll loading indicator */}
+            {hasMore && !isLoading && (
+              <div ref={loadMoreRef} className="flex items-center justify-center py-6">
+                {isLoadingMore ? (
+                  <div className="flex items-center gap-3">
+                    <div className="w-5 h-5 border-2 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" />
+                    <span className="text-slate-400">Loading more...</span>
+                  </div>
+                ) : (
+                  <span className="text-slate-500 text-sm">Scroll for more</span>
+                )}
+              </div>
+            )}
+
+            {/* End of list indicator */}
+            {!hasMore && items.length > 0 && (
+              <div className="text-center py-4 text-slate-500 text-sm">
+                Showing all {items.length} of {totalCount} items
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {/* Build table - desktop */}
+            <div className="hidden md:block border border-slate-800 rounded-xl overflow-hidden bg-slate-900/40">
+              {isLoadingBuilds ? (
+                <div className="p-8 text-center">
+                  <div className="w-8 h-8 border-2 border-primary-500/30 border-t-primary-500 rounded-full animate-spin mx-auto" />
+                  <p className="text-slate-400 mt-4">Loading builds...</p>
+                </div>
+              ) : builds.length === 0 ? (
+                <div className="p-8 text-center">
+                  <p className="text-slate-400">No builds found</p>
+                </div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 z-10 bg-slate-900 text-slate-400">
+                    <tr className="border-b border-slate-800">
+                      <th className="px-4 py-3 text-left font-medium">Last Edit</th>
+                      <th className="px-4 py-3 text-left font-medium">Status</th>
+                      <th className="px-4 py-3 text-left font-medium">Title</th>
+                      <th className="px-4 py-3 text-left font-medium">Pilot</th>
+                      <th className="px-4 py-3 text-left font-medium">Description</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {builds.map((build) => {
+                      const displayName = build.title || 'Untitled Build';
+                      const isSelected = editingBuildId === build.id;
+                      return (
+                        <tr
+                          key={build.id}
+                          onClick={() => handleBuildEditClick(build)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault();
+                              handleBuildEditClick(build);
+                            }
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`Open editor for ${displayName}`}
+                          className={`border-t border-slate-800 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-inset focus-visible:bg-primary-600/20 ${
+                            isSelected ? 'bg-primary-600/10' : 'bg-slate-900/40 hover:bg-slate-800/50'
+                          }`}
+                        >
+                          <td className="px-4 py-3 text-sm text-slate-400">{formatDateTime(build.updatedAt)}</td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className={`px-2 py-0.5 rounded text-xs ${getBuildStatusClass(build.status)}`}>
+                              {getBuildStatusLabel(build.status)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-white font-medium">{displayName}</td>
+                          <td className="px-4 py-3 text-sm text-slate-300">
+                            {build.pilot?.callSign || build.pilot?.displayName || 'Pilot'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-300 max-w-md truncate">
+                            {build.description?.trim() || 'No description provided'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Build cards - mobile */}
+            <div className="md:hidden space-y-3">
+              {isLoadingBuilds ? (
+                <div className="p-8 text-center border border-slate-800 bg-slate-900/40 rounded-xl">
+                  <div className="w-8 h-8 border-2 border-primary-500/30 border-t-primary-500 rounded-full animate-spin mx-auto" />
+                  <p className="text-slate-400 mt-4">Loading builds...</p>
+                </div>
+              ) : builds.length === 0 ? (
+                <div className="p-8 text-center border border-slate-800 bg-slate-900/40 rounded-xl">
+                  <p className="text-slate-400">No builds found</p>
+                </div>
+              ) : (
+                builds.map((build) => (
+                  <button
+                    key={build.id}
+                    type="button"
+                    onClick={() => handleBuildEditClick(build)}
+                    className={`group w-full rounded-xl border p-4 text-left transition ${
+                      editingBuildId === build.id
+                        ? 'border-primary-500/50 bg-primary-600/10'
+                        : 'border-slate-700 bg-slate-800/50 hover:border-primary-500/50 hover:bg-slate-800'
+                    }`}
+                  >
+                    <div className="mb-2 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-base font-semibold text-white">{build.title || 'Untitled Build'}</p>
+                        <p className="text-sm text-slate-400">
+                          by {build.pilot?.callSign || build.pilot?.displayName || 'Pilot'}
+                        </p>
+                      </div>
+                      <span className={`rounded-full px-2 py-1 text-xs font-medium ${getBuildStatusClass(build.status)}`}>
+                        {getBuildStatusLabel(build.status)}
+                      </span>
+                    </div>
+                    <p className="line-clamp-2 text-sm text-slate-300">
+                      {build.description?.trim() || 'No description provided'}
+                    </p>
+                    <div className="mt-3 text-xs text-slate-500">
+                      Updated {formatDateTime(build.updatedAt)}
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       <MobileFloatingControls
-        label="Gear Filters"
+        label={activeTab === 'gear' ? 'Gear Filters' : 'Build Filters'}
         isOpen={isMobileControlsOpen}
         onToggle={() => setIsMobileControlsOpen((prev) => !prev)}
       >
@@ -615,6 +933,389 @@ export function AdminGearModeration({ hasGearAdminAccess, authLoading }: AdminGe
         onSelectItem={handleAddGearSelect}
         startInCreateMode
         onUploadCatalogImage={adminUploadGearImage}
+      />
+
+      {editingBuildId && (
+        <AdminBuildEditModal
+          key={buildModalKey}
+          buildId={editingBuildId}
+          onClose={handleBuildEditClose}
+          onSave={handleBuildEditSaved}
+          onPublished={handleBuildPublished}
+        />
+      )}
+    </>
+  );
+}
+
+interface AdminBuildEditModalProps {
+  buildId: string;
+  onClose: () => void;
+  onSave: () => void;
+  onPublished: () => void;
+}
+
+function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBuildEditModalProps) {
+  const [build, setBuild] = useState<Build | null>(null);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [modalImageFile, setModalImageFile] = useState<File | null>(null);
+  const [modalImagePreview, setModalImagePreview] = useState<string | null>(null);
+  const [imageModalError, setImageModalError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [isDeletingImage, setIsDeletingImage] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<BuildValidationError[]>([]);
+  const [imageCacheBuster, setImageCacheBuster] = useState(() => Date.now());
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadBuild = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const loaded = await adminGetBuild(buildId);
+        if (cancelled) return;
+        setBuild(loaded);
+        setTitle(loaded.title || '');
+        setDescription(loaded.description || '');
+      } catch (err) {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : 'Failed to load build');
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void loadBuild();
+    return () => {
+      cancelled = true;
+      if (imagePreview?.startsWith('blob:')) {
+        URL.revokeObjectURL(imagePreview);
+      }
+      if (modalImagePreview?.startsWith('blob:')) {
+        URL.revokeObjectURL(modalImagePreview);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buildId]);
+
+  const hasExistingImage = Boolean(build?.mainImageUrl);
+  const existingImageUrl = build ? getAdminBuildImageUrl(build.id, imageCacheBuster) : null;
+  const currentPreview = imagePreview || (hasExistingImage ? existingImageUrl : null);
+
+  const refreshBuild = useCallback(async () => {
+    const refreshed = await adminGetBuild(buildId);
+    setBuild(refreshed);
+    setTitle(refreshed.title || '');
+    setDescription(refreshed.description || '');
+    setImageFile(null);
+    if (imagePreview?.startsWith('blob:')) {
+      URL.revokeObjectURL(imagePreview);
+    }
+    setImagePreview(null);
+    setModalImageFile(null);
+    if (modalImagePreview?.startsWith('blob:')) {
+      URL.revokeObjectURL(modalImagePreview);
+    }
+    setModalImagePreview(null);
+    setImageCacheBuster(Date.now());
+  }, [buildId, imagePreview, modalImagePreview]);
+
+  const handleOpenImageModal = () => {
+    setImageModalError(null);
+    setShowImageModal(true);
+    setModalImageFile(imageFile);
+    setModalImagePreview(imagePreview);
+  };
+
+  const handleCloseImageModal = () => {
+    setShowImageModal(false);
+    if (modalImagePreview?.startsWith('blob:') && modalImagePreview !== imagePreview) {
+      URL.revokeObjectURL(modalImagePreview);
+    }
+    setModalImageFile(null);
+    setModalImagePreview(null);
+    setImageModalError(null);
+  };
+
+  const handleSelectImage = (file: File) => {
+    if (file.size > 2 * 1024 * 1024) {
+      setImageModalError('Image file is too large. Maximum size is 2MB.');
+      return;
+    }
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      setImageModalError('Invalid image type. Please use JPEG, PNG, or WebP.');
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    if (modalImagePreview?.startsWith('blob:')) {
+      URL.revokeObjectURL(modalImagePreview);
+    }
+    setModalImageFile(file);
+    setModalImagePreview(previewUrl);
+    setImageModalError(null);
+  };
+
+  const handleSaveImageSelection = () => {
+    if (!modalImageFile || !modalImagePreview) return;
+    if (imagePreview?.startsWith('blob:')) {
+      URL.revokeObjectURL(imagePreview);
+    }
+    setImageFile(modalImageFile);
+    setImagePreview(modalImagePreview);
+    setModalImageFile(null);
+    setModalImagePreview(null);
+    setShowImageModal(false);
+  };
+
+  const saveChanges = useCallback(async (publishAfterSave: boolean) => {
+    if (!build) return;
+
+    const updatePayload = {
+      title: title.trim(),
+      description: description.trim(),
+    };
+
+    if (publishAfterSave) {
+      setIsPublishing(true);
+    } else {
+      setIsSaving(true);
+    }
+    setError(null);
+    setValidationErrors([]);
+
+    try {
+      let updated = await adminUpdateBuild(build.id, updatePayload);
+
+      if (imageFile) {
+        await adminUploadBuildImage(build.id, imageFile);
+        updated = await adminGetBuild(build.id);
+      }
+
+      if (publishAfterSave) {
+        const publishResponse = await adminPublishBuild(build.id);
+        if (!publishResponse.validation.valid) {
+          setValidationErrors(publishResponse.validation.errors ?? []);
+          if (publishResponse.build) {
+            setBuild(publishResponse.build);
+          } else {
+            setBuild(updated);
+          }
+          return;
+        }
+        onPublished();
+        return;
+      }
+
+      setBuild(updated);
+      setImageFile(null);
+      if (imagePreview?.startsWith('blob:')) {
+        URL.revokeObjectURL(imagePreview);
+      }
+      setImagePreview(null);
+      setImageCacheBuster(Date.now());
+      onSave();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save build');
+    } finally {
+      setIsSaving(false);
+      setIsPublishing(false);
+    }
+  }, [build, description, imageFile, imagePreview, onPublished, onSave, title]);
+
+  const handleDeleteImage = async () => {
+    if (!build || isDeletingImage) return;
+    setIsDeletingImage(true);
+    setError(null);
+    try {
+      await adminDeleteBuildImage(build.id);
+      await refreshBuild();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete build image');
+    } finally {
+      setIsDeletingImage(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4">
+        <div className="rounded-xl border border-slate-700 bg-slate-800 p-6 text-slate-300">
+          Loading build...
+        </div>
+      </div>
+    );
+  }
+
+  if (!build) {
+    return (
+      <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4">
+        <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-800 p-6">
+          <p className="text-slate-300">Build not found.</p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-4 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 z-[65] bg-black/70" onClick={onClose} />
+      <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+        <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-xl border border-slate-700 bg-slate-800 p-5 shadow-2xl">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h3 className="text-lg font-semibold text-white">Review Build</h3>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg p-2 text-slate-400 hover:bg-slate-700 hover:text-white"
+              aria-label="Close build moderation modal"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          {error && (
+            <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
+              {error}
+            </div>
+          )}
+
+          {validationErrors.length > 0 && (
+            <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+              <p className="font-medium">Build cannot be published yet:</p>
+              <ul className="mt-1 list-inside list-disc text-xs text-amber-100">
+                {validationErrors.map((validation) => (
+                  <li key={`${validation.category}-${validation.code}-${validation.message}`}>{validation.message}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr),260px]">
+            <div className="space-y-3">
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">Title</span>
+                <input
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  className="h-11 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 text-white focus:border-primary-500 focus:outline-none"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">Description</span>
+                <textarea
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  rows={6}
+                  className="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+                />
+              </label>
+            </div>
+
+            <div className="space-y-3 rounded-lg border border-slate-700 bg-slate-900/40 p-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Build Image</p>
+              <div className="aspect-square overflow-hidden rounded-lg border border-slate-600 bg-slate-800">
+                {currentPreview ? (
+                  <img src={currentPreview} alt={title || 'Build'} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-slate-500">No image</div>
+                )}
+              </div>
+              <div className="grid gap-2">
+                <button
+                  type="button"
+                  onClick={handleOpenImageModal}
+                  className="rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-500"
+                >
+                  {currentPreview ? 'Change Image' : 'Upload Image'}
+                </button>
+                {hasExistingImage && (
+                  <a
+                    href={existingImageUrl || undefined}
+                    download={`${(title || 'build').replace(/\s+/g, '-').toLowerCase()}-image`}
+                    className="rounded-lg border border-slate-600 px-3 py-2 text-center text-sm text-slate-200 hover:border-slate-500 hover:text-white"
+                  >
+                    Download Image
+                  </a>
+                )}
+                {hasExistingImage && (
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteImage()}
+                    disabled={isDeletingImage}
+                    className="rounded-lg border border-red-500/40 px-3 py-2 text-sm text-red-300 hover:bg-red-500/10 disabled:opacity-50"
+                  >
+                    {isDeletingImage ? 'Removing...' : 'Remove Image'}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-medium text-slate-200 hover:border-slate-500 hover:text-white"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={isSaving || isPublishing}
+              onClick={() => void saveChanges(false)}
+              className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-medium text-slate-200 hover:border-slate-500 hover:text-white disabled:opacity-60"
+            >
+              {isSaving ? 'Saving...' : 'Save Changes'}
+            </button>
+            <button
+              type="button"
+              disabled={isSaving || isPublishing}
+              onClick={() => void saveChanges(true)}
+              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-60"
+            >
+              {isPublishing ? 'Publishing...' : 'Publish Build'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <ImageUploadModal
+        isOpen={showImageModal}
+        title={currentPreview ? 'Update Build Image' : 'Upload Build Image'}
+        previewUrl={modalImagePreview || currentPreview}
+        previewAlt={title || 'Build image preview'}
+        placeholder="🚁"
+        accept="image/jpeg,image/jpg,image/png,image/webp"
+        helperText="JPEG, PNG, or WebP. Max 2MB."
+        selectButtonLabel={modalImagePreview ? 'Choose Different' : 'Select Image'}
+        onSelectFile={(file) => handleSelectImage(file)}
+        onClose={handleCloseImageModal}
+        onSave={handleSaveImageSelection}
+        disableSave={!modalImageFile || !modalImagePreview}
+        saveLabel="Use Image"
+        errorMessage={imageModalError}
+        zIndexClassName="z-[75]"
       />
     </>
   );

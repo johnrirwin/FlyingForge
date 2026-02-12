@@ -7,7 +7,8 @@ export interface AdminUser {
   callSign?: string;
   status: AdminUserStatus;
   isAdmin: boolean;
-  isGearAdmin: boolean;
+  isContentAdmin: boolean;
+  isGearAdmin?: boolean;
   avatarUrl?: string;
   googleAvatarUrl?: string;
   customAvatarUrl?: string;
@@ -32,5 +33,6 @@ export interface AdminUsersResponse {
 export interface AdminUpdateUserParams {
   status?: AdminUserStatus;
   isAdmin?: boolean;
+  isContentAdmin?: boolean;
   isGearAdmin?: boolean;
 }

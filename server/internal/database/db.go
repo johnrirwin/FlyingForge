@@ -664,8 +664,22 @@ const migrationUserIsGearAdmin = `
 -- Add is_gear_admin flag (defaults to false)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_gear_admin BOOLEAN DEFAULT FALSE;
 
--- Index for finding gear admin users
+-- Add is_content_admin flag (defaults to false) and migrate existing gear moderators.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_content_admin BOOLEAN DEFAULT FALSE;
+UPDATE users
+SET is_content_admin = TRUE
+WHERE COALESCE(is_content_admin, FALSE) = FALSE
+  AND COALESCE(is_gear_admin, FALSE) = TRUE;
+
+-- Keep legacy is_gear_admin in sync as an alias during the transition.
+UPDATE users
+SET is_gear_admin = COALESCE(is_content_admin, FALSE)
+WHERE COALESCE(is_gear_admin, FALSE) != COALESCE(is_content_admin, FALSE);
+
+-- Index for finding legacy gear admin users
 CREATE INDEX IF NOT EXISTS idx_users_is_gear_admin ON users(is_gear_admin) WHERE is_gear_admin = TRUE;
+-- Index for finding content admin users
+CREATE INDEX IF NOT EXISTS idx_users_is_content_admin ON users(is_content_admin) WHERE is_content_admin = TRUE;
 `
 
 // Migration to add binary image storage to gear_catalog
@@ -876,7 +890,7 @@ END $$;
 
 ALTER TABLE builds
 ADD CONSTRAINT chk_builds_status
-CHECK (status IN ('TEMP', 'SHARED', 'DRAFT', 'PUBLISHED', 'UNPUBLISHED'));
+CHECK (status IN ('TEMP', 'SHARED', 'DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED'));
 
 CREATE TABLE IF NOT EXISTS build_parts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

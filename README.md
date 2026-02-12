@@ -179,8 +179,23 @@ Force refresh feeds. Request body:
 - `GET /api/builds/{id}`
 - `PUT /api/builds/{id}`
 - `DELETE /api/builds/{id}`
-- `POST /api/builds/{id}/publish`
+- `POST /api/builds/{id}/publish` → submits to moderation queue (`PENDING_REVIEW`)
 - `POST /api/builds/{id}/unpublish`
+
+#### Content Moderation (Admin / Content Admin)
+- `GET /api/admin/gear`
+- `GET /api/admin/gear/{id}`
+- `PUT /api/admin/gear/{id}`
+- `POST /api/admin/gear/{id}/image`
+- `GET /api/admin/gear/{id}/image`
+- `DELETE /api/admin/gear/{id}/image`
+- `GET /api/admin/builds?status=PENDING_REVIEW`
+- `GET /api/admin/builds/{id}`
+- `PUT /api/admin/builds/{id}`
+- `POST /api/admin/builds/{id}/image`
+- `GET /api/admin/builds/{id}/image`
+- `DELETE /api/admin/builds/{id}/image`
+- `POST /api/admin/builds/{id}/publish`
 
 #### POST /api/images/upload
 Moderates an uploaded image (multipart/form-data `image`) synchronously and returns:

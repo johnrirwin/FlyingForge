@@ -146,9 +146,9 @@ func (s *Server) Start(addr string) error {
 		gearCatalogAPI.RegisterRoutes(mux, s.corsMiddleware)
 	}
 
-	// Admin routes (gear moderation, etc.)
+	// Admin routes (content moderation + user admin).
 	if s.gearCatalogStore != nil && s.userStore != nil && s.authMiddleware != nil && s.imageSvc != nil {
-		adminAPI := NewAdminAPI(s.gearCatalogStore, s.userStore, s.imageSvc, s.authMiddleware, s.logger)
+		adminAPI := NewAdminAPI(s.gearCatalogStore, s.userStore, s.buildSvc, s.imageSvc, s.authMiddleware, s.logger)
 		adminAPI.RegisterRoutes(mux, s.corsMiddleware)
 	}
 

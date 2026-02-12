@@ -246,14 +246,15 @@ export function AppRoutes({
         }
       />
       <Route
-        path="/admin/gear"
+        path="/admin/content"
         element={
           <AdminGearModeration
-            hasGearAdminAccess={Boolean(user?.isAdmin || user?.isGearAdmin)}
+            hasContentAdminAccess={Boolean(user?.isAdmin || user?.isContentAdmin || user?.isGearAdmin)}
             authLoading={authLoading}
           />
         }
       />
+      <Route path="/admin/gear" element={<Navigate to="/admin/content" replace />} />
       <Route
         path="/admin/users"
         element={

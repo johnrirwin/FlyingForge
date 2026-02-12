@@ -45,18 +45,25 @@ type buildStore interface {
 	Create(ctx context.Context, ownerUserID string, status models.BuildStatus, title string, description string, sourceAircraftID string, token string, expiresAt *time.Time, parts []models.BuildPartInput) (*models.Build, error)
 	ListByOwner(ctx context.Context, ownerUserID string, params models.BuildListParams) (*models.BuildListResponse, error)
 	ListPublic(ctx context.Context, params models.BuildListParams) (*models.BuildListResponse, error)
+	ListForModeration(ctx context.Context, params models.BuildModerationListParams) (*models.BuildListResponse, error)
 	GetByID(ctx context.Context, id string) (*models.Build, error)
 	GetForOwner(ctx context.Context, id string, ownerUserID string) (*models.Build, error)
 	GetPublic(ctx context.Context, id string) (*models.Build, error)
 	GetTempByToken(ctx context.Context, token string) (*models.Build, error)
+	GetForModeration(ctx context.Context, id string) (*models.Build, error)
 	Update(ctx context.Context, id string, ownerUserID string, params models.UpdateBuildParams) (*models.Build, error)
 	UpdateTempByToken(ctx context.Context, token string, params models.UpdateBuildParams) (*models.Build, error)
+	UpdateForModeration(ctx context.Context, id string, params models.UpdateBuildParams) (*models.Build, error)
 	ShareTempByToken(ctx context.Context, token string) (*models.Build, error)
 	SetStatus(ctx context.Context, id string, ownerUserID string, status models.BuildStatus) (*models.Build, error)
 	SetImage(ctx context.Context, id string, ownerUserID string, imageAssetID string) (string, error)
+	SetImageForModeration(ctx context.Context, id string, imageAssetID string) (string, error)
 	GetImageForOwner(ctx context.Context, id string, ownerUserID string) ([]byte, error)
 	GetPublicImage(ctx context.Context, id string) ([]byte, error)
+	GetImageForModeration(ctx context.Context, id string) ([]byte, error)
 	DeleteImage(ctx context.Context, id string, ownerUserID string) (string, error)
+	DeleteImageForModeration(ctx context.Context, id string) (string, error)
+	ApproveForModeration(ctx context.Context, id string) (*models.Build, error)
 	Delete(ctx context.Context, id string, ownerUserID string) (bool, error)
 	DeleteExpiredTemp(ctx context.Context, cutoff time.Time) (int64, error)
 }
@@ -115,6 +122,18 @@ func NewServiceWithDeps(store buildStore, aircraftStore aircraftDetailsReader, g
 // ListPublic returns published builds.
 func (s *Service) ListPublic(ctx context.Context, params models.BuildListParams) (*models.BuildListResponse, error) {
 	resp, err := s.store.ListPublic(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+	for i := range resp.Builds {
+		resp.Builds[i].Verified = isBuildVerified(&resp.Builds[i])
+	}
+	return resp, nil
+}
+
+// ListForModeration returns builds queued for content moderation.
+func (s *Service) ListForModeration(ctx context.Context, params models.BuildModerationListParams) (*models.BuildListResponse, error) {
+	resp, err := s.store.ListForModeration(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -383,6 +402,19 @@ func (s *Service) GetByOwner(ctx context.Context, id string, ownerUserID string)
 	return build, nil
 }
 
+// GetForModeration fetches one build for content moderation workflows.
+func (s *Service) GetForModeration(ctx context.Context, id string) (*models.Build, error) {
+	build, err := s.store.GetForModeration(ctx, strings.TrimSpace(id))
+	if err != nil {
+		return nil, err
+	}
+	if build == nil {
+		return nil, nil
+	}
+	build.Verified = isBuildVerified(build)
+	return build, nil
+}
+
 // UpdateByOwner updates an owned build.
 func (s *Service) UpdateByOwner(ctx context.Context, id string, ownerUserID string, params models.UpdateBuildParams) (*models.Build, error) {
 	if params.Title != nil {
@@ -408,7 +440,32 @@ func (s *Service) UpdateByOwner(ctx context.Context, id string, ownerUserID stri
 	return build, nil
 }
 
-// Publish validates and publishes a build.
+// UpdateForModeration updates a build from the content moderation queue.
+func (s *Service) UpdateForModeration(ctx context.Context, id string, params models.UpdateBuildParams) (*models.Build, error) {
+	if params.Title != nil {
+		title := strings.TrimSpace(*params.Title)
+		params.Title = &title
+	}
+	if params.Description != nil {
+		desc := strings.TrimSpace(*params.Description)
+		params.Description = &desc
+	}
+	if params.Parts != nil {
+		params.Parts = normalizeParts(params.Parts)
+	}
+
+	build, err := s.store.UpdateForModeration(ctx, strings.TrimSpace(id), params)
+	if err != nil {
+		return nil, err
+	}
+	if build == nil {
+		return nil, nil
+	}
+	build.Verified = isBuildVerified(build)
+	return build, nil
+}
+
+// Publish validates and submits a build for content moderation.
 func (s *Service) Publish(ctx context.Context, id string, ownerUserID string) (*models.Build, models.BuildValidationResult, error) {
 	build, err := s.store.GetForOwner(ctx, strings.TrimSpace(id), ownerUserID)
 	if err != nil {
@@ -423,7 +480,7 @@ func (s *Service) Publish(ctx context.Context, id string, ownerUserID string) (*
 		return nil, validation, &ValidationError{Validation: validation}
 	}
 
-	updated, err := s.store.SetStatus(ctx, build.ID, ownerUserID, models.BuildStatusPublished)
+	updated, err := s.store.SetStatus(ctx, build.ID, ownerUserID, models.BuildStatusPendingReview)
 	if err != nil {
 		return nil, validation, err
 	}
@@ -445,6 +502,35 @@ func (s *Service) Unpublish(ctx context.Context, id string, ownerUserID string) 
 	}
 	updated.Verified = isBuildVerified(updated)
 	return updated, nil
+}
+
+// ApproveForModeration publishes a pending build from the moderation queue.
+func (s *Service) ApproveForModeration(ctx context.Context, id string) (*models.Build, models.BuildValidationResult, error) {
+	build, err := s.store.GetForModeration(ctx, strings.TrimSpace(id))
+	if err != nil {
+		return nil, models.BuildValidationResult{}, err
+	}
+	if build == nil {
+		return nil, models.BuildValidationResult{}, nil
+	}
+
+	validation := ValidateForPublish(build)
+	if !validation.Valid {
+		return nil, validation, &ValidationError{Validation: validation}
+	}
+	if build.Status != models.BuildStatusPendingReview {
+		return nil, validation, &ServiceError{Message: "build is not pending moderation"}
+	}
+
+	updated, err := s.store.ApproveForModeration(ctx, build.ID)
+	if err != nil {
+		return nil, validation, err
+	}
+	if updated == nil {
+		return nil, validation, nil
+	}
+	updated.Verified = isBuildVerified(updated)
+	return updated, validation, nil
 }
 
 // DeleteByOwner deletes an owned non-temp build regardless of draft/publication status.
@@ -530,6 +616,60 @@ func (s *Service) SetImage(ctx context.Context, userID string, params models.Set
 	return decision, nil
 }
 
+// SetImageForModeration uploads an image for moderator-curated build updates.
+func (s *Service) SetImageForModeration(ctx context.Context, moderatorUserID string, params models.SetBuildImageParams) (*models.ModerationDecision, error) {
+	if strings.TrimSpace(params.BuildID) == "" {
+		return nil, &ServiceError{Message: "build id is required"}
+	}
+	if s.imageSvc == nil {
+		return nil, &ServiceError{Message: "image moderation unavailable"}
+	}
+
+	build, err := s.store.GetForModeration(ctx, strings.TrimSpace(params.BuildID))
+	if err != nil {
+		return nil, err
+	}
+	if build == nil {
+		return nil, &ServiceError{Message: "build not found"}
+	}
+
+	if len(params.ImageData) == 0 {
+		return nil, &ServiceError{Message: "image data is required"}
+	}
+	if params.ImageType != "image/jpeg" && params.ImageType != "image/png" && params.ImageType != "image/webp" {
+		return nil, &ServiceError{Message: "image must be JPEG, PNG, or WebP"}
+	}
+
+	const maxImageSize = 2 * 1024 * 1024
+	if len(params.ImageData) > maxImageSize {
+		return nil, &ServiceError{Message: "image must be less than 2MB"}
+	}
+
+	decision, asset, err := s.imageSvc.ModerateAndPersist(ctx, images.SaveRequest{
+		OwnerUserID: moderatorUserID,
+		EntityType:  models.ImageEntityBuild,
+		EntityID:    build.ID,
+		ImageBytes:  params.ImageData,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if decision == nil || decision.Status != models.ImageModerationApproved || asset == nil {
+		return decision, nil
+	}
+
+	previousAssetID, err := s.store.SetImageForModeration(ctx, build.ID, asset.ID)
+	if err != nil {
+		_ = s.imageSvc.Delete(ctx, asset.ID)
+		return nil, err
+	}
+	if previousAssetID != "" && previousAssetID != asset.ID {
+		_ = s.imageSvc.Delete(ctx, previousAssetID)
+	}
+
+	return decision, nil
+}
+
 // GetImage retrieves a build image for its owner.
 func (s *Service) GetImage(ctx context.Context, buildID string, userID string) ([]byte, string, error) {
 	imageData, err := s.store.GetImageForOwner(ctx, strings.TrimSpace(buildID), userID)
@@ -554,6 +694,18 @@ func (s *Service) GetPublicImage(ctx context.Context, buildID string) ([]byte, s
 	return imageData, http.DetectContentType(imageData), nil
 }
 
+// GetImageForModeration retrieves a build image for moderation views.
+func (s *Service) GetImageForModeration(ctx context.Context, buildID string) ([]byte, string, error) {
+	imageData, err := s.store.GetImageForModeration(ctx, strings.TrimSpace(buildID))
+	if err != nil {
+		return nil, "", err
+	}
+	if len(imageData) == 0 {
+		return imageData, "", nil
+	}
+	return imageData, http.DetectContentType(imageData), nil
+}
+
 // DeleteImage removes an image from a build.
 func (s *Service) DeleteImage(ctx context.Context, buildID string, userID string) error {
 	build, err := s.store.GetForOwner(ctx, strings.TrimSpace(buildID), userID)
@@ -565,6 +717,26 @@ func (s *Service) DeleteImage(ctx context.Context, buildID string, userID string
 	}
 
 	previousAssetID, err := s.store.DeleteImage(ctx, build.ID, userID)
+	if err != nil {
+		return err
+	}
+	if previousAssetID != "" && s.imageSvc != nil {
+		_ = s.imageSvc.Delete(ctx, previousAssetID)
+	}
+	return nil
+}
+
+// DeleteImageForModeration removes an image from a build via content moderation.
+func (s *Service) DeleteImageForModeration(ctx context.Context, buildID string) error {
+	build, err := s.store.GetForModeration(ctx, strings.TrimSpace(buildID))
+	if err != nil {
+		return err
+	}
+	if build == nil {
+		return &ServiceError{Message: "build not found"}
+	}
+
+	previousAssetID, err := s.store.DeleteImageForModeration(ctx, build.ID)
 	if err != nil {
 		return err
 	}
@@ -631,6 +803,22 @@ func ValidateForPublish(build *models.Build) models.BuildValidationResult {
 	}
 
 	errors := make([]models.BuildValidationError, 0)
+
+	if strings.TrimSpace(build.Description) == "" {
+		errors = append(errors, models.BuildValidationError{
+			Category: "description",
+			Code:     "missing_required",
+			Message:  "Description is required before submitting for review",
+		})
+	}
+
+	if strings.TrimSpace(build.ImageAssetID) == "" {
+		errors = append(errors, models.BuildValidationError{
+			Category: "image",
+			Code:     "missing_required",
+			Message:  "Build image is required before submitting for review",
+		})
+	}
 
 	required := []struct {
 		gearType models.GearType

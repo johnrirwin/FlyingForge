@@ -4,31 +4,52 @@ import { render } from '../test/test-utils';
 import { AdminGearModeration } from './AdminGearModeration';
 import type { GearCatalogItem } from '../gearCatalogTypes';
 import {
+  adminSearchBuilds,
+  adminGetBuild,
+  adminUpdateBuild,
+  adminPublishBuild,
+  adminUploadBuildImage,
+  adminDeleteBuildImage,
   adminDeleteGear,
   adminDeleteGearImage,
   adminGetGear,
   adminSearchGear,
   adminUpdateGear,
   adminUploadGearImage,
+  getAdminBuildImageUrl,
   getAdminGearImageUrl,
 } from '../adminApi';
 
 vi.mock('../adminApi', () => ({
+  adminSearchBuilds: vi.fn(),
+  adminGetBuild: vi.fn(),
+  adminUpdateBuild: vi.fn(),
+  adminPublishBuild: vi.fn(),
+  adminUploadBuildImage: vi.fn(),
+  adminDeleteBuildImage: vi.fn(),
   adminSearchGear: vi.fn(),
   adminUpdateGear: vi.fn(),
   adminUploadGearImage: vi.fn(),
   adminDeleteGearImage: vi.fn(),
   adminDeleteGear: vi.fn(),
   adminGetGear: vi.fn(),
+  getAdminBuildImageUrl: vi.fn(() => '/mock-build-image.png'),
   getAdminGearImageUrl: vi.fn(() => '/mock-image.png'),
 }));
 
+const mockAdminSearchBuilds = vi.mocked(adminSearchBuilds);
+const mockAdminGetBuild = vi.mocked(adminGetBuild);
+const mockAdminUpdateBuild = vi.mocked(adminUpdateBuild);
+const mockAdminPublishBuild = vi.mocked(adminPublishBuild);
+const mockAdminUploadBuildImage = vi.mocked(adminUploadBuildImage);
+const mockAdminDeleteBuildImage = vi.mocked(adminDeleteBuildImage);
 const mockAdminSearchGear = vi.mocked(adminSearchGear);
 const mockAdminUpdateGear = vi.mocked(adminUpdateGear);
 const mockAdminUploadGearImage = vi.mocked(adminUploadGearImage);
 const mockAdminDeleteGearImage = vi.mocked(adminDeleteGearImage);
 const mockAdminDeleteGear = vi.mocked(adminDeleteGear);
 const mockAdminGetGear = vi.mocked(adminGetGear);
+const mockGetAdminBuildImageUrl = vi.mocked(getAdminBuildImageUrl);
 const mockGetAdminGearImageUrl = vi.mocked(getAdminGearImageUrl);
 
 const mockItem: GearCatalogItem = {
@@ -69,11 +90,18 @@ describe('AdminGearModeration', () => {
     mockAdminUploadGearImage.mockResolvedValue();
     mockAdminDeleteGearImage.mockResolvedValue();
     mockAdminDeleteGear.mockResolvedValue();
+    mockAdminSearchBuilds.mockResolvedValue({ builds: [], totalCount: 0, sort: 'newest' });
+    mockAdminGetBuild.mockRejectedValue(new Error('Build not mocked'));
+    mockAdminUpdateBuild.mockRejectedValue(new Error('Build not mocked'));
+    mockAdminPublishBuild.mockRejectedValue(new Error('Build not mocked'));
+    mockAdminUploadBuildImage.mockResolvedValue();
+    mockAdminDeleteBuildImage.mockResolvedValue();
+    mockGetAdminBuildImageUrl.mockReturnValue('/mock-build-image.png');
     mockGetAdminGearImageUrl.mockReturnValue('/mock-image.png');
   });
 
   it('shows upload and last edit columns and opens modal by clicking a row', async () => {
-    render(<AdminGearModeration hasGearAdminAccess authLoading={false} />);
+    render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
 
     expect(await screen.findByText('EMAX')).toBeInTheDocument();
     const table = screen.getByRole('table');
@@ -91,7 +119,7 @@ describe('AdminGearModeration', () => {
   });
 
   it('opens the edit modal with keyboard interaction on a table row', async () => {
-    render(<AdminGearModeration hasGearAdminAccess authLoading={false} />);
+    render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
 
     const row = await screen.findByRole('button', { name: 'Open editor for EMAX ECO II 2207' });
     fireEvent.keyDown(row, { key: 'Enter' });
@@ -107,7 +135,7 @@ describe('AdminGearModeration', () => {
       .mockResolvedValueOnce({ items: [mockItem], totalCount: 1 })
       .mockResolvedValueOnce({ items: [], totalCount: 0 });
 
-    render(<AdminGearModeration hasGearAdminAccess authLoading={false} />);
+    render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
 
     const row = await screen.findByRole('button', { name: 'Open editor for EMAX ECO II 2207' });
     fireEvent.click(row);
@@ -128,7 +156,7 @@ describe('AdminGearModeration', () => {
   });
 
   it('shows an in-modal validation error when uploaded image exceeds 2MB', async () => {
-    render(<AdminGearModeration hasGearAdminAccess authLoading={false} />);
+    render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
 
     const row = await screen.findByRole('button', { name: 'Open editor for EMAX ECO II 2207' });
     fireEvent.click(row);

@@ -1,4 +1,4 @@
-// Admin API for gear moderation and user administration
+// Admin API for content moderation and user administration
 
 import type {
   GearCatalogItem,
@@ -6,6 +6,7 @@ import type {
   AdminGearSearchParams,
   AdminUpdateGearCatalogParams,
 } from './gearCatalogTypes';
+import type { Build, BuildListResponse, BuildPublishResponse, BuildStatus, UpdateBuildParams } from './buildTypes';
 import type {
   AdminUser,
   AdminUserSearchParams,
@@ -20,6 +21,19 @@ const API_BASE = '/api/admin';
 function getAuthToken(): string | null {
   const tokens = getStoredTokens();
   return tokens?.accessToken || null;
+}
+
+function withAdminImageAuth(url: string, cacheBuster?: number): string {
+  const params = new URLSearchParams();
+  const token = getAuthToken();
+  if (token) {
+    params.set('token', token);
+  }
+  if (typeof cacheBuster === 'number') {
+    params.set('v', cacheBuster.toString());
+  }
+  const query = params.toString();
+  return query ? `${url}?${query}` : url;
 }
 
 // Admin search for gear items (with imageStatus filter)
@@ -51,7 +65,7 @@ export async function adminSearchGear(
   if (!response.ok) {
     const data = await response.json().catch(() => ({ error: 'Request failed' }));
     if (response.status === 403) {
-      throw new Error('Admin or gear-admin access required');
+      throw new Error('Admin or content-admin access required');
     }
     throw new Error(data.error || 'Failed to search gear');
   }
@@ -76,7 +90,7 @@ export async function adminGetGear(id: string): Promise<GearCatalogItem> {
   if (!response.ok) {
     const data = await response.json().catch(() => ({ error: 'Request failed' }));
     if (response.status === 403) {
-      throw new Error('Admin or gear-admin access required');
+      throw new Error('Admin or content-admin access required');
     }
     if (response.status === 404) {
       throw new Error('Gear item not found');
@@ -109,7 +123,7 @@ export async function adminUpdateGear(
   if (!response.ok) {
     const data = await response.json().catch(() => ({ error: 'Request failed' }));
     if (response.status === 403) {
-      throw new Error('Admin or gear-admin access required');
+      throw new Error('Admin or content-admin access required');
     }
     if (response.status === 404) {
       throw new Error('Gear item not found');
@@ -157,7 +171,7 @@ export async function adminUploadGearImage(
   if (!response.ok) {
     const data = await response.json().catch(() => ({ error: 'Request failed' }));
     if (response.status === 403) {
-      throw new Error('Admin or gear-admin access required');
+      throw new Error('Admin or content-admin access required');
     }
     if (response.status === 400) {
       throw new Error(data.error || 'Invalid image');
@@ -183,7 +197,7 @@ export async function adminApproveGearImage(id: string): Promise<void> {
   if (!response.ok) {
     const data = await response.json().catch(() => ({ error: 'Request failed' }));
     if (response.status === 403) {
-      throw new Error('Admin or gear-admin access required');
+      throw new Error('Admin or content-admin access required');
     }
     if (response.status === 404) {
       throw new Error('Gear item not found');
@@ -232,7 +246,7 @@ export async function adminDeleteGear(id: string): Promise<void> {
   if (!response.ok) {
     const data = await response.json().catch(() => ({ error: 'Request failed' }));
     if (response.status === 403) {
-      throw new Error('Admin or gear-admin access required');
+      throw new Error('Admin or content-admin access required');
     }
     if (response.status === 404) {
       throw new Error('Gear item not found');
@@ -252,7 +266,203 @@ export function getGearImageUrl(gearId: string, cacheBuster?: number): string {
 // Use this in admin UI to always see latest image
 export function getAdminGearImageUrl(gearId: string, cacheBuster?: number): string {
   const url = `/api/admin/gear/${gearId}/image`;
-  return cacheBuster ? `${url}?v=${cacheBuster}` : url;
+  return withAdminImageAuth(url, cacheBuster);
+}
+
+export interface AdminBuildSearchParams {
+  query?: string;
+  status?: BuildStatus;
+  limit?: number;
+  offset?: number;
+}
+
+export async function adminSearchBuilds(params: AdminBuildSearchParams): Promise<BuildListResponse> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const searchParams = new URLSearchParams();
+  if (params.query) searchParams.set('query', params.query);
+  if (params.status) searchParams.set('status', params.status);
+  if (params.limit) searchParams.set('limit', params.limit.toString());
+  if (params.offset) searchParams.set('offset', params.offset.toString());
+
+  const response = await fetch(`${API_BASE}/builds?${searchParams.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Request failed' }));
+    if (response.status === 403) {
+      throw new Error('Admin or content-admin access required');
+    }
+    throw new Error(data.error || 'Failed to search builds');
+  }
+
+  return response.json();
+}
+
+export async function adminGetBuild(id: string): Promise<Build> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const response = await fetch(`${API_BASE}/builds/${id}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Request failed' }));
+    if (response.status === 403) {
+      throw new Error('Admin or content-admin access required');
+    }
+    if (response.status === 404) {
+      throw new Error('Build not found');
+    }
+    throw new Error(data.error || 'Failed to get build');
+  }
+
+  return response.json();
+}
+
+export async function adminUpdateBuild(id: string, params: UpdateBuildParams): Promise<Build> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const response = await fetch(`${API_BASE}/builds/${id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(params),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Request failed' }));
+    if (response.status === 403) {
+      throw new Error('Admin or content-admin access required');
+    }
+    if (response.status === 404) {
+      throw new Error('Build not found');
+    }
+    throw new Error(data.error || 'Failed to update build');
+  }
+
+  return response.json();
+}
+
+export async function adminPublishBuild(id: string): Promise<BuildPublishResponse> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const response = await fetch(`${API_BASE}/builds/${id}/publish`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (response.status === 400) {
+    const data = await response.json().catch(() => ({ error: 'Request failed' }));
+    if (data.validation) {
+      return data as BuildPublishResponse;
+    }
+    throw new Error(data.error || 'Failed to publish build');
+  }
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Request failed' }));
+    if (response.status === 403) {
+      throw new Error('Admin or content-admin access required');
+    }
+    if (response.status === 404) {
+      throw new Error('Build not found');
+    }
+    throw new Error(data.error || 'Failed to publish build');
+  }
+
+  return response.json();
+}
+
+export async function adminUploadBuildImage(id: string, imageFile: File): Promise<void> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  if (imageFile.size > 2 * 1024 * 1024) {
+    throw new Error('Image file is too large. Maximum size is 2MB.');
+  }
+
+  const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+  if (!validTypes.includes(imageFile.type)) {
+    throw new Error('Invalid image type. Please use JPEG, PNG, or WebP.');
+  }
+
+  const formData = new FormData();
+  formData.append('image', imageFile);
+
+  const response = await fetch(`${API_BASE}/builds/${id}/image`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Request failed' }));
+    if (response.status === 403) {
+      throw new Error('Admin or content-admin access required');
+    }
+    if (response.status === 404) {
+      throw new Error('Build not found');
+    }
+    throw new Error(data.error || 'Failed to upload build image');
+  }
+}
+
+export async function adminDeleteBuildImage(id: string): Promise<void> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const response = await fetch(`${API_BASE}/builds/${id}/image`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Request failed' }));
+    if (response.status === 403) {
+      throw new Error('Admin or content-admin access required');
+    }
+    if (response.status === 404) {
+      throw new Error('Build not found');
+    }
+    throw new Error(data.error || 'Failed to delete build image');
+  }
+}
+
+export function getAdminBuildImageUrl(buildId: string, cacheBuster?: number): string {
+  const url = `/api/admin/builds/${buildId}/image`;
+  return withAdminImageAuth(url, cacheBuster);
 }
 
 // Admin search for users (admin only)
