@@ -1,47 +1,74 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { getTempBuild, shareTempBuild, updateTempBuild } from '../buildApi';
 import type { Build, BuildPart } from '../buildTypes';
 import { BuildBuilder } from './BuildBuilder';
 
 export function TempBuildPage() {
   const { token } = useParams<{ token: string }>();
+  const navigate = useNavigate();
+  const routeToken = token ?? '';
+  const [activeToken, setActiveToken] = useState(routeToken);
 
   const [build, setBuild] = useState<Build | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
-  const [isSharing, setIsSharing] = useState(false);
+  const [isCopying, setIsCopying] = useState(false);
   const [autoSaveMessage, setAutoSaveMessage] = useState<string | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const lastSavedPayloadRef = useRef<string>('');
+  const lastSharedPayloadRef = useRef<string>('');
+  const hydratedTokenRef = useRef<string>('');
+  const buildRef = useRef<Build | null>(null);
+  const buildTokenRef = useRef<string>('');
 
   useEffect(() => {
-    if (!token) return;
+    setActiveToken(routeToken);
+  }, [routeToken]);
+
+  useEffect(() => {
+    buildRef.current = build;
+  }, [build]);
+
+  useEffect(() => {
+    if (!routeToken) return;
+    if (routeToken === hydratedTokenRef.current && buildRef.current) {
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     setError(null);
+    setBuild(null);
+    buildTokenRef.current = '';
 
-    getTempBuild(token)
+    getTempBuild(routeToken)
       .then((response) => {
-        const normalized = {
-          ...response,
-          parts: response.parts ?? [],
-        };
+        const normalized = normalizeTempBuild(response);
         setBuild(normalized);
+        hydratedTokenRef.current = routeToken;
         lastSavedPayloadRef.current = buildPayloadKey(normalized);
+        buildTokenRef.current = routeToken;
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load temporary build'))
       .finally(() => setIsLoading(false));
-  }, [token]);
+  }, [routeToken]);
 
   const shareUrl = useMemo(() => {
-    if (!token) return '';
-    if (typeof window === 'undefined') return `/builds/temp/${token}`;
-    return `${window.location.origin}/builds/temp/${token}`;
-  }, [token]);
+    if (!activeToken) return '';
+    if (typeof window === 'undefined') return `/builds/temp/${activeToken}`;
+    return `${window.location.origin}/builds/temp/${activeToken}`;
+  }, [activeToken]);
+
+  const hasUnsharedChanges = useMemo(() => {
+    if (!build || !lastSharedPayloadRef.current) return false;
+    return buildPayloadKey(build) !== lastSharedPayloadRef.current;
+  }, [build]);
 
   useEffect(() => {
-    if (!token || !build) return;
+    if (!activeToken || !build || build.status === 'SHARED' || isLoading) return;
+    if (hydratedTokenRef.current !== activeToken) return;
+    if (buildTokenRef.current !== activeToken) return;
 
     const payloadKey = buildPayloadKey(build);
     if (payloadKey === lastSavedPayloadRef.current) return;
@@ -51,20 +78,22 @@ export function TempBuildPage() {
       setAutoSaveMessage(null);
       setError(null);
       try {
-        const updated = await updateTempBuild(token, {
+        const updated = await updateTempBuild(activeToken, {
           title: build.title,
           description: build.description,
           parts: toPartInputs(build.parts),
         });
-        lastSavedPayloadRef.current = payloadKey;
-        setBuild((prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            updatedAt: updated.updatedAt,
-            expiresAt: updated.expiresAt ?? prev.expiresAt,
-          };
-        });
+        const updatedBuild = normalizeTempBuild(updated.build);
+        const canonicalPayloadKey = buildPayloadKey(updatedBuild);
+        lastSavedPayloadRef.current = canonicalPayloadKey;
+        setBuild(updatedBuild);
+        const nextToken = updated.token || activeToken;
+        buildTokenRef.current = nextToken;
+        if (nextToken !== activeToken) {
+          setActiveToken(nextToken);
+          hydratedTokenRef.current = nextToken;
+          navigate(`/builds/temp/${nextToken}`, { replace: true });
+        }
         setAutoSaveMessage('Changes saved');
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to save temporary build');
@@ -74,39 +103,67 @@ export function TempBuildPage() {
     }, 250);
 
     return () => window.clearTimeout(timeout);
-  }, [build, token]);
+  }, [activeToken, build, isLoading, navigate]);
 
   const handleCopy = async () => {
-    if (!shareUrl) return;
-
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopyMessage('Share URL copied to clipboard');
-    } catch {
-      setCopyMessage('Unable to copy automatically. Copy the URL manually.');
+    if (!activeToken || !build || !shareUrl) return;
+    if (isLoading || isAutoSaving || hydratedTokenRef.current !== activeToken || buildTokenRef.current !== activeToken) {
+      setCopyMessage('Please wait for the latest build URL to finish updating, then copy again.');
+      window.setTimeout(() => setCopyMessage(null), 3000);
+      return;
     }
 
-    window.setTimeout(() => setCopyMessage(null), 2500);
-  };
-
-  const handleShare = async () => {
-    if (!token || !build || build.status === 'SHARED') return;
-
-    setIsSharing(true);
-    setError(null);
-    try {
-      const shared = await shareTempBuild(token);
-      setBuild((prev) => (prev ? { ...prev, ...shared } : shared));
+    if (build.status === 'SHARED') {
       try {
         await navigator.clipboard.writeText(shareUrl);
-        setCopyMessage('Shared link copied to clipboard. This link will not expire.');
+        setCopyMessage('Share URL copied to clipboard.');
       } catch {
-        setCopyMessage('Link shared. Copy the URL manually if clipboard access is blocked.');
+        setCopyMessage('Unable to copy automatically. Copy the URL manually.');
+      }
+      window.setTimeout(() => setCopyMessage(null), 3000);
+      return;
+    }
+
+    const payloadKey = buildPayloadKey(build);
+    setIsCopying(true);
+    setError(null);
+    try {
+      let tokenToShare = activeToken;
+      let sharedPayloadKey = payloadKey;
+      if (payloadKey !== lastSavedPayloadRef.current) {
+        const updated = await updateTempBuild(activeToken, {
+          title: build.title,
+          description: build.description,
+          parts: toPartInputs(build.parts),
+        });
+        const normalizedUpdatedBuild = normalizeTempBuild(updated.build);
+        const normalizedPayloadKey = buildPayloadKey(normalizedUpdatedBuild);
+        lastSavedPayloadRef.current = normalizedPayloadKey;
+        setBuild(normalizedUpdatedBuild);
+        sharedPayloadKey = normalizedPayloadKey;
+        tokenToShare = updated.token || activeToken;
+        buildTokenRef.current = tokenToShare;
+        if (tokenToShare !== activeToken) {
+          setActiveToken(tokenToShare);
+          hydratedTokenRef.current = tokenToShare;
+          navigate(`/builds/temp/${tokenToShare}`, { replace: true });
+        }
+      }
+
+      const shared = await shareTempBuild(tokenToShare);
+      const copiedUrl = toAbsoluteTempBuildUrl(shared.url || `/builds/temp/${shared.token}`);
+      lastSharedPayloadRef.current = sharedPayloadKey;
+
+      try {
+        await navigator.clipboard.writeText(copiedUrl);
+        setCopyMessage('Share URL copied to clipboard. This link is saved permanently.');
+      } catch {
+        setCopyMessage('Share URL saved. Copy the URL manually if clipboard access is blocked.');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to share temporary build');
+      setError(err instanceof Error ? err.message : 'Failed to copy share URL');
     } finally {
-      setIsSharing(false);
+      setIsCopying(false);
       window.setTimeout(() => setCopyMessage(null), 3000);
     }
   };
@@ -121,7 +178,7 @@ export function TempBuildPage() {
     );
   }
 
-  if (!build || !token) {
+  if (!build || !routeToken) {
     return (
       <div className="flex-1 overflow-y-auto p-6">
         <div className="mx-auto w-full max-w-4xl rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-300">
@@ -142,7 +199,7 @@ export function TempBuildPage() {
               </Link>
               <h1 className="text-2xl font-semibold text-white">Temporary Build</h1>
               {build.status === 'SHARED' ? (
-                <p className="text-sm text-emerald-300">This link has been shared and will not expire.</p>
+                <p className="text-sm text-emerald-300">This link is a saved snapshot that will not expire.</p>
               ) : (
                 <p className="text-sm text-slate-400">
                   This build link expires on {build.expiresAt ? new Date(build.expiresAt).toLocaleString() : 'unknown date'}.
@@ -152,18 +209,11 @@ export function TempBuildPage() {
             <div className="flex gap-2">
               <button
                 type="button"
-                disabled={isSharing || build.status === 'SHARED'}
-                onClick={handleShare}
+                onClick={handleCopy}
+                disabled={isCopying}
                 className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {build.status === 'SHARED' ? 'Shared' : isSharing ? 'Sharing...' : 'Share'}
-              </button>
-              <button
-                type="button"
-                onClick={handleCopy}
-                className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-500 hover:text-white"
-              >
-                Copy Share URL
+                {isCopying ? 'Copying...' : 'Copy Share URL'}
               </button>
             </div>
           </div>
@@ -171,11 +221,8 @@ export function TempBuildPage() {
           <div className="mt-4 rounded-lg border border-slate-700 bg-slate-900/60 p-3 text-xs text-slate-300">
             <p className="break-all">{shareUrl}</p>
           </div>
-          {build.status !== 'SHARED' && (
-            <p className="mt-2 text-xs text-amber-300">
-              Copying this URL manually keeps it temporary. Click Share to make the link permanent.
-            </p>
-          )}
+          <p className="mt-2 text-xs text-slate-400">This URL rotates when the build changes. Copy Share URL saves a permanent snapshot link.</p>
+          {hasUnsharedChanges && <p className="mt-2 text-xs text-amber-300">Build changed since last copy. Copy again to generate a new share URL.</p>}
 
           {copyMessage && <p className="mt-2 text-xs text-emerald-300">{copyMessage}</p>}
           {isAutoSaving && <p className="mt-2 text-xs text-slate-300">Saving changes...</p>}
@@ -187,6 +234,7 @@ export function TempBuildPage() {
           title={build.title}
           description={build.description || ''}
           parts={build.parts || []}
+          readOnly={build.status === 'SHARED'}
           onTitleChange={(value) => setBuild((prev) => (prev ? { ...prev, title: value } : prev))}
           onDescriptionChange={(value) => setBuild((prev) => (prev ? { ...prev, description: value } : prev))}
           onPartsChange={(parts) => setBuild((prev) => (prev ? { ...prev, parts: parts ?? [] } : prev))}
@@ -194,6 +242,24 @@ export function TempBuildPage() {
       </div>
     </div>
   );
+}
+
+function normalizeTempBuild(build: Build): Build {
+  return {
+    ...build,
+    parts: build.parts ?? [],
+  };
+}
+
+function toAbsoluteTempBuildUrl(url: string) {
+  const trimmed = url.trim();
+  if (!trimmed) return '';
+  if (typeof window === 'undefined') return trimmed;
+  try {
+    return new URL(trimmed, window.location.origin).toString();
+  } catch {
+    return trimmed;
+  }
 }
 
 function toPartInputs(parts?: BuildPart[]) {

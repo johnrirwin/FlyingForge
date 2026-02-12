@@ -52,9 +52,8 @@ type buildStore interface {
 	GetTempByToken(ctx context.Context, token string) (*models.Build, error)
 	GetForModeration(ctx context.Context, id string) (*models.Build, error)
 	Update(ctx context.Context, id string, ownerUserID string, params models.UpdateBuildParams) (*models.Build, error)
-	UpdateTempByToken(ctx context.Context, token string, params models.UpdateBuildParams) (*models.Build, error)
+	UpdateTempByToken(ctx context.Context, token string, params models.UpdateBuildParams, nextToken string) (*models.Build, error)
 	UpdateForModeration(ctx context.Context, id string, params models.UpdateBuildParams) (*models.Build, error)
-	ShareTempByToken(ctx context.Context, token string) (*models.Build, error)
 	SetStatus(ctx context.Context, id string, ownerUserID string, status models.BuildStatus) (*models.Build, error)
 	SetImage(ctx context.Context, id string, ownerUserID string, imageAssetID string) (string, error)
 	SetImageForModeration(ctx context.Context, id string, imageAssetID string) (string, error)
@@ -209,8 +208,8 @@ func (s *Service) GetTempByToken(ctx context.Context, token string) (*models.Bui
 	return build, nil
 }
 
-// UpdateTempByToken updates editable temp fields.
-func (s *Service) UpdateTempByToken(ctx context.Context, token string, params models.UpdateBuildParams) (*models.Build, error) {
+// UpdateTempByToken updates editable temp fields and rotates the temporary URL token.
+func (s *Service) UpdateTempByToken(ctx context.Context, token string, params models.UpdateBuildParams) (*models.TempBuildCreateResponse, error) {
 	if params.Title != nil {
 		title := strings.TrimSpace(*params.Title)
 		params.Title = &title
@@ -223,7 +222,12 @@ func (s *Service) UpdateTempByToken(ctx context.Context, token string, params mo
 		params.Parts = normalizeParts(params.Parts)
 	}
 
-	build, err := s.store.UpdateTempByToken(ctx, strings.TrimSpace(token), params)
+	nextToken, err := generateTempToken()
+	if err != nil {
+		return nil, err
+	}
+
+	build, err := s.store.UpdateTempByToken(ctx, strings.TrimSpace(token), params, nextToken)
 	if err != nil {
 		return nil, err
 	}
@@ -232,21 +236,51 @@ func (s *Service) UpdateTempByToken(ctx context.Context, token string, params mo
 	}
 	build.Verified = isBuildVerified(build)
 	build.Token = ""
-	return build, nil
+	return &models.TempBuildCreateResponse{
+		Build: build,
+		Token: nextToken,
+		URL:   "/builds/temp/" + nextToken,
+	}, nil
 }
 
-// ShareTempByToken promotes a temporary build link so it no longer expires.
-func (s *Service) ShareTempByToken(ctx context.Context, token string) (*models.Build, error) {
-	build, err := s.store.ShareTempByToken(ctx, strings.TrimSpace(token))
+// ShareTempByToken snapshots a temporary/shared build into a new permanent shared link.
+func (s *Service) ShareTempByToken(ctx context.Context, token string) (*models.TempBuildCreateResponse, error) {
+	source, err := s.store.GetTempByToken(ctx, strings.TrimSpace(token))
 	if err != nil {
 		return nil, err
 	}
-	if build == nil {
+	if source == nil {
 		return nil, nil
 	}
-	build.Verified = isBuildVerified(build)
-	build.Token = ""
-	return build, nil
+
+	sharedToken, err := generateTempToken()
+	if err != nil {
+		return nil, err
+	}
+
+	sharedBuild, err := s.store.Create(
+		ctx,
+		source.OwnerUserID,
+		models.BuildStatusShared,
+		strings.TrimSpace(source.Title),
+		strings.TrimSpace(source.Description),
+		strings.TrimSpace(source.SourceAircraftID),
+		sharedToken,
+		nil,
+		normalizeParts(models.BuildPartInputsFromParts(source.Parts)),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	sharedBuild.Verified = isBuildVerified(sharedBuild)
+	sharedBuild.Token = ""
+
+	return &models.TempBuildCreateResponse{
+		Build: sharedBuild,
+		Token: sharedToken,
+		URL:   "/builds/temp/" + sharedToken,
+	}, nil
 }
 
 // ListByOwner returns authenticated user's builds.

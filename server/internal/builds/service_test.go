@@ -166,7 +166,7 @@ func TestTempBuildCreateAndRetrieve(t *testing.T) {
 	}
 }
 
-func TestShareTempByToken_PromotesBuildAndClearsExpiry(t *testing.T) {
+func TestShareTempByToken_CreatesPermanentSnapshot(t *testing.T) {
 	ctx := context.Background()
 	store := newFakeBuildStore()
 	svc := NewServiceWithDeps(store, nil, nil, logging.New(logging.LevelError))
@@ -184,16 +184,42 @@ func TestShareTempByToken_PromotesBuildAndClearsExpiry(t *testing.T) {
 		t.Fatalf("ShareTempByToken error: %v", err)
 	}
 	if shared == nil {
-		t.Fatalf("expected shared build")
+		t.Fatalf("expected shared response")
 	}
-	if shared.Status != models.BuildStatusShared {
-		t.Fatalf("status=%s want SHARED", shared.Status)
+	if shared.Build == nil {
+		t.Fatalf("expected shared build in response")
 	}
-	if shared.ExpiresAt != nil {
+	if shared.Token == "" {
+		t.Fatalf("expected shared token")
+	}
+	if shared.Token == created.Token {
+		t.Fatalf("expected new token for shared snapshot")
+	}
+	if shared.Build.Status != models.BuildStatusShared {
+		t.Fatalf("status=%s want SHARED", shared.Build.Status)
+	}
+	if shared.Build.ExpiresAt != nil {
 		t.Fatalf("expected expiresAt to be cleared")
 	}
+	if !strings.Contains(shared.URL, shared.Token) {
+		t.Fatalf("expected URL to contain shared token")
+	}
 
-	// Shared builds should remain retrievable even when temp cleanup runs.
+	original, err := svc.GetTempByToken(ctx, created.Token)
+	if err != nil {
+		t.Fatalf("GetTempByToken error: %v", err)
+	}
+	if original == nil {
+		t.Fatalf("expected original temp build to remain editable")
+	}
+	if original.Status != models.BuildStatusTemp {
+		t.Fatalf("status=%s want TEMP", original.Status)
+	}
+	if original.ExpiresAt == nil {
+		t.Fatalf("expected original temp expiry to remain")
+	}
+
+	// Shared snapshots should remain retrievable even when temp cleanup runs.
 	deleted, err := svc.CleanupExpiredTemp(ctx)
 	if err != nil {
 		t.Fatalf("CleanupExpiredTemp error: %v", err)
@@ -202,7 +228,7 @@ func TestShareTempByToken_PromotesBuildAndClearsExpiry(t *testing.T) {
 		t.Fatalf("expected cleanup to skip shared build, deleted=%d", deleted)
 	}
 
-	fetched, err := svc.GetTempByToken(ctx, created.Token)
+	fetched, err := svc.GetTempByToken(ctx, shared.Token)
 	if err != nil {
 		t.Fatalf("GetTempByToken error: %v", err)
 	}
@@ -211,6 +237,136 @@ func TestShareTempByToken_PromotesBuildAndClearsExpiry(t *testing.T) {
 	}
 	if fetched.Status != models.BuildStatusShared {
 		t.Fatalf("status=%s want SHARED", fetched.Status)
+	}
+}
+
+func TestShareTempByToken_AfterTempUpdateReturnsNewSnapshotURL(t *testing.T) {
+	ctx := context.Background()
+	store := newFakeBuildStore()
+	svc := NewServiceWithDeps(store, nil, nil, logging.New(logging.LevelError))
+
+	created, err := svc.CreateTemp(ctx, "", models.CreateBuildParams{
+		Title: "Visitor Build",
+		Parts: []models.BuildPartInput{
+			{GearType: models.GearTypeFrame, CatalogItemID: "frame-1"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateTemp error: %v", err)
+	}
+
+	firstShare, err := svc.ShareTempByToken(ctx, created.Token)
+	if err != nil {
+		t.Fatalf("ShareTempByToken first error: %v", err)
+	}
+	if firstShare == nil || firstShare.Build == nil {
+		t.Fatalf("expected first share response")
+	}
+
+	updatedTitle := "Visitor Build v2"
+	updatedTemp, err := svc.UpdateTempByToken(ctx, created.Token, models.UpdateBuildParams{
+		Title: &updatedTitle,
+		Parts: []models.BuildPartInput{
+			{GearType: models.GearTypeFrame, CatalogItemID: "frame-1"},
+			{GearType: models.GearTypeBattery, CatalogItemID: "battery-1"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdateTempByToken error: %v", err)
+	}
+	if updatedTemp == nil || updatedTemp.Token == "" {
+		t.Fatalf("expected rotated temp token")
+	}
+	if updatedTemp.Token == created.Token {
+		t.Fatalf("expected temp token to rotate after update")
+	}
+
+	secondShare, err := svc.ShareTempByToken(ctx, updatedTemp.Token)
+	if err != nil {
+		t.Fatalf("ShareTempByToken second error: %v", err)
+	}
+	if secondShare == nil || secondShare.Build == nil {
+		t.Fatalf("expected second share response")
+	}
+	if secondShare.Token == firstShare.Token {
+		t.Fatalf("expected second share to generate a distinct token")
+	}
+
+	firstFetched, err := svc.GetTempByToken(ctx, firstShare.Token)
+	if err != nil {
+		t.Fatalf("GetTempByToken first share error: %v", err)
+	}
+	if firstFetched == nil {
+		t.Fatalf("expected first shared snapshot to remain")
+	}
+	if len(firstFetched.Parts) != 1 {
+		t.Fatalf("expected first snapshot to retain original parts, got %d", len(firstFetched.Parts))
+	}
+
+	oldTemp, err := svc.GetTempByToken(ctx, created.Token)
+	if err != nil {
+		t.Fatalf("GetTempByToken old temp error: %v", err)
+	}
+	if oldTemp == nil {
+		t.Fatalf("expected old temp token to remain valid until cleanup")
+	}
+	if len(oldTemp.Parts) != 1 {
+		t.Fatalf("expected old temp token to preserve previous parts, got %d", len(oldTemp.Parts))
+	}
+
+	secondFetched, err := svc.GetTempByToken(ctx, secondShare.Token)
+	if err != nil {
+		t.Fatalf("GetTempByToken second share error: %v", err)
+	}
+	if secondFetched == nil {
+		t.Fatalf("expected second shared snapshot to exist")
+	}
+	if len(secondFetched.Parts) != 2 {
+		t.Fatalf("expected second snapshot to include updated parts, got %d", len(secondFetched.Parts))
+	}
+}
+
+func TestUpdateTempByToken_SharedSnapshotIsReadOnly(t *testing.T) {
+	ctx := context.Background()
+	store := newFakeBuildStore()
+	svc := NewServiceWithDeps(store, nil, nil, logging.New(logging.LevelError))
+
+	created, err := svc.CreateTemp(ctx, "", models.CreateBuildParams{
+		Title: "Visitor Build",
+		Parts: []models.BuildPartInput{
+			{GearType: models.GearTypeFrame, CatalogItemID: "frame-1"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateTemp error: %v", err)
+	}
+
+	shared, err := svc.ShareTempByToken(ctx, created.Token)
+	if err != nil {
+		t.Fatalf("ShareTempByToken error: %v", err)
+	}
+	if shared == nil || shared.Token == "" {
+		t.Fatalf("expected shared snapshot token")
+	}
+
+	newTitle := "Updated Snapshot Title"
+	updated, err := svc.UpdateTempByToken(ctx, shared.Token, models.UpdateBuildParams{Title: &newTitle})
+	if err != nil {
+		t.Fatalf("UpdateTempByToken error: %v", err)
+	}
+	if updated != nil {
+		t.Fatalf("expected shared snapshot updates to be rejected")
+	}
+
+	fetched, err := svc.GetTempByToken(ctx, shared.Token)
+	if err != nil {
+		t.Fatalf("GetTempByToken error: %v", err)
+	}
+	if fetched == nil {
+		t.Fatalf("expected shared snapshot to still exist")
+	}
+	if fetched.Title != "Visitor Build" {
+		t.Fatalf("expected shared snapshot title to remain unchanged, got %q", fetched.Title)
 	}
 }
 
@@ -665,26 +821,57 @@ func (s *fakeBuildStore) Update(ctx context.Context, id string, ownerUserID stri
 	return cloneBuild(build), nil
 }
 
-func (s *fakeBuildStore) UpdateTempByToken(ctx context.Context, token string, params models.UpdateBuildParams) (*models.Build, error) {
+func (s *fakeBuildStore) UpdateTempByToken(ctx context.Context, token string, params models.UpdateBuildParams, nextToken string) (*models.Build, error) {
 	id, ok := s.byToken[token]
 	if !ok {
 		return nil, nil
 	}
 	build := s.byID[id]
-	if build == nil || (build.Status != models.BuildStatusTemp && build.Status != models.BuildStatusShared) {
+	if build == nil || build.Status != models.BuildStatusTemp {
 		return nil, nil
 	}
+
+	title := build.Title
 	if params.Title != nil {
-		build.Title = *params.Title
+		title = *params.Title
 	}
+	description := build.Description
 	if params.Description != nil {
-		build.Description = *params.Description
+		description = *params.Description
 	}
+
+	parts := make([]models.BuildPart, len(build.Parts))
+	copy(parts, build.Parts)
 	if params.Parts != nil {
-		build.Parts = convertParts(params.Parts)
+		parts = convertParts(params.Parts)
 	}
-	build.UpdatedAt = time.Now().UTC()
-	return cloneBuild(build), nil
+
+	s.nextID++
+	newID := "build-" + strconvItoa(s.nextID)
+	now := time.Now().UTC()
+	var expiresAt *time.Time
+	if build.ExpiresAt != nil {
+		copyExpiry := *build.ExpiresAt
+		expiresAt = &copyExpiry
+	}
+
+	next := &models.Build{
+		ID:               newID,
+		OwnerUserID:      build.OwnerUserID,
+		Status:           models.BuildStatusTemp,
+		Token:            nextToken,
+		ExpiresAt:        expiresAt,
+		Title:            title,
+		Description:      description,
+		SourceAircraftID: build.SourceAircraftID,
+		CreatedAt:        now,
+		UpdatedAt:        now,
+		Parts:            parts,
+	}
+
+	s.byID[newID] = cloneBuild(next)
+	s.byToken[nextToken] = newID
+	return cloneBuild(next), nil
 }
 
 func (s *fakeBuildStore) UpdateForModeration(ctx context.Context, id string, params models.UpdateBuildParams) (*models.Build, error) {

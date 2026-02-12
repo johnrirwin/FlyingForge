@@ -52,6 +52,36 @@ type BuildPartInput struct {
 	Notes         string   `json:"notes,omitempty"`
 }
 
+// BuildPartInputsFromParts converts persisted build parts into input payloads.
+func BuildPartInputsFromParts(parts []BuildPart) []BuildPartInput {
+	if len(parts) == 0 {
+		return nil
+	}
+
+	inputs := make([]BuildPartInput, 0, len(parts))
+	for _, part := range parts {
+		gearType := GearType(strings.TrimSpace(string(part.GearType)))
+		catalogItemID := strings.TrimSpace(part.CatalogItemID)
+		if gearType == "" || catalogItemID == "" {
+			continue
+		}
+
+		position := part.Position
+		if position < 0 {
+			position = 0
+		}
+
+		inputs = append(inputs, BuildPartInput{
+			GearType:      gearType,
+			CatalogItemID: catalogItemID,
+			Position:      position,
+			Notes:         strings.TrimSpace(part.Notes),
+		})
+	}
+
+	return inputs
+}
+
 // BuildPart stores an assigned part for a build.
 type BuildPart struct {
 	ID            string            `json:"id,omitempty"`

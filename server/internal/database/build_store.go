@@ -365,56 +365,42 @@ func (s *BuildStore) Update(ctx context.Context, id string, ownerUserID string, 
 	return s.GetForOwner(ctx, id, ownerUserID)
 }
 
-// UpdateTempByToken updates title/description/parts for a temp build.
-func (s *BuildStore) UpdateTempByToken(ctx context.Context, token string, params models.UpdateBuildParams) (*models.Build, error) {
+// UpdateTempByToken creates a new temp build revision with a rotated token.
+func (s *BuildStore) UpdateTempByToken(ctx context.Context, token string, params models.UpdateBuildParams, nextToken string) (*models.Build, error) {
 	build, err := s.GetTempByToken(ctx, token)
 	if err != nil || build == nil {
 		return build, err
 	}
-
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to start transaction: %w", err)
+	if build.Status != models.BuildStatusTemp {
+		return nil, nil
 	}
-	defer tx.Rollback()
 
-	setClauses := []string{"updated_at = NOW()"}
-	args := []interface{}{}
-	argIndex := 1
-
+	title := strings.TrimSpace(build.Title)
 	if params.Title != nil {
-		setClauses = append(setClauses, fmt.Sprintf("title = $%d", argIndex))
-		args = append(args, strings.TrimSpace(*params.Title))
-		argIndex++
+		title = strings.TrimSpace(*params.Title)
 	}
+
+	description := strings.TrimSpace(build.Description)
 	if params.Description != nil {
-		setClauses = append(setClauses, fmt.Sprintf("description = $%d", argIndex))
-		args = append(args, strings.TrimSpace(*params.Description))
-		argIndex++
+		description = strings.TrimSpace(*params.Description)
 	}
 
-	query := fmt.Sprintf(`
-		UPDATE builds
-		SET %s
-		WHERE id = $%d AND status IN ('TEMP', 'SHARED')
-	`, strings.Join(setClauses, ", "), argIndex)
-	args = append(args, build.ID)
-
-	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
-		return nil, fmt.Errorf("failed to update temp build: %w", err)
-	}
-
+	parts := models.BuildPartInputsFromParts(build.Parts)
 	if params.Parts != nil {
-		if err := s.replacePartsTx(ctx, tx, build.ID, params.Parts); err != nil {
-			return nil, err
-		}
+		parts = params.Parts
 	}
 
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("failed to commit temp build update: %w", err)
-	}
-
-	return s.GetTempByToken(ctx, token)
+	return s.Create(
+		ctx,
+		build.OwnerUserID,
+		models.BuildStatusTemp,
+		title,
+		description,
+		build.SourceAircraftID,
+		nextToken,
+		build.ExpiresAt,
+		parts,
+	)
 }
 
 // ShareTempByToken promotes a temp build token to a permanent shared link.

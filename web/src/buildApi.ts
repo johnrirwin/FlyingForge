@@ -94,15 +94,15 @@ export async function getTempBuild(token: string): Promise<Build> {
   return fetchJSON<Build>(`/api/builds/temp/${token}`, undefined, false);
 }
 
-export async function updateTempBuild(token: string, params: UpdateBuildParams): Promise<Build> {
-  return fetchJSON<Build>(`/api/builds/temp/${token}`, {
+export async function updateTempBuild(token: string, params: UpdateBuildParams): Promise<TempBuildCreateResponse> {
+  return fetchJSON<TempBuildCreateResponse>(`/api/builds/temp/${token}`, {
     method: 'PUT',
     body: JSON.stringify(params),
   }, false);
 }
 
-export async function shareTempBuild(token: string): Promise<Build> {
-  return fetchJSON<Build>(`/api/builds/temp/${token}/share`, {
+export async function shareTempBuild(token: string): Promise<TempBuildCreateResponse> {
+  return fetchJSON<TempBuildCreateResponse>(`/api/builds/temp/${token}/share`, {
     method: 'POST',
   }, false);
 }
