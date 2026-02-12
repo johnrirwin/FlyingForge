@@ -267,7 +267,7 @@ func (s *Service) ShareTempByToken(ctx context.Context, token string) (*models.T
 		strings.TrimSpace(source.SourceAircraftID),
 		sharedToken,
 		nil,
-		buildPartsToInputs(source.Parts),
+		normalizeParts(models.BuildPartInputsFromParts(source.Parts)),
 	)
 	if err != nil {
 		return nil, err
@@ -980,23 +980,6 @@ func normalizeParts(parts []models.BuildPartInput) []models.BuildPartInput {
 		return result[i].GearType < result[j].GearType
 	})
 	return result
-}
-
-func buildPartsToInputs(parts []models.BuildPart) []models.BuildPartInput {
-	if len(parts) == 0 {
-		return nil
-	}
-
-	inputs := make([]models.BuildPartInput, 0, len(parts))
-	for _, part := range parts {
-		inputs = append(inputs, models.BuildPartInput{
-			GearType:      part.GearType,
-			CatalogItemID: strings.TrimSpace(part.CatalogItemID),
-			Position:      part.Position,
-			Notes:         strings.TrimSpace(part.Notes),
-		})
-	}
-	return normalizeParts(inputs)
 }
 
 func hasPart(parts []models.BuildPart, gearType models.GearType) bool {

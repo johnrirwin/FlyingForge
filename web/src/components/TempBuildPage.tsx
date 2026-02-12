@@ -21,6 +21,7 @@ export function TempBuildPage() {
   const lastSharedPayloadRef = useRef<string>('');
   const hydratedTokenRef = useRef<string>('');
   const buildRef = useRef<Build | null>(null);
+  const buildTokenRef = useRef<string>('');
 
   useEffect(() => {
     setActiveToken(routeToken);
@@ -38,6 +39,8 @@ export function TempBuildPage() {
     }
     setIsLoading(true);
     setError(null);
+    setBuild(null);
+    buildTokenRef.current = '';
 
     getTempBuild(routeToken)
       .then((response) => {
@@ -45,6 +48,7 @@ export function TempBuildPage() {
         setBuild(normalized);
         hydratedTokenRef.current = routeToken;
         lastSavedPayloadRef.current = buildPayloadKey(normalized);
+        buildTokenRef.current = routeToken;
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load temporary build'))
       .finally(() => setIsLoading(false));
@@ -62,7 +66,9 @@ export function TempBuildPage() {
   }, [build]);
 
   useEffect(() => {
-    if (!activeToken || !build || build.status === 'SHARED') return;
+    if (!activeToken || !build || build.status === 'SHARED' || isLoading) return;
+    if (hydratedTokenRef.current !== activeToken) return;
+    if (buildTokenRef.current !== activeToken) return;
 
     const payloadKey = buildPayloadKey(build);
     if (payloadKey === lastSavedPayloadRef.current) return;
@@ -77,13 +83,16 @@ export function TempBuildPage() {
           description: build.description,
           parts: toPartInputs(build.parts),
         });
-        lastSavedPayloadRef.current = payloadKey;
         const updatedBuild = normalizeTempBuild(updated.build);
+        const canonicalPayloadKey = buildPayloadKey(updatedBuild);
+        lastSavedPayloadRef.current = canonicalPayloadKey;
         setBuild(updatedBuild);
-        if (updated.token && updated.token !== activeToken) {
-          setActiveToken(updated.token);
-          hydratedTokenRef.current = updated.token;
-          navigate(`/builds/temp/${updated.token}`, { replace: true });
+        const nextToken = updated.token || activeToken;
+        buildTokenRef.current = nextToken;
+        if (nextToken !== activeToken) {
+          setActiveToken(nextToken);
+          hydratedTokenRef.current = nextToken;
+          navigate(`/builds/temp/${nextToken}`, { replace: true });
         }
         setAutoSaveMessage('Changes saved');
       } catch (err) {
@@ -94,10 +103,15 @@ export function TempBuildPage() {
     }, 250);
 
     return () => window.clearTimeout(timeout);
-  }, [activeToken, build, navigate]);
+  }, [activeToken, build, isLoading, navigate]);
 
   const handleCopy = async () => {
     if (!activeToken || !build || !shareUrl) return;
+    if (isLoading || isAutoSaving || hydratedTokenRef.current !== activeToken || buildTokenRef.current !== activeToken) {
+      setCopyMessage('Please wait for the latest build URL to finish updating, then copy again.');
+      window.setTimeout(() => setCopyMessage(null), 3000);
+      return;
+    }
 
     if (build.status === 'SHARED') {
       try {
@@ -115,15 +129,20 @@ export function TempBuildPage() {
     setError(null);
     try {
       let tokenToShare = activeToken;
+      let sharedPayloadKey = payloadKey;
       if (payloadKey !== lastSavedPayloadRef.current) {
         const updated = await updateTempBuild(activeToken, {
           title: build.title,
           description: build.description,
           parts: toPartInputs(build.parts),
         });
-        lastSavedPayloadRef.current = payloadKey;
-        setBuild(normalizeTempBuild(updated.build));
+        const normalizedUpdatedBuild = normalizeTempBuild(updated.build);
+        const normalizedPayloadKey = buildPayloadKey(normalizedUpdatedBuild);
+        lastSavedPayloadRef.current = normalizedPayloadKey;
+        setBuild(normalizedUpdatedBuild);
+        sharedPayloadKey = normalizedPayloadKey;
         tokenToShare = updated.token || activeToken;
+        buildTokenRef.current = tokenToShare;
         if (tokenToShare !== activeToken) {
           setActiveToken(tokenToShare);
           hydratedTokenRef.current = tokenToShare;
@@ -133,7 +152,7 @@ export function TempBuildPage() {
 
       const shared = await shareTempBuild(tokenToShare);
       const copiedUrl = toAbsoluteTempBuildUrl(shared.url || `/builds/temp/${shared.token}`);
-      lastSharedPayloadRef.current = payloadKey;
+      lastSharedPayloadRef.current = sharedPayloadKey;
 
       try {
         await navigator.clipboard.writeText(copiedUrl);

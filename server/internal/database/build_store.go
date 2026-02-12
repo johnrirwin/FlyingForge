@@ -385,7 +385,7 @@ func (s *BuildStore) UpdateTempByToken(ctx context.Context, token string, params
 		description = strings.TrimSpace(*params.Description)
 	}
 
-	parts := buildPartsToInputs(build.Parts)
+	parts := models.BuildPartInputsFromParts(build.Parts)
 	if params.Parts != nil {
 		parts = params.Parts
 	}
@@ -889,23 +889,6 @@ func (s *BuildStore) ApproveForModeration(ctx context.Context, id string) (*mode
 	}
 
 	return s.GetForModeration(ctx, id)
-}
-
-func buildPartsToInputs(parts []models.BuildPart) []models.BuildPartInput {
-	if len(parts) == 0 {
-		return nil
-	}
-
-	inputs := make([]models.BuildPartInput, 0, len(parts))
-	for _, part := range parts {
-		inputs = append(inputs, models.BuildPartInput{
-			GearType:      part.GearType,
-			CatalogItemID: strings.TrimSpace(part.CatalogItemID),
-			Position:      part.Position,
-			Notes:         strings.TrimSpace(part.Notes),
-		})
-	}
-	return inputs
 }
 
 func (s *BuildStore) replacePartsTx(ctx context.Context, tx *sql.Tx, buildID string, parts []models.BuildPartInput) error {
