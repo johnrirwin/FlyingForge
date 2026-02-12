@@ -426,16 +426,16 @@ export function MyBuildsPage() {
             <button
               type="button"
               onClick={handleCreateDraft}
-              className="h-10 rounded-lg bg-primary-600 px-4 text-sm font-medium text-white transition hover:bg-primary-500"
+              className="h-12 rounded-lg bg-primary-600 px-4 text-sm font-medium text-white transition hover:bg-primary-500"
             >
               New Draft
             </button>
 
-            <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr),minmax(0,1fr)] gap-2 rounded-lg border border-slate-700 bg-slate-900/70 p-1 sm:w-auto">
+            <div className="flex w-full min-w-0 items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 p-1 sm:w-auto">
               <select
                 value={selectedAircraftId}
                 onChange={(event) => setSelectedAircraftId(event.target.value)}
-                className="h-10 min-w-0 w-full rounded-md border border-slate-600 bg-slate-700 px-3 text-sm text-white focus:border-primary-500 focus:outline-none"
+                className="h-10 min-w-0 flex-1 rounded-md border border-slate-600 bg-slate-700 px-3 text-sm text-white focus:border-primary-500 focus:outline-none sm:w-56"
               >
                 <option value="">Create from aircraft...</option>
                 {aircraft.map((item) => (
@@ -446,7 +446,7 @@ export function MyBuildsPage() {
                 type="button"
                 disabled={!selectedAircraftId}
                 onClick={handleCreateFromAircraft}
-                className="h-10 w-full rounded-md bg-slate-700 px-3 text-sm font-medium text-slate-200 transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="h-10 shrink-0 rounded-md bg-slate-700 px-3 text-sm font-medium text-slate-200 transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Create
               </button>
