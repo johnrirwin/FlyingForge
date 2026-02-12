@@ -192,6 +192,16 @@ export function MyBuildsPage() {
     setIsSaving(true);
     setError(null);
     try {
+      // Persist current in-form changes before submitting for moderation so
+      // users don't have to click "Save Draft" first.
+      const saved = await updateMyBuild(editorBuild.id, {
+        title: editorBuild.title,
+        description: editorBuild.description,
+        parts: toPartInputs(editorBuild.parts),
+      });
+      setEditorBuild(saved);
+      setBuilds((prev) => [saved, ...prev.filter((item) => item.id !== saved.id)]);
+
       const response = await publishMyBuild(editorBuild.id);
       if (!response.validation.valid) {
         setValidationErrors(response.validation.errors ?? []);
