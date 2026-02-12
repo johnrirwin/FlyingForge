@@ -116,9 +116,9 @@ export function BuildBuilder({
 
     return (
       <div key={row.gearType} className="rounded-lg border border-slate-700 bg-slate-800/60 p-3">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h4 className="text-sm font-medium text-white">{row.label}</h4>
               {options?.showRequiredBadge && row.required && (
                 <span className="rounded bg-slate-700 px-2 py-0.5 text-[11px] uppercase tracking-wide text-slate-300">Required</span>
@@ -135,11 +135,11 @@ export function BuildBuilder({
             )}
           </div>
           {!readOnly && (
-            <div className="flex gap-2">
+            <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
               <button
                 type="button"
                 onClick={() => setPickerGearType(row.gearType)}
-                className="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-primary-500"
+                className="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-primary-500 whitespace-nowrap"
               >
                 Choose
               </button>
@@ -147,7 +147,7 @@ export function BuildBuilder({
                 <button
                   type="button"
                   onClick={() => removePart(row.gearType)}
-                  className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:border-slate-500 hover:text-white"
+                  className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:border-slate-500 hover:text-white whitespace-nowrap"
                 >
                   Clear
                 </button>
