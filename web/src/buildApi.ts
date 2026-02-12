@@ -7,6 +7,8 @@ import type {
   TempBuildCreateResponse,
   UpdateBuildParams,
 } from './buildTypes';
+import type { ImageModerationResponse } from './imageTypes';
+export type { ModerationStatus, ImageModerationResponse } from './imageTypes';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -136,6 +138,59 @@ export async function updateMyBuild(id: string, params: UpdateBuildParams): Prom
 
 export async function deleteMyBuild(id: string): Promise<void> {
   await fetchJSON<void>(`/api/builds/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+export function getMyBuildImageUrl(buildId: string): string {
+  const token = getAccessToken();
+  const baseUrl = `${API_BASE}/api/builds/${buildId}/image`;
+  const timestamp = Date.now();
+  if (token) {
+    return `${baseUrl}?token=${encodeURIComponent(token)}&t=${timestamp}`;
+  }
+  return `${baseUrl}?t=${timestamp}`;
+}
+
+export async function moderateBuildImageUpload(imageFile: File): Promise<ImageModerationResponse> {
+  const token = getAccessToken();
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const formData = new FormData();
+  formData.append('image', imageFile);
+  formData.append('entityType', 'build');
+
+  const response = await fetch(`${API_BASE}/api/images/upload`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Upload failed' }));
+    throw new Error(error.message || error.reason || error.error || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function saveBuildImageUpload(buildId: string, uploadId: string): Promise<void> {
+  if (!uploadId) {
+    throw new Error('uploadId is required');
+  }
+
+  await fetchJSON<void>(`/api/builds/${buildId}/image`, {
+    method: 'POST',
+    body: JSON.stringify({ uploadId }),
+  });
+}
+
+export async function deleteBuildImage(buildId: string): Promise<void> {
+  await fetchJSON<void>(`/api/builds/${buildId}/image`, {
     method: 'DELETE',
   });
 }

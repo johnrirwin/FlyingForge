@@ -112,6 +112,7 @@ func (p *BuildPilot) DisplayNameOrDefault() string {
 type Build struct {
 	ID               string      `json:"id"`
 	OwnerUserID      string      `json:"ownerUserId,omitempty"`
+	ImageAssetID     string      `json:"-"`
 	Status           BuildStatus `json:"status"`
 	Token            string      `json:"-"`
 	ExpiresAt        *time.Time  `json:"expiresAt,omitempty"`
@@ -140,6 +141,14 @@ type UpdateBuildParams struct {
 	Title       *string          `json:"title,omitempty"`
 	Description *string          `json:"description,omitempty"`
 	Parts       []BuildPartInput `json:"parts,omitempty"`
+}
+
+// SetBuildImageParams defines parameters for uploading a build image.
+type SetBuildImageParams struct {
+	BuildID   string
+	ImageType string // "image/jpeg", "image/png", or "image/webp"
+	ImageData []byte
+	UploadID  string // approved token from /api/images/upload
 }
 
 // BuildListParams describes list query options.

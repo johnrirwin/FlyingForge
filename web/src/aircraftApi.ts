@@ -11,6 +11,8 @@ import type {
   SetReceiverSettingsParams,
   UpdateAircraftParams,
 } from './aircraftTypes';
+import type { ImageModerationResponse } from './imageTypes';
+export type { ModerationStatus, ImageModerationResponse } from './imageTypes';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -46,14 +48,6 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
   }
 
   return response.json();
-}
-
-export type ModerationStatus = 'APPROVED' | 'REJECTED' | 'PENDING_REVIEW';
-
-export interface ImageModerationResponse {
-  status: ModerationStatus;
-  reason?: string;
-  uploadId?: string;
 }
 
 // Aircraft CRUD

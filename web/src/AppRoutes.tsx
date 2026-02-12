@@ -109,6 +109,13 @@ export function AppRoutes({
   onSelectPilot,
 }: AppRoutesProps) {
   const navigate = useNavigate();
+  const protectedFallback = (
+    <div className="flex-1 overflow-y-auto p-6">
+      <div className="mx-auto w-full max-w-4xl rounded-xl border border-slate-700 bg-slate-800/60 p-8 text-center text-slate-400">
+        Loading...
+      </div>
+    </div>
+  );
 
   return (
     <Routes>
@@ -136,9 +143,11 @@ export function AppRoutes({
       <Route
         path="/dashboard"
         element={
-          isAuthenticated
-            ? dashboardElement
-            : <Navigate to="/" replace />
+          authLoading
+            ? protectedFallback
+            : isAuthenticated
+              ? dashboardElement
+              : <Navigate to="/" replace />
         }
       />
       <Route
@@ -188,11 +197,11 @@ export function AppRoutes({
       <Route
         path="/me/builds"
         element={
-          isAuthenticated ? (
-            <MyBuildsPage />
-          ) : (
-            <Navigate to="/" replace />
-          )
+          authLoading
+            ? protectedFallback
+            : isAuthenticated
+              ? <MyBuildsPage />
+              : <Navigate to="/" replace />
         }
       />
       <Route

@@ -6,11 +6,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/johnrirwin/flyingforge/internal/database"
+	"github.com/johnrirwin/flyingforge/internal/images"
 	"github.com/johnrirwin/flyingforge/internal/logging"
 	"github.com/johnrirwin/flyingforge/internal/models"
 )
@@ -51,12 +53,17 @@ type buildStore interface {
 	UpdateTempByToken(ctx context.Context, token string, params models.UpdateBuildParams) (*models.Build, error)
 	ShareTempByToken(ctx context.Context, token string) (*models.Build, error)
 	SetStatus(ctx context.Context, id string, ownerUserID string, status models.BuildStatus) (*models.Build, error)
+	SetImage(ctx context.Context, id string, ownerUserID string, imageAssetID string) (string, error)
+	GetImageForOwner(ctx context.Context, id string, ownerUserID string) ([]byte, error)
+	GetPublicImage(ctx context.Context, id string) ([]byte, error)
+	DeleteImage(ctx context.Context, id string, ownerUserID string) (string, error)
 	Delete(ctx context.Context, id string, ownerUserID string) (bool, error)
 	DeleteExpiredTemp(ctx context.Context, cutoff time.Time) (int64, error)
 }
 
 type aircraftDetailsReader interface {
 	GetDetails(ctx context.Context, id string, userID string) (*models.AircraftDetailsResponse, error)
+	GetImage(ctx context.Context, id string, userID string) ([]byte, string, error)
 }
 
 type gearCatalogMigrator interface {
@@ -68,20 +75,28 @@ type gearCatalogMigrator interface {
 	) (*models.GearCatalogItem, error)
 }
 
+type imagePipeline interface {
+	ModerateAndPersist(ctx context.Context, req images.SaveRequest) (*models.ModerationDecision, *models.ImageAsset, error)
+	PersistApprovedUpload(ctx context.Context, ownerUserID, uploadID string, entityType models.ImageEntityType, entityID string) (*models.ImageAsset, error)
+	Delete(ctx context.Context, imageID string) error
+}
+
 // Service coordinates build business logic.
 type Service struct {
 	store         buildStore
 	aircraftStore aircraftDetailsReader
 	gearCatalog   gearCatalogMigrator
+	imageSvc      imagePipeline
 	logger        *logging.Logger
 }
 
 // NewService creates a build service.
-func NewService(store *database.BuildStore, aircraftStore *database.AircraftStore, gearCatalogStore *database.GearCatalogStore, logger *logging.Logger) *Service {
+func NewService(store *database.BuildStore, aircraftStore *database.AircraftStore, gearCatalogStore *database.GearCatalogStore, imageSvc *images.Service, logger *logging.Logger) *Service {
 	return &Service{
 		store:         store,
 		aircraftStore: aircraftStore,
 		gearCatalog:   gearCatalogStore,
+		imageSvc:      imageSvc,
 		logger:        logger,
 	}
 }
@@ -92,6 +107,7 @@ func NewServiceWithDeps(store buildStore, aircraftStore aircraftDetailsReader, g
 		store:         store,
 		aircraftStore: aircraftStore,
 		gearCatalog:   gearCatalog,
+		imageSvc:      nil,
 		logger:        logger,
 	}
 }
@@ -246,6 +262,7 @@ func (s *Service) CreateDraft(ctx context.Context, ownerUserID string, params mo
 	if err != nil {
 		return nil, err
 	}
+
 	build.Verified = isBuildVerified(build)
 	return build, nil
 }
@@ -336,6 +353,19 @@ func (s *Service) CreateDraftFromAircraft(ctx context.Context, ownerUserID strin
 	if err != nil {
 		return nil, err
 	}
+
+	if copied, err := s.copyAircraftImageToBuild(ctx, ownerUserID, details.Aircraft.ID, build.ID); err != nil {
+		s.logger.Warn("Failed to copy aircraft image to new build",
+			logging.WithFields(map[string]interface{}{
+				"aircraft_id": details.Aircraft.ID,
+				"build_id":    build.ID,
+				"error":       err.Error(),
+			}))
+	} else if copied {
+		if refreshed, refreshErr := s.store.GetForOwner(ctx, build.ID, ownerUserID); refreshErr == nil && refreshed != nil {
+			build = refreshed
+		}
+	}
 	build.Verified = isBuildVerified(build)
 	return build, nil
 }
@@ -422,9 +452,169 @@ func (s *Service) DeleteByOwner(ctx context.Context, id string, ownerUserID stri
 	return s.store.Delete(ctx, strings.TrimSpace(id), ownerUserID)
 }
 
+// SetImage uploads an image for a build.
+func (s *Service) SetImage(ctx context.Context, userID string, params models.SetBuildImageParams) (*models.ModerationDecision, error) {
+	if strings.TrimSpace(params.BuildID) == "" {
+		return nil, &ServiceError{Message: "build id is required"}
+	}
+	if s.imageSvc == nil {
+		return nil, &ServiceError{Message: "image moderation unavailable"}
+	}
+
+	build, err := s.store.GetForOwner(ctx, strings.TrimSpace(params.BuildID), userID)
+	if err != nil {
+		return nil, err
+	}
+	if build == nil {
+		return nil, &ServiceError{Message: "build not found"}
+	}
+
+	var (
+		decision *models.ModerationDecision
+		asset    *models.ImageAsset
+	)
+
+	uploadID := strings.TrimSpace(params.UploadID)
+	if uploadID != "" {
+		asset, err = s.imageSvc.PersistApprovedUpload(ctx, userID, uploadID, models.ImageEntityBuild, build.ID)
+		if err != nil {
+			return nil, err
+		}
+		decision = &models.ModerationDecision{
+			Status: models.ImageModerationApproved,
+			Reason: "Approved",
+		}
+		if params.ImageType == "" {
+			params.ImageType = http.DetectContentType(asset.ImageBytes)
+		}
+	} else {
+		if len(params.ImageData) == 0 {
+			return nil, &ServiceError{Message: "image data is required"}
+		}
+		if params.ImageType != "image/jpeg" && params.ImageType != "image/png" && params.ImageType != "image/webp" {
+			return nil, &ServiceError{Message: "image must be JPEG, PNG, or WebP"}
+		}
+
+		const maxImageSize = 2 * 1024 * 1024
+		if len(params.ImageData) > maxImageSize {
+			return nil, &ServiceError{Message: "image must be less than 2MB"}
+		}
+
+		decision, asset, err = s.imageSvc.ModerateAndPersist(ctx, images.SaveRequest{
+			OwnerUserID: userID,
+			EntityType:  models.ImageEntityBuild,
+			EntityID:    build.ID,
+			ImageBytes:  params.ImageData,
+		})
+		if err != nil {
+			return nil, err
+		}
+		if decision == nil || decision.Status != models.ImageModerationApproved {
+			return decision, nil
+		}
+	}
+
+	if asset == nil {
+		return nil, &ServiceError{Message: "failed to persist build image"}
+	}
+
+	previousAssetID, err := s.store.SetImage(ctx, build.ID, userID, asset.ID)
+	if err != nil {
+		_ = s.imageSvc.Delete(ctx, asset.ID)
+		return nil, err
+	}
+	if previousAssetID != "" && previousAssetID != asset.ID {
+		_ = s.imageSvc.Delete(ctx, previousAssetID)
+	}
+
+	return decision, nil
+}
+
+// GetImage retrieves a build image for its owner.
+func (s *Service) GetImage(ctx context.Context, buildID string, userID string) ([]byte, string, error) {
+	imageData, err := s.store.GetImageForOwner(ctx, strings.TrimSpace(buildID), userID)
+	if err != nil {
+		return nil, "", err
+	}
+	if len(imageData) == 0 {
+		return imageData, "", nil
+	}
+	return imageData, http.DetectContentType(imageData), nil
+}
+
+// GetPublicImage retrieves a published build image for public views.
+func (s *Service) GetPublicImage(ctx context.Context, buildID string) ([]byte, string, error) {
+	imageData, err := s.store.GetPublicImage(ctx, strings.TrimSpace(buildID))
+	if err != nil {
+		return nil, "", err
+	}
+	if len(imageData) == 0 {
+		return imageData, "", nil
+	}
+	return imageData, http.DetectContentType(imageData), nil
+}
+
+// DeleteImage removes an image from a build.
+func (s *Service) DeleteImage(ctx context.Context, buildID string, userID string) error {
+	build, err := s.store.GetForOwner(ctx, strings.TrimSpace(buildID), userID)
+	if err != nil {
+		return err
+	}
+	if build == nil {
+		return &ServiceError{Message: "build not found"}
+	}
+
+	previousAssetID, err := s.store.DeleteImage(ctx, build.ID, userID)
+	if err != nil {
+		return err
+	}
+	if previousAssetID != "" && s.imageSvc != nil {
+		_ = s.imageSvc.Delete(ctx, previousAssetID)
+	}
+	return nil
+}
+
 // CleanupExpiredTemp deletes expired temp builds.
 func (s *Service) CleanupExpiredTemp(ctx context.Context) (int64, error) {
 	return s.store.DeleteExpiredTemp(ctx, time.Now().UTC())
+}
+
+func (s *Service) copyAircraftImageToBuild(ctx context.Context, userID string, aircraftID string, buildID string) (bool, error) {
+	if s.aircraftStore == nil || s.imageSvc == nil {
+		return false, nil
+	}
+
+	imageData, _, err := s.aircraftStore.GetImage(ctx, aircraftID, userID)
+	if err != nil {
+		return false, err
+	}
+	if len(imageData) == 0 {
+		return false, nil
+	}
+
+	decision, asset, err := s.imageSvc.ModerateAndPersist(ctx, images.SaveRequest{
+		OwnerUserID: userID,
+		EntityType:  models.ImageEntityBuild,
+		EntityID:    buildID,
+		ImageBytes:  imageData,
+	})
+	if err != nil {
+		return false, err
+	}
+	if decision == nil || decision.Status != models.ImageModerationApproved || asset == nil {
+		return false, nil
+	}
+
+	previousAssetID, err := s.store.SetImage(ctx, buildID, userID, asset.ID)
+	if err != nil {
+		_ = s.imageSvc.Delete(ctx, asset.ID)
+		return false, err
+	}
+	if previousAssetID != "" && previousAssetID != asset.ID {
+		_ = s.imageSvc.Delete(ctx, previousAssetID)
+	}
+
+	return true, nil
 }
 
 // ValidateForPublish enforces public-eligibility rules.

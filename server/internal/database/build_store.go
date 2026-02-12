@@ -104,6 +104,7 @@ func (s *BuildStore) ListByOwner(ctx context.Context, ownerUserID string, params
 		SELECT
 			b.id,
 			b.owner_user_id,
+			b.image_asset_id,
 			b.status,
 			b.token,
 			b.expires_at,
@@ -141,6 +142,7 @@ func (s *BuildStore) ListByOwner(ctx context.Context, ownerUserID string, params
 	if err := s.attachParts(ctx, buildPtrs); err != nil {
 		return nil, err
 	}
+	s.setMainImageURLs(buildPtrs, false)
 
 	return &models.BuildListResponse{
 		Builds:     builds,
@@ -200,6 +202,7 @@ func (s *BuildStore) ListPublic(ctx context.Context, params models.BuildListPara
 		SELECT
 			b.id,
 			b.owner_user_id,
+			b.image_asset_id,
 			b.status,
 			b.token,
 			b.expires_at,
@@ -239,6 +242,7 @@ func (s *BuildStore) ListPublic(ctx context.Context, params models.BuildListPara
 	if err := s.attachParts(ctx, buildPtrs); err != nil {
 		return nil, err
 	}
+	s.setMainImageURLs(buildPtrs, true)
 
 	return &models.BuildListResponse{
 		Builds:      builds,
@@ -258,6 +262,7 @@ func (s *BuildStore) GetByID(ctx context.Context, id string) (*models.Build, err
 	if err := s.attachParts(ctx, []*models.Build{build}); err != nil {
 		return nil, err
 	}
+	s.setMainImageURLs([]*models.Build{build}, false)
 	return build, nil
 }
 
@@ -271,6 +276,7 @@ func (s *BuildStore) GetForOwner(ctx context.Context, id string, ownerUserID str
 	if err := s.attachParts(ctx, []*models.Build{build}); err != nil {
 		return nil, err
 	}
+	s.setMainImageURLs([]*models.Build{build}, false)
 	return build, nil
 }
 
@@ -284,6 +290,7 @@ func (s *BuildStore) GetPublic(ctx context.Context, id string) (*models.Build, e
 	if err := s.attachParts(ctx, []*models.Build{build}); err != nil {
 		return nil, err
 	}
+	s.setMainImageURLs([]*models.Build{build}, true)
 	return build, nil
 }
 
@@ -302,6 +309,7 @@ func (s *BuildStore) GetTempByToken(ctx context.Context, token string) (*models.
 	if err := s.attachParts(ctx, []*models.Build{build}); err != nil {
 		return nil, err
 	}
+	s.setMainImageURLs([]*models.Build{build}, false)
 	return build, nil
 }
 
@@ -468,6 +476,123 @@ func (s *BuildStore) SetStatus(ctx context.Context, id string, ownerUserID strin
 	}
 
 	return s.GetForOwner(ctx, id, ownerUserID)
+}
+
+// SetImage stores a new approved image asset reference for a build.
+// Returns any previous image asset ID so callers can clean up orphaned assets.
+func (s *BuildStore) SetImage(ctx context.Context, id string, ownerUserID string, imageAssetID string) (string, error) {
+	var previousAssetID sql.NullString
+	if err := s.db.QueryRowContext(
+		ctx,
+		`SELECT image_asset_id FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED')`,
+		id,
+		ownerUserID,
+	).Scan(&previousAssetID); err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("build not found")
+		}
+		return "", fmt.Errorf("failed to fetch existing build image reference: %w", err)
+	}
+
+	query := `
+		UPDATE builds
+		SET image_asset_id = $1,
+		    updated_at = NOW()
+		WHERE id = $2 AND owner_user_id = $3 AND status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED')
+	`
+	result, err := s.db.ExecContext(ctx, query, imageAssetID, id, ownerUserID)
+	if err != nil {
+		return "", fmt.Errorf("failed to set build image: %w", err)
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return "", fmt.Errorf("build not found")
+	}
+
+	if previousAssetID.Valid {
+		return previousAssetID.String, nil
+	}
+	return "", nil
+}
+
+// GetImageForOwner loads approved build image bytes for an owner-visible build.
+func (s *BuildStore) GetImageForOwner(ctx context.Context, id string, ownerUserID string) ([]byte, error) {
+	query := `
+		SELECT ia.image_bytes
+		FROM builds b
+		JOIN image_assets ia ON ia.id = b.image_asset_id AND ia.status = 'APPROVED'
+		WHERE b.id = $1
+		  AND b.owner_user_id = $2
+		  AND b.status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED')
+		  AND b.image_asset_id IS NOT NULL
+	`
+
+	var imageData []byte
+	err := s.db.QueryRowContext(ctx, query, id, ownerUserID).Scan(&imageData)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get build image: %w", err)
+	}
+	return imageData, nil
+}
+
+// GetPublicImage loads approved build image bytes for a published build.
+func (s *BuildStore) GetPublicImage(ctx context.Context, id string) ([]byte, error) {
+	query := `
+		SELECT ia.image_bytes
+		FROM builds b
+		JOIN image_assets ia ON ia.id = b.image_asset_id AND ia.status = 'APPROVED'
+		WHERE b.id = $1
+		  AND b.status = 'PUBLISHED'
+		  AND b.image_asset_id IS NOT NULL
+	`
+
+	var imageData []byte
+	err := s.db.QueryRowContext(ctx, query, id).Scan(&imageData)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get public build image: %w", err)
+	}
+	return imageData, nil
+}
+
+// DeleteImage removes a build image and returns any previous image asset ID.
+func (s *BuildStore) DeleteImage(ctx context.Context, id string, ownerUserID string) (string, error) {
+	var previousAssetID sql.NullString
+	if err := s.db.QueryRowContext(
+		ctx,
+		`SELECT image_asset_id FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED')`,
+		id,
+		ownerUserID,
+	).Scan(&previousAssetID); err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("build not found")
+		}
+		return "", fmt.Errorf("failed to fetch existing build image reference: %w", err)
+	}
+
+	query := `
+		UPDATE builds
+		SET image_asset_id = NULL,
+		    updated_at = NOW()
+		WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED')
+	`
+	result, err := s.db.ExecContext(ctx, query, id, ownerUserID)
+	if err != nil {
+		return "", fmt.Errorf("failed to delete build image: %w", err)
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return "", fmt.Errorf("build not found")
+	}
+	if previousAssetID.Valid {
+		return previousAssetID.String, nil
+	}
+	return "", nil
 }
 
 // Delete removes a non-temp build for the owner.
@@ -664,10 +789,27 @@ func (s *BuildStore) attachParts(ctx context.Context, builds []*models.Build) er
 	return nil
 }
 
+func (s *BuildStore) setMainImageURLs(builds []*models.Build, isPublic bool) {
+	for _, build := range builds {
+		if build == nil {
+			continue
+		}
+		if strings.TrimSpace(build.ImageAssetID) == "" {
+			continue
+		}
+		if isPublic {
+			build.MainImageURL = fmt.Sprintf("/api/public/builds/%s/image?v=%d", build.ID, build.UpdatedAt.UnixMilli())
+		} else {
+			build.MainImageURL = fmt.Sprintf("/api/builds/%s/image?v=%d", build.ID, build.UpdatedAt.UnixMilli())
+		}
+	}
+}
+
 var baseBuildSelect = `
 	SELECT
 		b.id,
 		b.owner_user_id,
+		b.image_asset_id,
 		b.status,
 		b.token,
 		b.expires_at,
@@ -702,6 +844,7 @@ func scanBuildRow(scanner interface {
 }) (*models.Build, error) {
 	var item models.Build
 	var ownerUserID sql.NullString
+	var imageAssetID sql.NullString
 	var token sql.NullString
 	var expiresAt sql.NullTime
 	var description sql.NullString
@@ -716,6 +859,7 @@ func scanBuildRow(scanner interface {
 	err := scanner.Scan(
 		&item.ID,
 		&ownerUserID,
+		&imageAssetID,
 		&item.Status,
 		&token,
 		&expiresAt,
@@ -735,6 +879,7 @@ func scanBuildRow(scanner interface {
 	}
 
 	item.OwnerUserID = ownerUserID.String
+	item.ImageAssetID = imageAssetID.String
 	item.Token = token.String
 	item.Description = description.String
 	item.SourceAircraftID = sourceAircraftID.String

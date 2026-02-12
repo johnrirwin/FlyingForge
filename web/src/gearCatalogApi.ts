@@ -10,16 +10,10 @@ import type {
   NearMatchResponse,
   GearType,
 } from './gearCatalogTypes';
+import type { ImageModerationResponse } from './imageTypes';
+export type { ModerationStatus, ImageModerationResponse } from './imageTypes';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
-
-export type ModerationStatus = 'APPROVED' | 'REJECTED' | 'PENDING_REVIEW';
-
-export interface ImageModerationResponse {
-  status: ModerationStatus;
-  reason?: string;
-  uploadId?: string;
-}
 
 // Get access token from localStorage
 function getAccessToken(): string | null {

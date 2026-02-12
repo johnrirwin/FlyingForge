@@ -11,6 +11,7 @@ import (
 
 	"github.com/johnrirwin/flyingforge/internal/auth"
 	"github.com/johnrirwin/flyingforge/internal/builds"
+	"github.com/johnrirwin/flyingforge/internal/images"
 	"github.com/johnrirwin/flyingforge/internal/logging"
 	"github.com/johnrirwin/flyingforge/internal/models"
 	"github.com/johnrirwin/flyingforge/internal/ratelimit"
@@ -65,14 +66,31 @@ func (api *BuildAPI) handlePublicBuilds(w http.ResponseWriter, r *http.Request) 
 }
 
 func (api *BuildAPI) handlePublicBuildItem(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	path := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/public/builds/"), "/")
+	parts := strings.Split(path, "/")
+	if len(parts) == 0 || strings.TrimSpace(parts[0]) == "" {
+		api.writeError(w, http.StatusBadRequest, "invalid_id", "build id is required")
 		return
 	}
+	buildID := strings.TrimSpace(parts[0])
 
-	buildID := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/api/public/builds/"))
-	if buildID == "" {
-		api.writeError(w, http.StatusBadRequest, "invalid_id", "build id is required")
+	if len(parts) > 1 {
+		switch parts[1] {
+		case "image":
+			if r.Method != http.MethodGet {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			api.getPublicBuildImage(w, r, buildID)
+			return
+		default:
+			api.writeError(w, http.StatusNotFound, "not_found", "unknown build action")
+			return
+		}
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -265,6 +283,18 @@ func (api *BuildAPI) handleBuildItem(w http.ResponseWriter, r *http.Request) {
 
 	if len(parts) > 1 {
 		switch parts[1] {
+		case "image":
+			switch r.Method {
+			case http.MethodGet:
+				api.getBuildImage(w, r, buildID, userID)
+			case http.MethodPost, http.MethodPut:
+				api.uploadBuildImage(w, r, buildID, userID)
+			case http.MethodDelete:
+				api.deleteBuildImage(w, r, buildID, userID)
+			default:
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
 		case "publish":
 			if r.Method != http.MethodPost {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -355,6 +385,214 @@ func (api *BuildAPI) handleBuildItem(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (api *BuildAPI) uploadBuildImage(w http.ResponseWriter, r *http.Request, buildID string, userID string) {
+	contentType := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
+
+	if strings.HasPrefix(contentType, "application/json") {
+		var req struct {
+			UploadID string `json:"uploadId"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			api.writeError(w, http.StatusBadRequest, "invalid_body", "invalid request body")
+			return
+		}
+		req.UploadID = strings.TrimSpace(req.UploadID)
+		if req.UploadID == "" {
+			api.writeError(w, http.StatusBadRequest, "invalid_upload", "uploadId is required")
+			return
+		}
+
+		decision, err := api.service.SetImage(r.Context(), userID, models.SetBuildImageParams{
+			BuildID:  buildID,
+			UploadID: req.UploadID,
+		})
+		if err != nil {
+			switch err {
+			case images.ErrPendingUploadNotFound:
+				api.writeJSON(w, http.StatusUnprocessableEntity, map[string]string{
+					"status": string(models.ImageModerationRejected),
+					"reason": "Image approval token expired or missing",
+					"error":  "image approval token expired or missing",
+				})
+				return
+			case images.ErrUploadNotApproved:
+				api.writeJSON(w, http.StatusUnprocessableEntity, map[string]string{
+					"status": string(models.ImageModerationRejected),
+					"reason": "Image is not approved",
+					"error":  "image is not approved",
+				})
+				return
+			default:
+				var svcErr *builds.ServiceError
+				if errors.As(err, &svcErr) {
+					switch strings.ToLower(strings.TrimSpace(svcErr.Message)) {
+					case "build not found":
+						api.writeError(w, http.StatusNotFound, "not_found", "build not found")
+					default:
+						api.writeError(w, http.StatusBadRequest, "invalid_request", svcErr.Message)
+					}
+					return
+				}
+				api.logger.Error("Set build image from approved upload failed", logging.WithFields(map[string]interface{}{
+					"build_id": buildID,
+					"error":    err.Error(),
+				}))
+				api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to set build image")
+				return
+			}
+		}
+		if decision == nil {
+			api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to set build image")
+			return
+		}
+
+		api.writeJSON(w, http.StatusOK, map[string]string{
+			"status":  string(decision.Status),
+			"message": "Image uploaded successfully",
+		})
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 3*1024*1024)
+	if err := r.ParseMultipartForm(3 * 1024 * 1024); err != nil {
+		api.writeError(w, http.StatusBadRequest, "invalid_upload", "file too large or invalid form")
+		return
+	}
+
+	file, _, err := r.FormFile("image")
+	if err != nil {
+		api.writeError(w, http.StatusBadRequest, "missing_image", "image file required")
+		return
+	}
+	defer file.Close()
+
+	imageData, err := io.ReadAll(file)
+	if err != nil {
+		api.writeError(w, http.StatusInternalServerError, "read_error", "failed to read image")
+		return
+	}
+	if len(imageData) > 2*1024*1024 {
+		api.writeError(w, http.StatusBadRequest, "invalid_upload", "image must be less than 2MB")
+		return
+	}
+	detectedContentType, ok := detectAllowedImageContentType(imageData)
+	if !ok {
+		api.writeError(w, http.StatusBadRequest, "invalid_upload", "image must be JPEG, PNG, or WebP")
+		return
+	}
+
+	decision, err := api.service.SetImage(r.Context(), userID, models.SetBuildImageParams{
+		BuildID:   buildID,
+		ImageType: detectedContentType,
+		ImageData: imageData,
+	})
+	if err != nil {
+		var svcErr *builds.ServiceError
+		if errors.As(err, &svcErr) {
+			switch strings.ToLower(strings.TrimSpace(svcErr.Message)) {
+			case "build not found":
+				api.writeError(w, http.StatusNotFound, "not_found", "build not found")
+			default:
+				api.writeError(w, http.StatusBadRequest, "invalid_request", svcErr.Message)
+			}
+			return
+		}
+		api.logger.Error("Set build image failed", logging.WithFields(map[string]interface{}{
+			"build_id": buildID,
+			"error":    err.Error(),
+		}))
+		api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to set build image")
+		return
+	}
+	if decision == nil {
+		api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to set build image")
+		return
+	}
+	if decision.Status != models.ImageModerationApproved {
+		statusCode := http.StatusUnprocessableEntity
+		if decision.Status == models.ImageModerationPendingReview {
+			statusCode = http.StatusServiceUnavailable
+		}
+		api.writeJSON(w, statusCode, map[string]string{
+			"status": string(decision.Status),
+			"reason": decision.Reason,
+			"error":  decision.Reason,
+		})
+		return
+	}
+
+	api.writeJSON(w, http.StatusOK, map[string]string{
+		"status":  string(decision.Status),
+		"message": "Image uploaded successfully",
+	})
+}
+
+func (api *BuildAPI) getBuildImage(w http.ResponseWriter, r *http.Request, buildID string, userID string) {
+	imageData, imageType, err := api.service.GetImage(r.Context(), buildID, userID)
+	if err != nil {
+		api.logger.Error("Get build image failed", logging.WithFields(map[string]interface{}{
+			"build_id": buildID,
+			"error":    err.Error(),
+		}))
+		http.Error(w, "image not found", http.StatusNotFound)
+		return
+	}
+	if len(imageData) == 0 {
+		http.Error(w, "no image for this build", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Type", imageType)
+	w.Header().Set("Content-Length", strconv.Itoa(len(imageData)))
+	w.Header().Set("Cache-Control", "private, max-age=300")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(imageData)
+}
+
+func (api *BuildAPI) getPublicBuildImage(w http.ResponseWriter, r *http.Request, buildID string) {
+	imageData, imageType, err := api.service.GetPublicImage(r.Context(), buildID)
+	if err != nil {
+		api.logger.Error("Get public build image failed", logging.WithFields(map[string]interface{}{
+			"build_id": buildID,
+			"error":    err.Error(),
+		}))
+		http.Error(w, "image not found", http.StatusNotFound)
+		return
+	}
+	if len(imageData) == 0 {
+		http.Error(w, "no image for this build", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Type", imageType)
+	w.Header().Set("Content-Length", strconv.Itoa(len(imageData)))
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(imageData)
+}
+
+func (api *BuildAPI) deleteBuildImage(w http.ResponseWriter, r *http.Request, buildID string, userID string) {
+	if err := api.service.DeleteImage(r.Context(), buildID, userID); err != nil {
+		var svcErr *builds.ServiceError
+		if errors.As(err, &svcErr) && strings.EqualFold(strings.TrimSpace(svcErr.Message), "build not found") {
+			api.writeError(w, http.StatusNotFound, "not_found", "build not found")
+			return
+		}
+		api.logger.Error("Delete build image failed", logging.WithFields(map[string]interface{}{
+			"build_id": buildID,
+			"error":    err.Error(),
+		}))
+		api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to delete build image")
+		return
+	}
+
+	api.writeJSON(w, http.StatusOK, map[string]string{
+		"message": "Image deleted successfully",
+	})
 }
 
 func (api *BuildAPI) parseListParams(r *http.Request) models.BuildListParams {

@@ -11,6 +11,7 @@ type ImageEntityType string
 const (
 	ImageEntityAvatar   ImageEntityType = "avatar"
 	ImageEntityAircraft ImageEntityType = "aircraft"
+	ImageEntityBuild    ImageEntityType = "build"
 	ImageEntityGear     ImageEntityType = "gear"
 	ImageEntityOther    ImageEntityType = "other"
 )

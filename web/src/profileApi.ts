@@ -1,6 +1,8 @@
 import type { UserProfile, UpdateProfileParams } from './authTypes';
 import type { AvatarUploadResponse } from './socialTypes';
 import { getStoredTokens } from './authApi';
+import type { ImageModerationResponse } from './imageTypes';
+export type { ModerationStatus, ImageModerationResponse } from './imageTypes';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
@@ -49,14 +51,6 @@ export async function updateProfile(params: UpdateProfileParams): Promise<UserPr
   }
 
   return response.json();
-}
-
-export type ModerationStatus = 'APPROVED' | 'REJECTED' | 'PENDING_REVIEW';
-
-export interface ImageModerationResponse {
-  status: ModerationStatus;
-  reason?: string;
-  uploadId?: string;
 }
 
 // Upload image for moderation (does not persist avatar yet)

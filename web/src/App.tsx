@@ -172,7 +172,9 @@ function App() {
     
     // Detect login: was not authenticated, now is
     if (!wasAuthenticated && isAuthenticated) {
-      navigate('/dashboard', { replace: true });
+      if (location.pathname === '/' || location.pathname === '/getting-started') {
+        navigate('/dashboard', { replace: true });
+      }
     }
     
     setWasAuthenticated(isAuthenticated);

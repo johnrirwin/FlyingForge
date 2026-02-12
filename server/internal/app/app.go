@@ -258,7 +258,7 @@ func (a *App) initDatabaseServices() {
 
 	// Initialize builds service (public builds + draft/temp builder)
 	a.buildStore = database.NewBuildStore(db)
-	a.BuildSvc = builds.NewService(a.buildStore, a.aircraftStore, a.gearCatalogStore, a.Logger)
+	a.BuildSvc = builds.NewService(a.buildStore, a.aircraftStore, a.gearCatalogStore, a.imageSvc, a.Logger)
 
 	// Initialize radio
 	radioStore := database.NewRadioStore(db)

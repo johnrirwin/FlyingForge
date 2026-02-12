@@ -2,10 +2,12 @@ package builds
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/johnrirwin/flyingforge/internal/images"
 	"github.com/johnrirwin/flyingforge/internal/logging"
 	"github.com/johnrirwin/flyingforge/internal/models"
 )
@@ -212,6 +214,183 @@ func TestDeleteByOwner(t *testing.T) {
 	}
 }
 
+func TestSetImage_WithApprovedUpload_PersistsAndCleansPreviousAsset(t *testing.T) {
+	ctx := context.Background()
+	store := newFakeBuildStore()
+	svc := NewServiceWithDeps(store, nil, nil, logging.New(logging.LevelError))
+
+	imageSvc := &fakeImagePipeline{
+		persistAsset: &models.ImageAsset{
+			ID:         "asset-new",
+			ImageBytes: []byte{0xFF, 0xD8, 0xFF, 0xDB},
+		},
+	}
+	svc.imageSvc = imageSvc
+
+	build, err := svc.CreateDraft(ctx, "user-1", models.CreateBuildParams{Title: "Image Build"})
+	if err != nil {
+		t.Fatalf("CreateDraft error: %v", err)
+	}
+	if _, err := store.SetImage(ctx, build.ID, "user-1", "asset-old"); err != nil {
+		t.Fatalf("SetImage setup error: %v", err)
+	}
+
+	decision, err := svc.SetImage(ctx, "user-1", models.SetBuildImageParams{
+		BuildID:  build.ID,
+		UploadID: "upload-1",
+	})
+	if err != nil {
+		t.Fatalf("SetImage error: %v", err)
+	}
+	if decision == nil || decision.Status != models.ImageModerationApproved {
+		t.Fatalf("expected approved decision, got %+v", decision)
+	}
+	if imageSvc.persistUploadID != "upload-1" || imageSvc.persistEntityType != models.ImageEntityBuild || imageSvc.persistEntityID != build.ID {
+		t.Fatalf("unexpected persist args: uploadID=%s entityType=%s entityID=%s", imageSvc.persistUploadID, imageSvc.persistEntityType, imageSvc.persistEntityID)
+	}
+
+	updated, err := store.GetForOwner(ctx, build.ID, "user-1")
+	if err != nil {
+		t.Fatalf("GetForOwner error: %v", err)
+	}
+	if updated == nil || updated.ImageAssetID != "asset-new" {
+		t.Fatalf("expected image asset to be replaced with asset-new, got %+v", updated)
+	}
+	if len(imageSvc.deletedIDs) != 1 || imageSvc.deletedIDs[0] != "asset-old" {
+		t.Fatalf("expected previous asset cleanup, deleted=%v", imageSvc.deletedIDs)
+	}
+}
+
+func TestSetImage_NonApprovedModeration_DoesNotPersist(t *testing.T) {
+	tests := []struct {
+		name   string
+		status models.ImageModerationStatus
+		reason string
+	}{
+		{name: "rejected", status: models.ImageModerationRejected, reason: "Not allowed"},
+		{name: "pending", status: models.ImageModerationPendingReview, reason: "Unable to verify right now"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			store := newFakeBuildStore()
+			svc := NewServiceWithDeps(store, nil, nil, logging.New(logging.LevelError))
+
+			imageSvc := &fakeImagePipeline{
+				moderateDecision: &models.ModerationDecision{
+					Status: tt.status,
+					Reason: tt.reason,
+				},
+			}
+			svc.imageSvc = imageSvc
+
+			build, err := svc.CreateDraft(ctx, "user-1", models.CreateBuildParams{Title: "Image Build"})
+			if err != nil {
+				t.Fatalf("CreateDraft error: %v", err)
+			}
+
+			decision, err := svc.SetImage(ctx, "user-1", models.SetBuildImageParams{
+				BuildID:   build.ID,
+				ImageType: "image/jpeg",
+				ImageData: []byte{0xFF, 0xD8, 0xFF, 0xDB},
+			})
+			if err != nil {
+				t.Fatalf("SetImage error: %v", err)
+			}
+			if decision == nil || decision.Status != tt.status {
+				t.Fatalf("expected status=%s got %+v", tt.status, decision)
+			}
+
+			updated, err := store.GetForOwner(ctx, build.ID, "user-1")
+			if err != nil {
+				t.Fatalf("GetForOwner error: %v", err)
+			}
+			if updated == nil {
+				t.Fatalf("expected build")
+			}
+			if updated.ImageAssetID != "" {
+				t.Fatalf("expected no image asset persisted, got %s", updated.ImageAssetID)
+			}
+		})
+	}
+}
+
+func TestDeleteImage_RemovesImageAndDeletesAsset(t *testing.T) {
+	ctx := context.Background()
+	store := newFakeBuildStore()
+	svc := NewServiceWithDeps(store, nil, nil, logging.New(logging.LevelError))
+
+	imageSvc := &fakeImagePipeline{}
+	svc.imageSvc = imageSvc
+
+	build, err := svc.CreateDraft(ctx, "user-1", models.CreateBuildParams{Title: "Image Build"})
+	if err != nil {
+		t.Fatalf("CreateDraft error: %v", err)
+	}
+	if _, err := store.SetImage(ctx, build.ID, "user-1", "asset-old"); err != nil {
+		t.Fatalf("SetImage setup error: %v", err)
+	}
+
+	if err := svc.DeleteImage(ctx, build.ID, "user-1"); err != nil {
+		t.Fatalf("DeleteImage error: %v", err)
+	}
+
+	updated, err := store.GetForOwner(ctx, build.ID, "user-1")
+	if err != nil {
+		t.Fatalf("GetForOwner error: %v", err)
+	}
+	if updated == nil {
+		t.Fatalf("expected build")
+	}
+	if updated.ImageAssetID != "" {
+		t.Fatalf("expected build image to be removed, got %s", updated.ImageAssetID)
+	}
+	if len(imageSvc.deletedIDs) != 1 || imageSvc.deletedIDs[0] != "asset-old" {
+		t.Fatalf("expected old asset to be deleted, deleted=%v", imageSvc.deletedIDs)
+	}
+}
+
+func TestGetImageAndGetPublicImage_ReturnDetectedContentType(t *testing.T) {
+	ctx := context.Background()
+	store := newFakeBuildStore()
+	svc := NewServiceWithDeps(store, nil, nil, logging.New(logging.LevelError))
+
+	build, err := svc.CreateDraft(ctx, "user-1", models.CreateBuildParams{Title: "Image Build"})
+	if err != nil {
+		t.Fatalf("CreateDraft error: %v", err)
+	}
+	if _, err := store.SetImage(ctx, build.ID, "user-1", "asset-image"); err != nil {
+		t.Fatalf("SetImage setup error: %v", err)
+	}
+
+	imageData, imageType, err := svc.GetImage(ctx, build.ID, "user-1")
+	if err != nil {
+		t.Fatalf("GetImage error: %v", err)
+	}
+	if len(imageData) == 0 {
+		t.Fatalf("expected image data for owner")
+	}
+	if imageType == "" {
+		t.Fatalf("expected detected content type for owner image")
+	}
+
+	if _, err := store.SetStatus(ctx, build.ID, "user-1", models.BuildStatusPublished); err != nil {
+		t.Fatalf("SetStatus setup error: %v", err)
+	}
+
+	publicData, publicType, err := svc.GetPublicImage(ctx, build.ID)
+	if err != nil {
+		t.Fatalf("GetPublicImage error: %v", err)
+	}
+	if len(publicData) == 0 {
+		t.Fatalf("expected public image data")
+	}
+	if publicType == "" {
+		t.Fatalf("expected detected content type for public image")
+	}
+}
+
 func assertHasValidationCode(t *testing.T, errs []models.BuildValidationError, category, code string) {
 	t.Helper()
 	for _, err := range errs {
@@ -415,6 +594,44 @@ func (s *fakeBuildStore) SetStatus(ctx context.Context, id string, ownerUserID s
 	return cloneBuild(build), nil
 }
 
+func (s *fakeBuildStore) SetImage(ctx context.Context, id string, ownerUserID string, imageAssetID string) (string, error) {
+	build := s.byID[id]
+	if build == nil || build.OwnerUserID != ownerUserID {
+		return "", fmt.Errorf("build not found")
+	}
+	prev := build.ImageAssetID
+	build.ImageAssetID = imageAssetID
+	build.UpdatedAt = time.Now().UTC()
+	return prev, nil
+}
+
+func (s *fakeBuildStore) GetImageForOwner(ctx context.Context, id string, ownerUserID string) ([]byte, error) {
+	build := s.byID[id]
+	if build == nil || build.OwnerUserID != ownerUserID || build.ImageAssetID == "" {
+		return nil, nil
+	}
+	return []byte("image"), nil
+}
+
+func (s *fakeBuildStore) GetPublicImage(ctx context.Context, id string) ([]byte, error) {
+	build := s.byID[id]
+	if build == nil || build.Status != models.BuildStatusPublished || build.ImageAssetID == "" {
+		return nil, nil
+	}
+	return []byte("image"), nil
+}
+
+func (s *fakeBuildStore) DeleteImage(ctx context.Context, id string, ownerUserID string) (string, error) {
+	build := s.byID[id]
+	if build == nil || build.OwnerUserID != ownerUserID {
+		return "", fmt.Errorf("build not found")
+	}
+	prev := build.ImageAssetID
+	build.ImageAssetID = ""
+	build.UpdatedAt = time.Now().UTC()
+	return prev, nil
+}
+
 func (s *fakeBuildStore) Delete(ctx context.Context, id string, ownerUserID string) (bool, error) {
 	build := s.byID[id]
 	if build == nil || build.OwnerUserID != ownerUserID {
@@ -487,4 +704,57 @@ func strconvItoa(i int) string {
 		i /= 10
 	}
 	return string(out)
+}
+
+type fakeImagePipeline struct {
+	moderateDecision *models.ModerationDecision
+	moderateAsset    *models.ImageAsset
+	moderateErr      error
+
+	persistAsset      *models.ImageAsset
+	persistErr        error
+	persistOwnerUser  string
+	persistUploadID   string
+	persistEntityType models.ImageEntityType
+	persistEntityID   string
+
+	deletedIDs []string
+}
+
+func (f *fakeImagePipeline) ModerateAndPersist(ctx context.Context, req images.SaveRequest) (*models.ModerationDecision, *models.ImageAsset, error) {
+	if f.moderateErr != nil {
+		return nil, nil, f.moderateErr
+	}
+	if f.moderateDecision != nil {
+		return f.moderateDecision, f.moderateAsset, nil
+	}
+	return &models.ModerationDecision{
+			Status: models.ImageModerationApproved,
+			Reason: "Approved",
+		}, &models.ImageAsset{
+			ID:         "asset-generated",
+			ImageBytes: req.ImageBytes,
+		}, nil
+}
+
+func (f *fakeImagePipeline) PersistApprovedUpload(ctx context.Context, ownerUserID, uploadID string, entityType models.ImageEntityType, entityID string) (*models.ImageAsset, error) {
+	if f.persistErr != nil {
+		return nil, f.persistErr
+	}
+	f.persistOwnerUser = ownerUserID
+	f.persistUploadID = uploadID
+	f.persistEntityType = entityType
+	f.persistEntityID = entityID
+	if f.persistAsset != nil {
+		return f.persistAsset, nil
+	}
+	return &models.ImageAsset{
+		ID:         "asset-from-upload",
+		ImageBytes: []byte{0xFF, 0xD8, 0xFF, 0xDB},
+	}, nil
+}
+
+func (f *fakeImagePipeline) Delete(ctx context.Context, imageID string) error {
+	f.deletedIDs = append(f.deletedIDs, imageID)
+	return nil
 }

@@ -13,6 +13,10 @@ interface BuildBuilderProps {
   onPartsChange: (parts: BuildPart[]) => void;
   validationErrors?: BuildValidationError[];
   readOnly?: boolean;
+  imagePreviewUrl?: string | null;
+  onImageAction?: () => void;
+  imageActionLabel?: string;
+  imageHelperText?: string;
 }
 
 interface BuildRow {
@@ -51,6 +55,10 @@ export function BuildBuilder({
   onPartsChange,
   validationErrors,
   readOnly = false,
+  imagePreviewUrl,
+  onImageAction,
+  imageActionLabel,
+  imageHelperText,
 }: BuildBuilderProps) {
   const [pickerGearType, setPickerGearType] = useState<GearType | null>(null);
 
@@ -108,9 +116,9 @@ export function BuildBuilder({
 
     return (
       <div key={row.gearType} className="rounded-lg border border-slate-700 bg-slate-800/60 p-3">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h4 className="text-sm font-medium text-white">{row.label}</h4>
               {options?.showRequiredBadge && row.required && (
                 <span className="rounded bg-slate-700 px-2 py-0.5 text-[11px] uppercase tracking-wide text-slate-300">Required</span>
@@ -127,11 +135,11 @@ export function BuildBuilder({
             )}
           </div>
           {!readOnly && (
-            <div className="flex gap-2">
+            <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
               <button
                 type="button"
                 onClick={() => setPickerGearType(row.gearType)}
-                className="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-primary-500"
+                className="rounded-md bg-primary-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-primary-500 whitespace-nowrap"
               >
                 Choose
               </button>
@@ -139,7 +147,7 @@ export function BuildBuilder({
                 <button
                   type="button"
                   onClick={() => removePart(row.gearType)}
-                  className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:border-slate-500 hover:text-white"
+                  className="rounded-md border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:border-slate-500 hover:text-white whitespace-nowrap"
                 >
                   Clear
                 </button>
@@ -155,26 +163,57 @@ export function BuildBuilder({
     <>
       <div className="space-y-4">
         <div className="space-y-3 rounded-xl border border-slate-700 bg-slate-800/60 p-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-300">Build title</label>
-            <input
-              value={title}
-              onChange={(event) => onTitleChange(event.target.value)}
-              disabled={readOnly}
-              className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none disabled:opacity-70"
-              placeholder={'My Freestyle 5"'}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-300">Description</label>
-            <textarea
-              value={description}
-              onChange={(event) => onDescriptionChange(event.target.value)}
-              disabled={readOnly}
-              rows={3}
-              className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none disabled:opacity-70"
-              placeholder="Describe the goals, tune style, and intended use."
-            />
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr),260px]">
+            <div className="min-w-0 space-y-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-300">Build title</label>
+                <input
+                  value={title}
+                  onChange={(event) => onTitleChange(event.target.value)}
+                  disabled={readOnly}
+                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none disabled:opacity-70"
+                  placeholder={'My Freestyle 5"'}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-300">Description</label>
+                <textarea
+                  value={description}
+                  onChange={(event) => onDescriptionChange(event.target.value)}
+                  disabled={readOnly}
+                  rows={3}
+                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none disabled:opacity-70"
+                  placeholder="Describe the goals, tune style, and intended use."
+                />
+              </div>
+            </div>
+
+            {(onImageAction || imagePreviewUrl) && (
+              <div className="min-w-0 space-y-2 rounded-lg border border-slate-700 bg-slate-900/60 p-3">
+                <p className="text-sm font-medium text-slate-300">Build image</p>
+                <div className="aspect-[4/3] w-full overflow-hidden rounded-lg border border-slate-700 bg-slate-800">
+                  {imagePreviewUrl ? (
+                    <img src={imagePreviewUrl} alt={title || 'Build image'} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-slate-500">
+                      No image
+                    </div>
+                  )}
+                </div>
+                {!readOnly && onImageAction && (
+                  <button
+                    type="button"
+                    onClick={onImageAction}
+                    className="w-full rounded-md border border-slate-600 bg-slate-700 px-3 py-2 text-sm font-medium text-white transition hover:border-slate-500 hover:bg-slate-600"
+                  >
+                    {imageActionLabel ?? (imagePreviewUrl ? 'Change Image' : 'Upload Image')}
+                  </button>
+                )}
+                {imageHelperText && (
+                  <p className="text-xs text-slate-500">{imageHelperText}</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

@@ -80,7 +80,7 @@ func (api *ImageAPI) handleUpload(w http.ResponseWriter, r *http.Request) {
 	entityType := models.ImageEntityOther
 	if raw := strings.TrimSpace(r.FormValue("entityType")); raw != "" {
 		switch models.ImageEntityType(raw) {
-		case models.ImageEntityAvatar, models.ImageEntityAircraft, models.ImageEntityGear, models.ImageEntityOther:
+		case models.ImageEntityAvatar, models.ImageEntityAircraft, models.ImageEntityBuild, models.ImageEntityGear, models.ImageEntityOther:
 			entityType = models.ImageEntityType(raw)
 		default:
 			api.writeJSON(w, http.StatusBadRequest, map[string]string{

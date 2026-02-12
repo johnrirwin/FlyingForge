@@ -852,6 +852,7 @@ const migrationBuilds = `
 CREATE TABLE IF NOT EXISTS builds (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     owner_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    image_asset_id UUID,
     status VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
     token VARCHAR(128),
     expires_at TIMESTAMPTZ,
@@ -895,4 +896,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_builds_token_unique ON builds(token) WHERE
 CREATE INDEX IF NOT EXISTS idx_builds_expires_at ON builds(expires_at);
 CREATE INDEX IF NOT EXISTS idx_build_parts_build ON build_parts(build_id);
 CREATE INDEX IF NOT EXISTS idx_build_parts_catalog ON build_parts(catalog_item_id);
+
+ALTER TABLE builds ADD COLUMN IF NOT EXISTS image_asset_id UUID;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'fk_builds_image_asset'
+    ) THEN
+        ALTER TABLE builds
+        ADD CONSTRAINT fk_builds_image_asset
+        FOREIGN KEY (image_asset_id) REFERENCES image_assets(id) ON DELETE SET NULL;
+    END IF;
+END $$;
 `
