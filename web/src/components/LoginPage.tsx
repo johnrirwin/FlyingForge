@@ -1,53 +1,81 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { sanitizeNextPath, storePendingLoginNext } from '../authRouting';
 import { useAuth } from '../hooks/useAuth';
 
-interface LoginPageProps {
-  onClose: () => void;
-}
+export function LoginPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { isLoading, error, isAuthenticated } = useAuth();
+  const [isRedirecting, setIsRedirecting] = useState(false);
+  const [configError, setConfigError] = useState<string | null>(null);
 
-export function LoginPage({ onClose }: LoginPageProps) {
-  const { isLoading, error } = useAuth();
+  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const nextPath = useMemo(() => sanitizeNextPath(searchParams.get('next')), [searchParams]);
+  const reason = searchParams.get('reason');
+  const callbackError = searchParams.get('error');
+  const callbackErrorDescription = searchParams.get('error_description');
+
+  useEffect(() => {
+    if (isLoading) {
+      return;
+    }
+
+    if (isAuthenticated) {
+      navigate(nextPath, { replace: true });
+    }
+  }, [isAuthenticated, isLoading, navigate, nextPath]);
 
   const handleGoogleLogin = () => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     if (!clientId) {
-      console.error('Google Client ID not configured');
+      setConfigError('Google sign-in is not configured. Please contact support.');
       return;
     }
+
+    setConfigError(null);
+    storePendingLoginNext(nextPath);
+
     const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8080';
     const redirectUri = `${apiBase}/api/auth/google/callback`;
     const scope = 'openid email profile';
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}`;
-    window.location.href = authUrl;
+
+    setIsRedirecting(true);
+    window.location.assign(authUrl);
   };
 
+  const bannerMessage = configError
+    ?? callbackErrorDescription
+    ?? (callbackError ? 'Sign-in failed. Please try again.' : null)
+    ?? error?.message
+    ?? null;
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-white">Sign In</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+    <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-4 py-10">
+      <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900/90 p-8 shadow-2xl">
+        <div className="text-center mb-6">
+          <h1 className="text-3xl font-bold text-white mb-2">Welcome back</h1>
+          <p className="text-slate-300 text-sm">
+            Sign in with your Google account to access your dashboard, inventory, and builds.
+          </p>
         </div>
 
-        {error && (
-          <div className="mb-4 p-3 bg-red-900/50 border border-red-700 rounded text-red-200 text-sm">
-            {error.message}
+        {reason === 'expired' && (
+          <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            Your session expired. Please sign in again to continue.
           </div>
         )}
 
-        <p className="text-gray-300 mb-6 text-center">
-          Sign in with your Google account to access your pilot profile, manage your aircraft, and join the community.
-        </p>
+        {bannerMessage && (
+          <div className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+            {bannerMessage}
+          </div>
+        )}
 
         <button
           onClick={handleGoogleLogin}
-          disabled={isLoading}
+          disabled={isLoading || isRedirecting}
           className="w-full py-3 px-4 bg-white hover:bg-gray-100 disabled:bg-gray-200 disabled:cursor-not-allowed text-gray-800 font-medium rounded-lg transition-colors flex items-center justify-center gap-3"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -68,10 +96,10 @@ export function LoginPage({ onClose }: LoginPageProps) {
               d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
             />
           </svg>
-          {isLoading ? 'Signing in...' : 'Continue with Google'}
+          {isLoading ? 'Checking session...' : isRedirecting ? 'Redirecting to Google...' : 'Continue with Google'}
         </button>
 
-        <p className="mt-6 text-center text-xs text-gray-500">
+        <p className="mt-6 text-center text-xs text-slate-500">
           By signing in, you agree to our Terms of Service and Privacy Policy.
         </p>
       </div>

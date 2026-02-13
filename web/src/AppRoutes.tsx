@@ -1,5 +1,5 @@
 import type { ComponentProps, ReactNode } from 'react';
-import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import {
   Homepage,
   GettingStarted,
@@ -29,6 +29,7 @@ import type {
 } from './equipmentTypes';
 import type { Aircraft } from './aircraftTypes';
 import type { GearCatalogItem } from './gearCatalogTypes';
+import { buildLoginPath, getCurrentPathWithSearchAndHash } from './authRouting';
 
 interface AppRoutesProps {
   isAuthenticated: boolean;
@@ -70,6 +71,39 @@ interface AppRoutesProps {
   onRadioError: (message: string) => void;
   onBatteryError: (message: string) => void;
   onSelectPilot: (pilotId: string) => void;
+}
+
+interface RequireAuthRouteProps {
+  isAuthenticated: boolean;
+  authLoading: boolean;
+  loadingFallback: ReactNode;
+}
+
+function RequireAuthRoute({
+  isAuthenticated,
+  authLoading,
+  loadingFallback,
+}: RequireAuthRouteProps) {
+  const location = useLocation();
+
+  if (authLoading) {
+    return <>{loadingFallback}</>;
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <Navigate
+        to={buildLoginPath(getCurrentPathWithSearchAndHash({
+          pathname: location.pathname,
+          search: location.search,
+          hash: location.hash,
+        }))}
+        replace
+      />
+    );
+  }
+
+  return <Outlet />;
 }
 
 export function AppRoutes({
@@ -141,15 +175,98 @@ export function AppRoutes({
         }
       />
       <Route
-        path="/dashboard"
-        element={
-          authLoading
-            ? protectedFallback
-            : isAuthenticated
-              ? dashboardElement
-              : <Navigate to="/" replace />
-        }
-      />
+        element={(
+          <RequireAuthRoute
+            isAuthenticated={isAuthenticated}
+            authLoading={authLoading}
+            loadingFallback={protectedFallback}
+          />
+        )}
+      >
+        <Route
+          path="/dashboard"
+          element={dashboardElement}
+        />
+        <Route
+          path="/inventory"
+          element={
+            <InventoryPage
+              inventoryCategory={inventoryCategory}
+              inventorySummary={inventorySummary}
+              inventoryItems={inventoryItems}
+              isInventoryLoading={isInventoryLoading}
+              inventoryHasLoaded={inventoryHasLoaded}
+              inventoryError={inventoryError}
+              onInventoryCategoryFilterChange={onInventoryCategoryFilterChange}
+              onAddItem={onAddInventoryItem}
+              onOpenItem={onOpenInventoryItem}
+            />
+          }
+        />
+        <Route path="/me/builds" element={<MyBuildsPage />} />
+        <Route
+          path="/aircraft"
+          element={
+            <AircraftPage
+              aircraftItems={aircraftItems}
+              isAircraftLoading={isAircraftLoading}
+              aircraftError={aircraftError}
+              onSelectAircraft={onSelectAircraft}
+              onEditAircraft={onEditAircraft}
+              onDeleteAircraft={onDeleteAircraft}
+              onAddAircraft={onAddAircraft}
+            />
+          }
+        />
+        <Route
+          path="/radio"
+          element={(
+            <RadioSection
+              onError={onRadioError}
+            />
+          )}
+        />
+        <Route
+          path="/batteries"
+          element={(
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+              <BatterySection
+                onError={onBatteryError}
+              />
+            </div>
+          )}
+        />
+        <Route path="/profile" element={<MyProfile />} />
+        <Route
+          path="/social"
+          element={
+            <SocialPage
+              onSelectPilot={onSelectPilot}
+            />
+          }
+        />
+        <Route
+          path="/admin/content"
+          element={
+            <AdminGearModeration
+              hasContentAdminAccess={Boolean(user?.isAdmin || user?.isContentAdmin || user?.isGearAdmin)}
+              authLoading={authLoading}
+            />
+          }
+        />
+        <Route path="/admin" element={<Navigate to="/admin/content" replace />} />
+        <Route path="/admin/gear" element={<Navigate to="/admin/content" replace />} />
+        <Route
+          path="/admin/users"
+          element={
+            <AdminUserManagement
+              isAdmin={Boolean(user?.isAdmin)}
+              currentUserId={user?.id}
+              authLoading={authLoading}
+            />
+          }
+        />
+      </Route>
       <Route
         path="/news"
         element={
@@ -175,93 +292,6 @@ export function AppRoutes({
         element={
           <GearCatalogPage
             onAddToInventory={onAddToInventoryFromCatalog}
-          />
-        }
-      />
-      <Route
-        path="/inventory"
-        element={
-          <InventoryPage
-            inventoryCategory={inventoryCategory}
-            inventorySummary={inventorySummary}
-            inventoryItems={inventoryItems}
-            isInventoryLoading={isInventoryLoading}
-            inventoryHasLoaded={inventoryHasLoaded}
-            inventoryError={inventoryError}
-            onInventoryCategoryFilterChange={onInventoryCategoryFilterChange}
-            onAddItem={onAddInventoryItem}
-            onOpenItem={onOpenInventoryItem}
-          />
-        }
-      />
-      <Route
-        path="/me/builds"
-        element={
-          authLoading
-            ? protectedFallback
-            : isAuthenticated
-              ? <MyBuildsPage />
-              : <Navigate to="/" replace />
-        }
-      />
-      <Route
-        path="/aircraft"
-        element={
-          <AircraftPage
-            aircraftItems={aircraftItems}
-            isAircraftLoading={isAircraftLoading}
-            aircraftError={aircraftError}
-            onSelectAircraft={onSelectAircraft}
-            onEditAircraft={onEditAircraft}
-            onDeleteAircraft={onDeleteAircraft}
-            onAddAircraft={onAddAircraft}
-          />
-        }
-      />
-      <Route
-        path="/radio"
-        element={
-          <RadioSection
-            onError={onRadioError}
-          />
-        }
-      />
-      <Route
-        path="/batteries"
-        element={(
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-            <BatterySection
-              onError={onBatteryError}
-            />
-          </div>
-        )}
-      />
-      <Route path="/profile" element={<MyProfile />} />
-      <Route
-        path="/social"
-        element={
-          <SocialPage
-            onSelectPilot={onSelectPilot}
-          />
-        }
-      />
-      <Route
-        path="/admin/content"
-        element={
-          <AdminGearModeration
-            hasContentAdminAccess={Boolean(user?.isAdmin || user?.isContentAdmin || user?.isGearAdmin)}
-            authLoading={authLoading}
-          />
-        }
-      />
-      <Route path="/admin/gear" element={<Navigate to="/admin/content" replace />} />
-      <Route
-        path="/admin/users"
-        element={
-          <AdminUserManagement
-            isAdmin={Boolean(user?.isAdmin)}
-            currentUserId={user?.id}
-            authLoading={authLoading}
           />
         }
       />

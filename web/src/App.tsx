@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ItemDetail, AddGearModal, Sidebar, AircraftForm, AircraftDetail, AuthCallback, Dashboard, PilotProfile } from './components';
-import { LoginPage } from './components/LoginPage';
+import { ItemDetail, AddGearModal, Sidebar, AircraftForm, AircraftDetail, Dashboard, PilotProfile } from './components';
 import { AppRoutes } from './AppRoutes';
 import { getItems, getSources, refreshFeeds, RateLimitError } from './api';
 import { getInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem, getInventorySummary, addEquipmentToInventory } from './equipmentApi';
@@ -9,12 +8,11 @@ import { listAircraft, createAircraft, updateAircraft, deleteAircraft, getAircra
 import { useFilters } from './hooks';
 import { useAuth } from './hooks/useAuth';
 import { useGoogleAnalytics, trackEvent } from './hooks/useGoogleAnalytics';
+import { buildLoginPath, getCurrentPathWithSearchAndHash } from './authRouting';
 import type { FeedItem, SourceInfo, FilterParams } from './types';
 import type { EquipmentItem, InventoryItem, EquipmentCategory, AddInventoryParams, InventorySummary, AppSection } from './equipmentTypes';
 import type { Aircraft, AircraftDetailsResponse, CreateAircraftParams, UpdateAircraftParams, SetComponentParams, ReceiverConfig } from './aircraftTypes';
 import type { GearCatalogItem } from './gearCatalogTypes';
-
-type AuthModal = 'none' | 'login';
 
 const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -35,6 +33,7 @@ const pathToSection: Record<string, AppSection> = {
   '/batteries': 'batteries',
   '/social': 'social',
   '/profile': 'profile',
+  '/admin': 'admin-content',
   '/admin/content': 'admin-content',
   '/admin/gear': 'admin-content',
   '/admin/users': 'admin-users',
@@ -71,18 +70,11 @@ function App() {
   // Initialize Google Analytics and track page views
   useGoogleAnalytics();
   
-  // Check if this is the OAuth callback
-  const isAuthCallback = location.pathname === '/auth/callback';
-  
-  // Auth state - ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
+  // Auth state
   const { isAuthenticated, user, logout, isLoading: authLoading } = useAuth();
-  const [authModal, setAuthModal] = useState<AuthModal>('none');
   
   // Mobile menu state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  // Track previous auth state to detect logout
-  const [wasAuthenticated, setWasAuthenticated] = useState<boolean | null>(null);
 
   // Derive activeSection from URL path
   const activeSection: AppSection = (() => {
@@ -142,44 +134,6 @@ function App() {
   const handleNewsSearch = useCallback(() => {
     setAppliedQuery(filters.query);
   }, [filters.query]);
-
-  // Handle auth state changes for routing
-  useEffect(() => {
-    if (authLoading) return;
-    
-    // Protected paths that require authentication
-    const protectedPaths = ['/dashboard', '/me/builds', '/inventory', '/aircraft', '/radio', '/batteries', '/profile', '/social', '/admin'];
-    const isProtectedPath = protectedPaths.some(p => location.pathname.startsWith(p));
-    
-    // On initial load after auth check completes
-    if (wasAuthenticated === null) {
-      setWasAuthenticated(isAuthenticated);
-      // Only redirect if we're on the root path and authenticated
-      // This preserves the current section on refresh
-      if (isAuthenticated && location.pathname === '/') {
-        navigate('/dashboard', { replace: true });
-      }
-      // If trying to access protected path while not authenticated, show login modal
-      if (!isAuthenticated && isProtectedPath) {
-        setAuthModal('login');
-      }
-      return;
-    }
-    
-    // Detect logout: was authenticated, now not
-    if (wasAuthenticated && !isAuthenticated) {
-      navigate('/', { replace: true });
-    }
-    
-    // Detect login: was not authenticated, now is
-    if (!wasAuthenticated && isAuthenticated) {
-      if (location.pathname === '/' || location.pathname === '/getting-started') {
-        navigate('/dashboard', { replace: true });
-      }
-    }
-    
-    setWasAuthenticated(isAuthenticated);
-  }, [isAuthenticated, authLoading, wasAuthenticated, navigate, location.pathname]);
 
   // Load sources on mount
   useEffect(() => {
@@ -659,20 +613,26 @@ function App() {
     // Protected sections that require authentication
     const protectedSections = ['dashboard', 'my-builds', 'inventory', 'aircraft', 'radio', 'batteries', 'profile', 'social', 'admin-content', 'admin-users'];
     if (protectedSections.includes(section) && !isAuthenticated) {
-      setAuthModal('login');
+      navigate(buildLoginPath(sectionToPath[section]));
       return;
     }
     navigate(sectionToPath[section]);
   }, [isAuthenticated, navigate]);
 
-  // Handle logout with redirect to news feed
+  // Handle logout with redirect to home
   const handleLogout = useCallback(async () => {
     await logout();
-    // Navigation to news is handled by the auth state change effect
-  }, [logout]);
+    navigate('/', { replace: true });
+  }, [logout, navigate]);
 
   // Memoized callbacks for Sidebar to prevent re-renders
-  const handleOpenLogin = useCallback(() => setAuthModal('login'), []);
+  const handleOpenLogin = useCallback(() => {
+    navigate(buildLoginPath(getCurrentPathWithSearchAndHash({
+      pathname: location.pathname,
+      search: location.search,
+      hash: location.hash,
+    })));
+  }, [navigate, location.pathname, location.search, location.hash]);
   const handleCloseMobileMenu = useCallback(() => setIsMobileMenuOpen(false), []);
 
   const newsTopBarProps = {
@@ -713,11 +673,6 @@ function App() {
     />
   );
 
-  // Handle OAuth callback - must be after all hooks are called
-  if (isAuthCallback) {
-    return <AuthCallback />;
-  }
-
   return (
     <div className="flex h-screen supports-[height:100dvh]:h-[100dvh] bg-slate-900 text-white overflow-hidden">
       <div ref={appShellRef} className="flex flex-1 min-h-0 min-w-0">
@@ -755,7 +710,7 @@ function App() {
           user={user}
           authLoading={authLoading}
           dashboardElement={dashboardElement}
-          onOpenLogin={() => setAuthModal('login')}
+          onOpenLogin={handleOpenLogin}
           newsTopBarProps={newsTopBarProps}
           newsItems={items}
           newsSources={sources}
@@ -900,12 +855,6 @@ function App() {
         />
       )}
 
-      {/* Auth Modal */}
-      {authModal === 'login' && (
-        <LoginPage
-          onClose={() => setAuthModal('none')}
-        />
-      )}
     </div>
   );
 }
