@@ -2,6 +2,7 @@
 // Getting Started Page - Public education page for newcomers
 // ============================================================================
 // Content is structured as constants for easy future migration to CMS/JSON
+import { useEffect, useState } from 'react';
 
 interface GettingStartedProps {
   onSignIn: () => void;
@@ -122,13 +123,14 @@ interface Simulator {
   linkType: 'steam' | 'official';
 }
 
-interface YouTubeCreator {
+interface CreatorSpotlight {
   id: string;
   name: string;
   description: string;
   tags: string[];
-  url: string;
-  subscribers: string;
+  youtubeUrl?: string;
+  instagramUrl?: string;
+  subscribers?: string;
   featured?: boolean;
 }
 
@@ -262,13 +264,14 @@ const SAFETY_RULES: SafetyRule[] = [
   },
 ];
 
-const YOUTUBE_CREATORS: YouTubeCreator[] = [
+const TAKING_OFF_CREATORS: CreatorSpotlight[] = [
   {
     id: 'joshua-bardwell',
     name: 'Joshua Bardwell',
     description: 'The go-to source for FPV building, repair, configuration, and troubleshooting. Thousands of detailed tutorials.',
     tags: ['Tutorials', 'Builds', 'Troubleshooting'],
-    url: 'https://www.youtube.com/@JoshuaBardwell',
+    youtubeUrl: 'https://www.youtube.com/@JoshuaBardwell',
+    instagramUrl: undefined,
     subscribers: '500K+',
     featured: true,
   },
@@ -277,7 +280,8 @@ const YOUTUBE_CREATORS: YouTubeCreator[] = [
     name: 'Mr Steele',
     description: 'Cinematic freestyle, travel flying, mindset, and high-level setup insights from one of the most recognized pilots.',
     tags: ['Freestyle', 'Cinematic'],
-    url: 'https://www.youtube.com/@MrSteeleFPV',
+    youtubeUrl: 'https://www.youtube.com/@MrSteeleFPV',
+    instagramUrl: undefined,
     subscribers: '400K+',
   },
   {
@@ -285,7 +289,8 @@ const YOUTUBE_CREATORS: YouTubeCreator[] = [
     name: 'Drone Racing League',
     description: 'Professional FPV racing content, competitive flying highlights, and simulator crossover from the official league.',
     tags: ['Racing', 'Competition'],
-    url: 'https://www.youtube.com/@TheDroneRacingLeague',
+    youtubeUrl: 'https://www.youtube.com/@TheDroneRacingLeague',
+    instagramUrl: undefined,
     subscribers: '1M+',
   },
   {
@@ -293,7 +298,8 @@ const YOUTUBE_CREATORS: YouTubeCreator[] = [
     name: 'Nick Burns',
     description: 'Tiny whoops, small drones, and accessible freestyle flying. Great for beginners getting into micro quads.',
     tags: ['Reviews', 'Whoops', 'Beginner Friendly'],
-    url: 'https://www.youtube.com/@NickBurnsFPV',
+    youtubeUrl: 'https://www.youtube.com/@NickBurnsFPV',
+    instagramUrl: undefined,
     subscribers: '100K+',
   },
   {
@@ -301,32 +307,90 @@ const YOUTUBE_CREATORS: YouTubeCreator[] = [
     name: 'Botgrinder',
     description: 'High-energy freestyle flying with entertaining commentary and urban exploration.',
     tags: ['Freestyle', 'Entertainment'],
-    url: 'https://www.youtube.com/@BOTGRINDER',
+    youtubeUrl: 'https://www.youtube.com/@BOTGRINDER',
+    instagramUrl: undefined,
     subscribers: '200K+',
+  },
+  {
+    id: 'mads',
+    name: 'Mads',
+    description: 'Deep technical reviews, builds, and component analysis with thorough testing methodology.',
+    tags: ['Technical', 'Reviews'],
+    youtubeUrl: 'https://youtube.com/@madrc?si=09AIH8jg7Hbxun_A',
+    instagramUrl: undefined,
+    subscribers: '82.4K',
+  },
+  {
+    id: 'colibri',
+    name: 'Colibri',
+    description: 'Creative FPV flying and community-focused content with a strong freestyle style.',
+    tags: ['Freestyle', 'Community'],
+    youtubeUrl: 'https://youtube.com/@colibrifpv?si=4VrnckgwbuExB7rC',
+    instagramUrl: undefined,
+    subscribers: '33.8K',
+  },
+  {
+    id: 'kai-vertigoh',
+    name: 'Kai Vertigoh',
+    description: 'Precision freestyle and dynamic flying lines with educational insights.',
+    tags: ['Freestyle', 'Technique'],
+    youtubeUrl: 'https://youtube.com/@kaivertigoh?si=MDRinuur-FaUJX7C',
+    instagramUrl: undefined,
+    subscribers: '260K',
+  },
+  {
+    id: 'rimzler',
+    name: 'Rimzler',
+    description: 'Fast-paced FPV content and pilot perspective sessions for improving control.',
+    tags: ['Freestyle', 'Pilot POV'],
+    youtubeUrl: 'https://youtube.com/@rimzler?si=JGYhxU8nfnhiMSjf',
+    instagramUrl: undefined,
+    subscribers: '37.6K',
+  },
+  {
+    id: 'hurricanefpv',
+    name: 'Hurricanefpv',
+    description: 'FPV progression, flights, and practical drone-focused content.',
+    tags: ['Progression', 'FPV'],
+    youtubeUrl: 'https://youtube.com/@fpvdrone-l7b?si=HHgrjlOSJiZ5Pfx4',
+    instagramUrl: undefined,
+    subscribers: '1.97K',
+  },
+  {
+    id: 'brodie-reed',
+    name: 'Brodie Reed',
+    description: 'Freestyle sessions and drone storytelling from locations around the world.',
+    tags: ['Freestyle', 'Storytelling'],
+    youtubeUrl: 'https://youtube.com/@brodiereed?si=chHjaxMhLjCMLuQD',
+    instagramUrl: undefined,
+    subscribers: '40.2K',
   },
   {
     id: 'le-drib',
     name: 'Le Drib',
     description: 'Adventure-oriented, cinematic freestyle FPV with stunning locations and smooth flying.',
     tags: ['Cinematic', 'Exploration'],
-    url: 'https://www.youtube.com/@LeDrib',
-    subscribers: '300K+',
+    youtubeUrl: 'https://www.youtube.com/@LeDribFPV',
+    instagramUrl: undefined,
+    subscribers: '103K',
   },
   {
-    id: 'mads-tech',
-    name: 'Mads Tech',
-    description: 'Deep technical reviews, builds, and component analysis with thorough testing methodology.',
-    tags: ['Technical', 'Reviews'],
-    url: 'https://www.youtube.com/@MadsTech',
-    subscribers: '100K+',
+    id: 'bubby-fpv',
+    name: 'Bubby FPV',
+    description: 'Cinematic FPV sessions, creative edits, and storytelling-driven flight content.',
+    tags: ['Cinematic', 'Freestyle'],
+    youtubeUrl: 'https://www.youtube.com/@BubbyFPV',
+    instagramUrl: undefined,
+    subscribers: '20.5K',
   },
   {
-    id: 'minchan-fpv',
-    name: 'MinChan FPV',
-    description: 'High-skill, fast-paced freestyle flying pushing the limits of what\'s possible.',
-    tags: ['Advanced Freestyle'],
-    url: 'https://www.youtube.com/@MinChanKim',
-    subscribers: '100K+',
+    id: 'captain-vanover',
+    name: 'Captain Vanover',
+    description: 'Freestyle flying, tutorials, and practical FPV tips from years of field experience.',
+    tags: ['Freestyle', 'Tutorials'],
+    youtubeUrl: 'https://www.youtube.com/@captainvanover',
+    instagramUrl: undefined,
+    subscribers: '52.8K',
   },
 ];
 
@@ -479,39 +543,67 @@ function SimulatorCard({ sim }: { sim: Simulator }) {
   );
 }
 
-function CreatorCard({ creator }: { creator: YouTubeCreator }) {
+function SocialIcon({ platform }: { platform: 'youtube' | 'instagram' }) {
+  if (platform === 'youtube') {
+    return (
+      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+      </svg>
+    );
+  }
+
   return (
-    <a
-      href={creator.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={`block bg-slate-800 border rounded-xl p-5 hover:border-slate-500 transition-colors group ${
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M7.75 2h8.5A5.75 5.75 0 0 1 22 7.75v8.5A5.75 5.75 0 0 1 16.25 22h-8.5A5.75 5.75 0 0 1 2 16.25v-8.5A5.75 5.75 0 0 1 7.75 2Zm0 1.5A4.25 4.25 0 0 0 3.5 7.75v8.5a4.25 4.25 0 0 0 4.25 4.25h8.5a4.25 4.25 0 0 0 4.25-4.25v-8.5a4.25 4.25 0 0 0-4.25-4.25h-8.5ZM17 6.25a1 1 0 1 1 0 2 1 1 0 0 1 0-2ZM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm0 1.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/>
+    </svg>
+  );
+}
+
+function getCreatorSocialLinks(creator: CreatorSpotlight): Array<{ platform: 'youtube' | 'instagram'; url: string }> {
+  const socialLinks: Array<{ platform: 'youtube' | 'instagram'; url: string }> = [];
+  if (creator.youtubeUrl) {
+    socialLinks.push({ platform: 'youtube', url: creator.youtubeUrl });
+  }
+  if (creator.instagramUrl) {
+    socialLinks.push({ platform: 'instagram', url: creator.instagramUrl });
+  }
+  return socialLinks;
+}
+
+function CreatorCard({ creator, onSelect }: { creator: CreatorSpotlight; onSelect: (creator: CreatorSpotlight) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(creator)}
+      className={`block w-full text-left bg-slate-800 border rounded-xl p-5 hover:border-slate-500 transition-colors group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/80 ${
         creator.featured
           ? 'border-primary-500/50 ring-1 ring-primary-500/20'
           : 'border-slate-700'
       }`}
-      aria-label={`Visit ${creator.name} on YouTube (opens in new tab)`}
+      aria-label={`Open creator details for ${creator.name}`}
     >
       <div className="flex items-start gap-4">
-        {/* YouTube icon */}
+        {/* Creator icon */}
         <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${
           creator.featured ? 'bg-primary-600/20' : 'bg-slate-700'
         }`}>
-          <svg className={`w-6 h-6 ${creator.featured ? 'text-primary-400' : 'text-slate-400'}`} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+          <svg className={`w-6 h-6 ${creator.featured ? 'text-primary-400' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M16 7a4 4 0 11-8 0 4 4 0 018 0ZM4 20a8 8 0 0116 0" />
           </svg>
         </div>
         
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <h4 className="text-base font-semibold text-white group-hover:text-primary-400 transition-colors">
-              {creator.name}
-            </h4>
-            {creator.featured && (
-              <span className="px-1.5 py-0.5 bg-primary-600/20 text-primary-400 text-xs font-medium rounded">
-                Essential
-              </span>
-            )}
+          <div className="flex items-start justify-between gap-3 mb-1">
+            <div className="flex items-center gap-2 min-w-0">
+              <h4 className="text-base font-semibold text-white group-hover:text-primary-400 transition-colors">
+                {creator.name}
+              </h4>
+              {creator.featured && (
+                <span className="px-1.5 py-0.5 bg-primary-600/20 text-primary-400 text-xs font-medium rounded">
+                  Essential
+                </span>
+              )}
+            </div>
           </div>
           
           <p className="text-slate-400 text-sm mb-3 line-clamp-2">
@@ -529,18 +621,92 @@ function CreatorCard({ creator }: { creator: YouTubeCreator }) {
                 </span>
               ))}
             </div>
-            <span className="text-xs text-slate-500 whitespace-nowrap">
-              {creator.subscribers} subscribers
-            </span>
+            {creator.subscribers && (
+              <span className="text-xs text-slate-500 whitespace-nowrap">
+                {creator.subscribers} subscribers
+              </span>
+            )}
           </div>
         </div>
-        
-        {/* External link indicator */}
-        <svg className="w-4 h-4 text-slate-500 group-hover:text-slate-400 transition-colors flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-        </svg>
       </div>
-    </a>
+    </button>
+  );
+}
+
+function CreatorLinksModal({ creator, onClose }: { creator: CreatorSpotlight | null; onClose: () => void }) {
+  useEffect(() => {
+    if (!creator) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleEscape);
+    return () => {
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [creator, onClose]);
+
+  if (!creator) return null;
+
+  const socialLinks = getCreatorSocialLinks(creator);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={`creator-links-title-${creator.id}`}
+        className="relative w-full max-w-md rounded-2xl border border-slate-700 bg-slate-800 p-6 shadow-2xl"
+      >
+        <button
+          onClick={onClose}
+          className="absolute right-4 top-4 rounded-lg p-2 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
+          aria-label="Close creator details"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        <h3 id={`creator-links-title-${creator.id}`} className="text-xl font-semibold text-white pr-10">
+          {creator.name}
+        </h3>
+        <p className="mt-2 text-sm text-slate-400">{creator.description}</p>
+        {creator.subscribers && (
+          <p className="mt-3 text-sm text-slate-300">
+            {creator.subscribers} subscribers
+          </p>
+        )}
+
+        <div className="mt-5 space-y-3">
+          {socialLinks.map(link => (
+            <a
+              key={link.platform}
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                link.platform === 'youtube'
+                  ? 'bg-primary-600 hover:bg-primary-500 text-white'
+                  : 'bg-slate-700 hover:bg-slate-600 text-white'
+              }`}
+            >
+              <SocialIcon platform={link.platform} />
+              {link.platform === 'youtube' ? 'Open YouTube channel' : 'Open Instagram profile'}
+            </a>
+          ))}
+          {socialLinks.length === 0 && (
+            <p className="text-sm text-slate-500">
+              No external links are available yet.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -551,6 +717,7 @@ function CreatorCard({ creator }: { creator: YouTubeCreator }) {
 export function GettingStarted({ onSignIn }: GettingStartedProps) {
   const fpvSims = SIMULATORS.filter(s => s.category === 'fpv');
   const fixedWingSims = SIMULATORS.filter(s => s.category === 'fixedwing');
+  const [selectedCreator, setSelectedCreator] = useState<CreatorSpotlight | null>(null);
 
   return (
     <div className="flex-1 overflow-y-auto bg-slate-900">
@@ -664,13 +831,13 @@ export function GettingStarted({ onSignIn }: GettingStartedProps) {
           <div className="text-center mb-10">
             <h2 className="text-2xl md:text-3xl font-bold text-white mb-3">Learn from the pros</h2>
             <p className="text-slate-400 max-w-xl mx-auto">
-              Some of the best FPV and drone education lives on YouTube. These creators are trusted across the community.
+              Some of the best FPV and drone education lives on YouTube and Instagram. These creators are trusted across the community.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {YOUTUBE_CREATORS.map(creator => (
-              <CreatorCard key={creator.id} creator={creator} />
+            {TAKING_OFF_CREATORS.map(creator => (
+              <CreatorCard key={creator.id} creator={creator} onSelect={setSelectedCreator} />
             ))}
           </div>
 
@@ -775,6 +942,11 @@ export function GettingStarted({ onSignIn }: GettingStartedProps) {
           </button>
         </div>
       </section>
+
+      <CreatorLinksModal
+        creator={selectedCreator}
+        onClose={() => setSelectedCreator(null)}
+      />
 
       {/* Footer */}
       <footer className="px-6 py-8 border-t border-slate-800 bg-slate-900">
