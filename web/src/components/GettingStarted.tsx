@@ -2,7 +2,7 @@
 // Getting Started Page - Public education page for newcomers
 // ============================================================================
 // Content is structured as constants for easy future migration to CMS/JSON
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface GettingStartedProps {
   onSignIn: () => void;
@@ -271,7 +271,6 @@ const TAKING_OFF_CREATORS: CreatorSpotlight[] = [
     description: 'The go-to source for FPV building, repair, configuration, and troubleshooting. Thousands of detailed tutorials.',
     tags: ['Tutorials', 'Builds', 'Troubleshooting'],
     youtubeUrl: 'https://www.youtube.com/@JoshuaBardwell',
-    instagramUrl: undefined,
     subscribers: '500K+',
     featured: true,
   },
@@ -281,7 +280,6 @@ const TAKING_OFF_CREATORS: CreatorSpotlight[] = [
     description: 'Cinematic freestyle, travel flying, mindset, and high-level setup insights from one of the most recognized pilots.',
     tags: ['Freestyle', 'Cinematic'],
     youtubeUrl: 'https://www.youtube.com/@MrSteeleFPV',
-    instagramUrl: undefined,
     subscribers: '400K+',
   },
   {
@@ -290,7 +288,6 @@ const TAKING_OFF_CREATORS: CreatorSpotlight[] = [
     description: 'Professional FPV racing content, competitive flying highlights, and simulator crossover from the official league.',
     tags: ['Racing', 'Competition'],
     youtubeUrl: 'https://www.youtube.com/@TheDroneRacingLeague',
-    instagramUrl: undefined,
     subscribers: '1M+',
   },
   {
@@ -299,7 +296,6 @@ const TAKING_OFF_CREATORS: CreatorSpotlight[] = [
     description: 'Tiny whoops, small drones, and accessible freestyle flying. Great for beginners getting into micro quads.',
     tags: ['Reviews', 'Whoops', 'Beginner Friendly'],
     youtubeUrl: 'https://www.youtube.com/@NickBurnsFPV',
-    instagramUrl: undefined,
     subscribers: '100K+',
   },
   {
@@ -308,7 +304,6 @@ const TAKING_OFF_CREATORS: CreatorSpotlight[] = [
     description: 'High-energy freestyle flying with entertaining commentary and urban exploration.',
     tags: ['Freestyle', 'Entertainment'],
     youtubeUrl: 'https://www.youtube.com/@BOTGRINDER',
-    instagramUrl: undefined,
     subscribers: '200K+',
   },
   {
@@ -317,7 +312,6 @@ const TAKING_OFF_CREATORS: CreatorSpotlight[] = [
     description: 'Deep technical reviews, builds, and component analysis with thorough testing methodology.',
     tags: ['Technical', 'Reviews'],
     youtubeUrl: 'https://youtube.com/@madrc?si=09AIH8jg7Hbxun_A',
-    instagramUrl: undefined,
     subscribers: '82.4K',
   },
   {
@@ -326,7 +320,6 @@ const TAKING_OFF_CREATORS: CreatorSpotlight[] = [
     description: 'Creative FPV flying and community-focused content with a strong freestyle style.',
     tags: ['Freestyle', 'Community'],
     youtubeUrl: 'https://youtube.com/@colibrifpv?si=4VrnckgwbuExB7rC',
-    instagramUrl: undefined,
     subscribers: '33.8K',
   },
   {
@@ -335,7 +328,6 @@ const TAKING_OFF_CREATORS: CreatorSpotlight[] = [
     description: 'Precision freestyle and dynamic flying lines with educational insights.',
     tags: ['Freestyle', 'Technique'],
     youtubeUrl: 'https://youtube.com/@kaivertigoh?si=MDRinuur-FaUJX7C',
-    instagramUrl: undefined,
     subscribers: '260K',
   },
   {
@@ -344,7 +336,6 @@ const TAKING_OFF_CREATORS: CreatorSpotlight[] = [
     description: 'Fast-paced FPV content and pilot perspective sessions for improving control.',
     tags: ['Freestyle', 'Pilot POV'],
     youtubeUrl: 'https://youtube.com/@rimzler?si=JGYhxU8nfnhiMSjf',
-    instagramUrl: undefined,
     subscribers: '37.6K',
   },
   {
@@ -353,7 +344,6 @@ const TAKING_OFF_CREATORS: CreatorSpotlight[] = [
     description: 'FPV progression, flights, and practical drone-focused content.',
     tags: ['Progression', 'FPV'],
     youtubeUrl: 'https://youtube.com/@fpvdrone-l7b?si=HHgrjlOSJiZ5Pfx4',
-    instagramUrl: undefined,
     subscribers: '1.97K',
   },
   {
@@ -362,7 +352,6 @@ const TAKING_OFF_CREATORS: CreatorSpotlight[] = [
     description: 'Freestyle sessions and drone storytelling from locations around the world.',
     tags: ['Freestyle', 'Storytelling'],
     youtubeUrl: 'https://youtube.com/@brodiereed?si=chHjaxMhLjCMLuQD',
-    instagramUrl: undefined,
     subscribers: '40.2K',
   },
   {
@@ -371,7 +360,6 @@ const TAKING_OFF_CREATORS: CreatorSpotlight[] = [
     description: 'Adventure-oriented, cinematic freestyle FPV with stunning locations and smooth flying.',
     tags: ['Cinematic', 'Exploration'],
     youtubeUrl: 'https://www.youtube.com/@LeDribFPV',
-    instagramUrl: undefined,
     subscribers: '103K',
   },
   {
@@ -380,7 +368,6 @@ const TAKING_OFF_CREATORS: CreatorSpotlight[] = [
     description: 'Cinematic FPV sessions, creative edits, and storytelling-driven flight content.',
     tags: ['Cinematic', 'Freestyle'],
     youtubeUrl: 'https://www.youtube.com/@BubbyFPV',
-    instagramUrl: undefined,
     subscribers: '20.5K',
   },
   {
@@ -389,7 +376,6 @@ const TAKING_OFF_CREATORS: CreatorSpotlight[] = [
     description: 'Freestyle flying, tutorials, and practical FPV tips from years of field experience.',
     tags: ['Freestyle', 'Tutorials'],
     youtubeUrl: 'https://www.youtube.com/@captainvanover',
-    instagramUrl: undefined,
     subscribers: '52.8K',
   },
 ];
@@ -634,18 +620,68 @@ function CreatorCard({ creator, onSelect }: { creator: CreatorSpotlight; onSelec
 }
 
 function CreatorLinksModal({ creator, onClose }: { creator: CreatorSpotlight | null; onClose: () => void }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
     if (!creator) return;
 
-    const handleEscape = (event: KeyboardEvent) => {
+    previouslyFocusedElementRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    const getFocusableElements = () =>
+      Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      );
+
+    const initialFocusTarget = closeButtonRef.current ?? getFocusableElements()[0] ?? dialog;
+    initialFocusTarget.focus();
+
+    const handleDialogKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        event.preventDefault();
         onClose();
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+
+      const focusableElements = getFocusableElements();
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+      const activeElement = document.activeElement;
+
+      if (event.shiftKey) {
+        if (activeElement === firstElement || activeElement === dialog) {
+          event.preventDefault();
+          lastElement.focus();
+        }
+        return;
+      }
+
+      if (activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
       }
     };
 
-    window.addEventListener('keydown', handleEscape);
+    dialog.addEventListener('keydown', handleDialogKeyDown);
     return () => {
-      window.removeEventListener('keydown', handleEscape);
+      dialog.removeEventListener('keydown', handleDialogKeyDown);
+      previouslyFocusedElementRef.current?.focus();
+      previouslyFocusedElementRef.current = null;
     };
   }, [creator, onClose]);
 
@@ -657,12 +693,15 @@ function CreatorLinksModal({ creator, onClose }: { creator: CreatorSpotlight | n
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={`creator-links-title-${creator.id}`}
-        className="relative w-full max-w-md rounded-2xl border border-slate-700 bg-slate-800 p-6 shadow-2xl"
+        tabIndex={-1}
+        className="relative w-full max-w-md rounded-2xl border border-slate-700 bg-slate-800 p-6 shadow-2xl focus:outline-none"
       >
         <button
+          ref={closeButtonRef}
           onClick={onClose}
           className="absolute right-4 top-4 rounded-lg p-2 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
           aria-label="Close creator details"
@@ -718,6 +757,9 @@ export function GettingStarted({ onSignIn }: GettingStartedProps) {
   const fpvSims = SIMULATORS.filter(s => s.category === 'fpv');
   const fixedWingSims = SIMULATORS.filter(s => s.category === 'fixedwing');
   const [selectedCreator, setSelectedCreator] = useState<CreatorSpotlight | null>(null);
+  const closeCreatorModal = useCallback(() => {
+    setSelectedCreator(null);
+  }, []);
 
   return (
     <div className="flex-1 overflow-y-auto bg-slate-900">
@@ -945,7 +987,7 @@ export function GettingStarted({ onSignIn }: GettingStartedProps) {
 
       <CreatorLinksModal
         creator={selectedCreator}
-        onClose={() => setSelectedCreator(null)}
+        onClose={closeCreatorModal}
       />
 
       {/* Footer */}
