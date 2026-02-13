@@ -1,4 +1,4 @@
-import { createContext, useReducer, useEffect, useCallback } from 'react';
+import { createContext, useReducer, useEffect, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
 import type {
   AuthState,
@@ -9,6 +9,37 @@ import type {
 } from '../authTypes';
 import * as authApi from '../authApi';
 import { trackEvent } from '../hooks/useGoogleAnalytics';
+import { dispatchAuthExpired, getCurrentPathWithSearchAndHash } from '../authRouting';
+
+function requestHasAuthorizationHeader(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): boolean {
+  const initHeaders = new Headers(init?.headers ?? {});
+  if (initHeaders.has('Authorization')) {
+    return true;
+  }
+
+  if (input instanceof Request) {
+    return input.headers.has('Authorization');
+  }
+
+  return false;
+}
+
+function getRequestPathname(input: RequestInfo | URL): string | null {
+  const rawUrl = typeof input === 'string'
+    ? input
+    : input instanceof URL
+      ? input.toString()
+      : input.url;
+
+  try {
+    return new URL(rawUrl, window.location.origin).pathname;
+  } catch {
+    return null;
+  }
+}
 
 // Initial state
 const initialState: AuthState = {
@@ -83,6 +114,50 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [state, dispatch] = useReducer(authReducer, initialState);
+  const authFailureHandledRef = useRef(false);
+
+  const handleSessionExpired = useCallback(() => {
+    if (authFailureHandledRef.current) {
+      return;
+    }
+
+    authFailureHandledRef.current = true;
+    authApi.clearStoredTokens();
+    dispatch({ type: 'AUTH_LOGOUT' });
+
+    if (window.location.pathname !== '/login' && window.location.pathname !== '/auth/callback') {
+      dispatchAuthExpired(getCurrentPathWithSearchAndHash());
+    }
+  }, []);
+
+  useEffect(() => {
+    const originalFetch = window.fetch.bind(window);
+
+    const wrappedFetch: typeof window.fetch = async (input, init) => {
+      const response = await originalFetch(input, init);
+
+      if (response.status === 401 && requestHasAuthorizationHeader(input, init)) {
+        const requestPathname = getRequestPathname(input);
+        if (requestPathname !== '/api/auth/logout') {
+          handleSessionExpired();
+        }
+      }
+
+      return response;
+    };
+
+    window.fetch = wrappedFetch;
+
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, [handleSessionExpired]);
+
+  useEffect(() => {
+    if (state.isAuthenticated) {
+      authFailureHandledRef.current = false;
+    }
+  }, [state.isAuthenticated]);
 
   // Check for existing session on mount
   useEffect(() => {

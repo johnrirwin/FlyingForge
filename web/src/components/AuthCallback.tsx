@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { storeTokens, getCurrentUser } from '../authApi';
+import { consumePendingLoginNext, sanitizeNextPath } from '../authRouting';
+import { clearStoredTokens, getCurrentUser, storeTokens } from '../authApi';
 
 export function AuthCallback() {
   const [error, setError] = useState<string | null>(null);
@@ -9,10 +10,9 @@ export function AuthCallback() {
     const handleCallback = async () => {
       // Get tokens from URL fragment
       const hash = window.location.hash.substring(1);
-      const params = new URLSearchParams(hash);
-      
-      const accessToken = params.get('access_token');
-      const refreshToken = params.get('refresh_token');
+      const hashParams = new URLSearchParams(hash);
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
 
       // Check for error in query params
       const searchParams = new URLSearchParams(window.location.search);
@@ -31,6 +31,10 @@ export function AuthCallback() {
         return;
       }
 
+      const searchNextPath = searchParams.get('next');
+      const pendingNextPath = consumePendingLoginNext();
+      const nextPath = sanitizeNextPath(searchNextPath ?? pendingNextPath ?? '/dashboard');
+
       try {
         // Store tokens using the authApi function
         storeTokens({
@@ -39,14 +43,15 @@ export function AuthCallback() {
           tokenType: 'Bearer',
           expiresIn: 3600,
         });
-        
+
         // Verify tokens work by fetching user - this ensures tokens are valid
         await getCurrentUser();
-        
+
         // Small delay to ensure localStorage is synced, then redirect
         await new Promise(resolve => setTimeout(resolve, 100));
-        window.location.replace('/');
+        window.location.replace(nextPath);
       } catch (err) {
+        clearStoredTokens();
         setError(err instanceof Error ? err.message : 'Authentication failed');
         setIsProcessing(false);
       }
@@ -62,10 +67,10 @@ export function AuthCallback() {
           <h2 className="text-xl font-bold text-white mb-4">Authentication Error</h2>
           <p className="text-red-400 mb-4">{error}</p>
           <button
-            onClick={() => window.location.href = '/'}
+            onClick={() => window.location.assign('/login')}
             className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
           >
-            Return to Home
+            Return to Sign In
           </button>
         </div>
       </div>
