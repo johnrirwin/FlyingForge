@@ -2,6 +2,7 @@ package aggregator
 
 import (
 	"context"
+	"encoding/json"
 	"sort"
 	"strings"
 	"sync"
@@ -12,6 +13,11 @@ import (
 	"github.com/johnrirwin/flyingforge/internal/models"
 	"github.com/johnrirwin/flyingforge/internal/sources"
 	"github.com/johnrirwin/flyingforge/internal/tagging"
+)
+
+const (
+	allItemsCacheKey = "all_items"
+	allItemsCacheTTL = 36 * time.Hour
 )
 
 type Aggregator struct {
@@ -86,7 +92,9 @@ func (a *Aggregator) Refresh(ctx context.Context) error {
 	a.items = dedupedItems
 	a.mu.Unlock()
 
-	a.cache.Set("all_items", dedupedItems)
+	if a.cache != nil {
+		a.cache.SetWithTTL(allItemsCacheKey, dedupedItems, allItemsCacheTTL)
+	}
 
 	a.logger.Info("Aggregation complete", logging.WithFields(map[string]interface{}{
 		"total_items":  len(dedupedItems),
@@ -100,6 +108,17 @@ func (a *Aggregator) GetItems(params models.FilterParams) models.AggregatedRespo
 	a.mu.RLock()
 	items := a.items
 	a.mu.RUnlock()
+
+	if len(items) == 0 {
+		if cachedItems, ok := a.loadItemsFromCache(); ok {
+			a.mu.Lock()
+			if len(a.items) == 0 {
+				a.items = cachedItems
+			}
+			items = a.items
+			a.mu.Unlock()
+		}
+	}
 
 	filtered := a.filterItems(items, params)
 	total := len(filtered)
@@ -123,6 +142,38 @@ func (a *Aggregator) GetItems(params models.FilterParams) models.AggregatedRespo
 		FetchedAt:   time.Now(),
 		SourceCount: len(a.fetchers),
 	}
+}
+
+func (a *Aggregator) loadItemsFromCache() ([]models.FeedItem, bool) {
+	if a.cache == nil {
+		return nil, false
+	}
+
+	cached, ok := a.cache.Get(allItemsCacheKey)
+	if !ok || cached == nil {
+		return nil, false
+	}
+
+	items, ok := cached.([]models.FeedItem)
+	if ok {
+		return items, true
+	}
+
+	raw, err := json.Marshal(cached)
+	if err != nil {
+		return nil, false
+	}
+
+	var decoded []models.FeedItem
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return nil, false
+	}
+
+	if len(decoded) == 0 {
+		return nil, false
+	}
+
+	return decoded, true
 }
 
 func (a *Aggregator) GetSources() []models.SourceInfo {

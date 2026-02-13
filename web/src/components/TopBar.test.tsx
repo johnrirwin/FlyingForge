@@ -16,9 +16,6 @@ describe('TopBar', () => {
     onSortChange: vi.fn(),
     sourceType: 'all' as const,
     onSourceTypeChange: vi.fn(),
-    onRefresh: vi.fn(),
-    isRefreshing: false,
-    refreshCooldown: 0,
     totalCount: 42,
   }
 
@@ -141,22 +138,8 @@ describe('TopBar', () => {
     expect(screen.getByText(/123/)).toBeInTheDocument()
   })
 
-  it('calls onRefresh when refresh button clicked', () => {
-    const onRefresh = vi.fn()
-    render(<TopBar {...defaultProps} onRefresh={onRefresh} />)
-
-    // Find the refresh button by its text or nearby text
-    const refreshButton = screen.getByRole('button', { name: /refresh/i })
-    fireEvent.click(refreshButton)
-
-    expect(onRefresh).toHaveBeenCalled()
-  })
-
-  it('shows refreshing state', () => {
-    const { container } = render(<TopBar {...defaultProps} isRefreshing={true} />)
-
-    // Should show spinning animation
-    const spinner = container.querySelector('.animate-spin')
-    expect(spinner).toBeInTheDocument()
+  it('does not render a manual refresh button', () => {
+    render(<TopBar {...defaultProps} />)
+    expect(screen.queryByRole('button', { name: /refresh/i })).not.toBeInTheDocument()
   })
 })

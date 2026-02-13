@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ItemDetail, AddGearModal, Sidebar, AircraftForm, AircraftDetail, Dashboard, PilotProfile } from './components';
 import { AppRoutes } from './AppRoutes';
-import { getItems, getSources, refreshFeeds, RateLimitError } from './api';
+import { getItems, getSources } from './api';
 import { getInventory, addInventoryItem, updateInventoryItem, deleteInventoryItem, getInventorySummary, addEquipmentToInventory } from './equipmentApi';
 import { listAircraft, createAircraft, updateAircraft, deleteAircraft, getAircraftDetails, setAircraftComponent, setReceiverSettings } from './aircraftApi';
 import { useFilters } from './hooks';
@@ -89,9 +89,6 @@ function App() {
   const [selectedItem, setSelectedItem] = useState<FeedItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [refreshCooldown, setRefreshCooldown] = useState(0);
-  const cooldownIntervalRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState(0);
   const [currentOffset, setCurrentOffset] = useState(0);
@@ -299,95 +296,6 @@ function App() {
 
     loadAircraft();
   }, [activeSection, isAuthenticated]);
-
-  // Start cooldown timer
-  const startCooldown = useCallback((seconds: number) => {
-    setRefreshCooldown(seconds);
-    
-    // Clear any existing interval
-    if (cooldownIntervalRef.current) {
-      clearInterval(cooldownIntervalRef.current);
-    }
-    
-    // Start countdown
-    cooldownIntervalRef.current = window.setInterval(() => {
-      setRefreshCooldown(prev => {
-        if (prev <= 1) {
-          if (cooldownIntervalRef.current) {
-            clearInterval(cooldownIntervalRef.current);
-            cooldownIntervalRef.current = null;
-          }
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  }, []);
-
-  // Cleanup cooldown interval on unmount
-  useEffect(() => {
-    return () => {
-      if (cooldownIntervalRef.current) {
-        clearInterval(cooldownIntervalRef.current);
-      }
-    };
-  }, []);
-
-  // Refresh handler
-  const handleRefresh = useCallback(async () => {
-    setIsRefreshing(true);
-    setError(null);
-
-    try {
-      // First, trigger the backend to refresh feeds from sources
-      await refreshFeeds(
-        filters.sources.length > 0 ? filters.sources : undefined
-      );
-      
-      // Reset infinite scroll state
-      setCurrentOffset(0);
-      
-      // Then re-fetch items with current filters
-      const params: FilterParams = {
-        limit: ITEMS_PER_PAGE,
-        sort: filters.sort,
-      };
-
-      if (filters.sources.length > 0) {
-        params.sources = filters.sources;
-      }
-
-      if (filters.sourceType !== 'all') {
-        params.sourceType = filters.sourceType;
-      }
-
-      if (appliedQuery) {
-        params.query = appliedQuery;
-      }
-
-      if (filters.fromDate) {
-        params.fromDate = filters.fromDate;
-      }
-
-      if (filters.toDate) {
-        params.toDate = filters.toDate;
-      }
-
-      const response = await getItems(params);
-      setItems(response.items || []);
-      setTotalCount(response.totalCount || 0);
-      setCurrentOffset(ITEMS_PER_PAGE);
-    } catch (err) {
-      if (err instanceof RateLimitError) {
-        // Start 2 minute cooldown
-        startCooldown(120);
-      } else {
-        setError(err instanceof Error ? err.message : 'Failed to refresh feeds');
-      }
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [filters.sources, filters.sourceType, filters.sort, filters.fromDate, filters.toDate, appliedQuery, startCooldown]);
 
   // Inventory category filter handler
   const handleInventoryCategoryFilterChange = useCallback((category: EquipmentCategory | null) => {
@@ -647,9 +555,6 @@ function App() {
     onSortChange: (s: 'newest' | 'score') => updateFilter('sort', s),
     sourceType: filters.sourceType,
     onSourceTypeChange: (t: typeof filters.sourceType) => updateFilter('sourceType', t),
-    onRefresh: handleRefresh,
-    isRefreshing,
-    refreshCooldown,
     totalCount,
   };
 

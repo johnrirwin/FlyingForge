@@ -13,9 +13,6 @@ interface TopBarProps {
   onSortChange: (sort: 'newest' | 'score') => void;
   sourceType: SourceType | 'all';
   onSourceTypeChange: (type: SourceType | 'all') => void;
-  onRefresh: () => void;
-  isRefreshing: boolean;
-  refreshCooldown: number; // seconds remaining
   totalCount: number;
   isCollapsed?: boolean; // External control for mobile collapse
 }
@@ -32,9 +29,6 @@ export function TopBar({
   onSortChange,
   sourceType,
   onSourceTypeChange,
-  onRefresh,
-  isRefreshing,
-  refreshCooldown,
   totalCount,
   isCollapsed = false,
 }: TopBarProps) {
@@ -42,21 +36,6 @@ export function TopBar({
 
   // Show filters when not collapsed (at top of scroll)
   const showFilters = !isCollapsed;
-
-  // Format cooldown time as M:SS
-  const formatCooldown = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const isRefreshDisabled = isRefreshing || refreshCooldown > 0;
-
-  const getRefreshButtonText = () => {
-    if (isRefreshing) return 'Refreshing...';
-    if (refreshCooldown > 0) return `Refresh (${formatCooldown(refreshCooldown)})`;
-    return 'Refresh';
-  };
 
   // Handle enter key in search
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -216,28 +195,6 @@ export function TopBar({
             </button>
           </div>
         </div>
-
-        {/* Refresh */}
-        <button
-          onClick={onRefresh}
-          disabled={isRefreshDisabled}
-          className="flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-1.5 md:py-2 bg-primary-600 hover:bg-primary-700 disabled:bg-primary-800 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors"
-        >
-          <svg
-            className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-            />
-          </svg>
-          <span className="hidden sm:inline">{getRefreshButtonText()}</span>
-        </button>
 
         {/* Count */}
         <div className="text-xs md:text-sm text-slate-400 ml-auto md:ml-0">

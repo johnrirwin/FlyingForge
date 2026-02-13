@@ -21,6 +21,24 @@ web_cpu              = 256
 web_memory           = 512
 server_desired_count = 2
 web_desired_count    = 2
+news_refresh_cpu     = 256
+news_refresh_memory  = 512
+
+# Scheduled one-shot feed refresh (4:00 PM in configured timezone).
+enable_scheduled_news_refresh = true
+news_refresh_schedule_expression = "cron(0 16 * * ? *)"
+news_refresh_schedule_timezone   = "America/New_York"
+
+# NAT optimization: bypass NAT for AWS service traffic from private subnets.
+enable_vpc_endpoints    = true
+enable_kms_vpc_endpoint = true
+
+# Optional endpoint policy extensions (add only when needed).
+# vpc_endpoint_subnet_ids               = []
+# additional_ecr_repository_arns        = []
+# additional_cloudwatch_log_group_arns  = []
+# additional_secretsmanager_secret_arns = []
+# additional_s3_gateway_bucket_arns     = []
 
 # Domain (optional - leave empty if not using custom domain)
 domain_name       = ""

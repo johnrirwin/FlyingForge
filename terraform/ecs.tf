@@ -166,6 +166,10 @@ resource "aws_ecs_task_definition" "server" {
           value = "8080"
         },
         {
+          name  = "ENABLE_MANUAL_REFRESH"
+          value = "false"
+        },
+        {
           name  = "ENVIRONMENT"
           value = var.environment
         },

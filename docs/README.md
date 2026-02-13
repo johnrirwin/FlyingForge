@@ -8,6 +8,7 @@ This folder contains project documentation organized by scope.
 docs/
 ├── README.md           # This file
 ├── WORKFLOW.md         # AI-augmented development workflow (global)
+├── NAT_GATEWAY_COST_OPTIMIZATION.md # NAT/endpoint/scheduler cost optimization runbook
 ├── server/             # Backend-specific documentation
 │   └── ARCHITECTURE.md # Server architecture and API reference
 └── web/                # Frontend-specific documentation
@@ -17,6 +18,7 @@ docs/
 ## Global Documentation
 
 - [WORKFLOW.md](./WORKFLOW.md) - AI-augmented product development workflow
+- [NAT_GATEWAY_COST_OPTIMIZATION.md](./NAT_GATEWAY_COST_OPTIMIZATION.md) - NAT Gateway and feed refresh cost optimization rollout
 
 ## Server Documentation
 

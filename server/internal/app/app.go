@@ -94,6 +94,9 @@ func New(cfg *config.Config) (*App, error) {
 
 // Run starts the application in the appropriate mode
 func (a *App) Run(ctx context.Context) error {
+	if a.Config.Server.RefreshOnceMode {
+		return a.runRefreshOnceMode(ctx)
+	}
 	if a.Config.Server.MCPMode {
 		return a.runMCPMode(ctx)
 	}
@@ -281,7 +284,7 @@ func (a *App) initDatabaseServices() {
 
 func (a *App) initServers() {
 	// Initialize HTTP server with auth, aircraft, radio, battery, fc-config, gear-catalog, and profile/pilot support
-	a.HTTPServer = httpapi.New(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.AircraftSvc, a.BuildSvc, a.RadioSvc, a.BatterySvc, a.AuthService, a.AuthMiddleware, a.userStore, a.aircraftStore, a.fcConfigStore, a.inventoryStore, a.gearCatalogStore, a.imageSvc, a.refreshLimiter, a.Logger)
+	a.HTTPServer = httpapi.New(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.AircraftSvc, a.BuildSvc, a.RadioSvc, a.BatterySvc, a.AuthService, a.AuthMiddleware, a.userStore, a.aircraftStore, a.fcConfigStore, a.inventoryStore, a.gearCatalogStore, a.imageSvc, a.refreshLimiter, a.Config.Server.EnableManualRefresh, a.Logger)
 
 	// Initialize MCP server
 	mcpHandler := mcp.NewHandler(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.Logger)
@@ -320,20 +323,21 @@ func (a *App) runMCPMode(ctx context.Context) error {
 func (a *App) runHTTPMode(ctx context.Context) error {
 	a.Logger.Info("Starting HTTP server", logging.WithField("addr", a.Config.Server.HTTPAddr))
 
-	// Pre-fetch feeds in background
-	go func() {
-		a.Logger.Info("Pre-fetching feeds in background...")
-		if err := a.Aggregator.Refresh(ctx); err != nil {
-			a.Logger.Warn("Initial fetch had errors", logging.WithField("error", err.Error()))
-		}
-		a.Logger.Info("Initial fetch complete")
-	}()
-
 	if a.BuildSvc != nil {
 		go a.runTempBuildCleanup(ctx)
 	}
 
 	return a.HTTPServer.Start(a.Config.Server.HTTPAddr)
+}
+
+func (a *App) runRefreshOnceMode(ctx context.Context) error {
+	a.Logger.Info("Running one-shot feed refresh")
+	if err := a.Aggregator.Refresh(ctx); err != nil {
+		a.Logger.Warn("One-shot feed refresh had errors", logging.WithField("error", err.Error()))
+		return err
+	}
+	a.Logger.Info("One-shot feed refresh complete")
+	return nil
 }
 
 func (a *App) runTempBuildCleanup(ctx context.Context) {

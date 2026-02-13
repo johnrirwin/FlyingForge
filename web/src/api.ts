@@ -2,14 +2,6 @@ import type { AggregatedResponse, FeedItem, FilterParams, SourcesResponse } from
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
-// Custom error class for rate limiting
-export class RateLimitError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'RateLimitError';
-  }
-}
-
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
@@ -21,12 +13,6 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ message: 'Request failed' }));
-    
-    // Throw specific error for rate limiting
-    if (response.status === 429) {
-      throw new RateLimitError(error.message || 'Rate limit exceeded');
-    }
-    
     throw new Error(error.message || `HTTP ${response.status}`);
   }
 
@@ -55,27 +41,6 @@ export async function getItem(id: string): Promise<FeedItem> {
 
 export async function getSources(): Promise<SourcesResponse> {
   return fetchAPI<SourcesResponse>('/api/sources');
-}
-
-export async function refreshFeeds(sources?: string[]): Promise<AggregatedResponse> {
-  // Use AbortController for timeout - refresh can take a while in production
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
-  
-  try {
-    return await fetchAPI<AggregatedResponse>('/api/refresh', {
-      method: 'POST',
-      body: JSON.stringify({ sources }),
-      signal: controller.signal,
-    });
-  } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') {
-      throw new Error('Refresh timed out - feeds may still be updating in the background');
-    }
-    throw err;
-  } finally {
-    clearTimeout(timeoutId);
-  }
 }
 
 export async function checkHealth(): Promise<{ status: string; timestamp: string }> {

@@ -51,7 +51,9 @@ resource "aws_eip" "nat" {
   domain = "vpc"
 
   tags = {
-    Name = "${var.app_name}-nat-eip-${count.index + 1}"
+    Name        = "${var.app_name}-nat-eip-${count.index + 1}"
+    Component   = "nat-gateway"
+    CostProfile = "nat-egress"
   }
 
   depends_on = [aws_internet_gateway.main]
@@ -64,7 +66,9 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public[count.index].id
 
   tags = {
-    Name = "${var.app_name}-nat-${count.index + 1}"
+    Name        = "${var.app_name}-nat-${count.index + 1}"
+    Component   = "nat-gateway"
+    CostProfile = "nat-egress"
   }
 
   depends_on = [aws_internet_gateway.main]
@@ -95,7 +99,9 @@ resource "aws_route_table" "private" {
   }
 
   tags = {
-    Name = "${var.app_name}-private-rt-${count.index + 1}"
+    Name        = "${var.app_name}-private-rt-${count.index + 1}"
+    Component   = "private-routing"
+    CostProfile = "nat-egress"
   }
 }
 

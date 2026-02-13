@@ -54,3 +54,21 @@ output "app_url" {
   description = "Application URL"
   value       = var.domain_name != "" ? "https://${var.domain_name}" : "http://${aws_lb.main.dns_name}"
 }
+
+output "vpc_endpoint_ids" {
+  description = "VPC endpoint IDs used to keep private subnet AWS traffic off NAT"
+  value = var.enable_vpc_endpoints ? merge(
+    { s3 = aws_vpc_endpoint.s3[0].id },
+    { for name, endpoint in aws_vpc_endpoint.interface : name => endpoint.id }
+  ) : {}
+}
+
+output "vpc_endpoint_security_group_id" {
+  description = "Security group attached to interface VPC endpoints"
+  value       = var.enable_vpc_endpoints ? aws_security_group.vpc_endpoints[0].id : null
+}
+
+output "news_refresh_schedule_arn" {
+  description = "ARN for the daily scheduled one-shot news refresh task"
+  value       = var.enable_scheduled_news_refresh ? aws_scheduler_schedule.news_refresh[0].arn : null
+}

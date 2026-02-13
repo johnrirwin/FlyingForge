@@ -21,9 +21,11 @@ type Config struct {
 
 // ServerConfig holds HTTP/MCP server configuration
 type ServerConfig struct {
-	HTTPAddr     string
-	MCPMode      bool
-	RateLimitDur time.Duration
+	HTTPAddr            string
+	MCPMode             bool
+	RefreshOnceMode     bool
+	EnableManualRefresh bool
+	RateLimitDur        time.Duration
 }
 
 // CacheConfig holds cache configuration
@@ -86,6 +88,7 @@ func Load() *Config {
 	// Define flags with defaults
 	httpAddr := flag.String("http", ":8080", "HTTP server address")
 	mcpMode := flag.Bool("mcp", false, "Run in MCP stdio mode")
+	refreshOnceMode := flag.Bool("refresh-once", false, "Run a single feed refresh and exit")
 	cacheTTL := flag.Duration("cache-ttl", 5*time.Minute, "Cache TTL for feed items")
 	cacheBackend := flag.String("cache-backend", "memory", "Cache backend: memory or redis")
 	redisAddr := flag.String("redis-addr", "localhost:6379", "Redis server address")
@@ -101,13 +104,20 @@ func Load() *Config {
 	flag.Parse()
 
 	// Apply environment variable overrides
-	applyEnvOverrides(httpAddr, mcpMode, cacheTTL, cacheBackend, redisAddr, rateLimitDur, logLevel, dbHost, dbPort, dbUser, dbPassword, dbName, dbSSLMode)
+	enableManualRefresh := false
+	if v := strings.ToLower(strings.TrimSpace(os.Getenv("ENABLE_MANUAL_REFRESH"))); v == "true" || v == "1" {
+		enableManualRefresh = true
+	}
+
+	applyEnvOverrides(httpAddr, mcpMode, refreshOnceMode, cacheTTL, cacheBackend, redisAddr, rateLimitDur, logLevel, dbHost, dbPort, dbUser, dbPassword, dbName, dbSSLMode)
 
 	// Build config struct
 	cfg.Server = ServerConfig{
-		HTTPAddr:     *httpAddr,
-		MCPMode:      *mcpMode,
-		RateLimitDur: *rateLimitDur,
+		HTTPAddr:            *httpAddr,
+		MCPMode:             *mcpMode,
+		RefreshOnceMode:     *refreshOnceMode,
+		EnableManualRefresh: enableManualRefresh,
+		RateLimitDur:        *rateLimitDur,
 	}
 
 	cfg.Cache = CacheConfig{
@@ -229,6 +239,7 @@ func getEnvOrDefault(key, defaultValue string) string {
 func applyEnvOverrides(
 	httpAddr *string,
 	mcpMode *bool,
+	refreshOnceMode *bool,
 	cacheTTL *time.Duration,
 	cacheBackend *string,
 	redisAddr *string,
@@ -246,6 +257,9 @@ func applyEnvOverrides(
 	}
 	if v := os.Getenv("MCP_MODE"); v == "true" || v == "1" {
 		*mcpMode = true
+	}
+	if v := os.Getenv("REFRESH_ONCE_MODE"); v == "true" || v == "1" {
+		*refreshOnceMode = true
 	}
 	if v := os.Getenv("CACHE_TTL"); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {

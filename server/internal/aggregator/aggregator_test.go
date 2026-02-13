@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/johnrirwin/flyingforge/internal/cache"
+	"github.com/johnrirwin/flyingforge/internal/logging"
 	"github.com/johnrirwin/flyingforge/internal/models"
 	"github.com/johnrirwin/flyingforge/internal/sources"
 )
@@ -363,5 +365,59 @@ func TestAggregator_GetItems_Pagination(t *testing.T) {
 				t.Errorf("GetItems().TotalCount = %d, want %d", resp.TotalCount, tt.expectedTotal)
 			}
 		})
+	}
+}
+
+func TestAggregator_GetItems_LoadsFromTypedCache(t *testing.T) {
+	c := cache.NewMemory(time.Hour)
+	cachedItems := []models.FeedItem{
+		{
+			ID:          "typed-cache-item",
+			Title:       "Cached item",
+			PublishedAt: time.Now(),
+		},
+	}
+	c.SetWithTTL(allItemsCacheKey, cachedItems, time.Hour)
+
+	a := &Aggregator{
+		cache:    c,
+		logger:   logging.New(logging.LevelError),
+		items:    []models.FeedItem{},
+		fetchers: []sources.Fetcher{},
+	}
+
+	resp := a.GetItems(models.FilterParams{})
+	if len(resp.Items) != 1 {
+		t.Fatalf("GetItems() should load cached typed items, got %d", len(resp.Items))
+	}
+	if resp.Items[0].ID != "typed-cache-item" {
+		t.Fatalf("GetItems() first cached item = %q, want %q", resp.Items[0].ID, "typed-cache-item")
+	}
+}
+
+func TestAggregator_GetItems_LoadsFromGenericCachePayload(t *testing.T) {
+	c := cache.NewMemory(time.Hour)
+	c.SetWithTTL(allItemsCacheKey, []interface{}{
+		map[string]interface{}{
+			"id":          "generic-cache-item",
+			"title":       "Cached via generic payload",
+			"publishedAt": time.Now().Format(time.RFC3339Nano),
+			"fetchedAt":   time.Now().Format(time.RFC3339Nano),
+		},
+	}, time.Hour)
+
+	a := &Aggregator{
+		cache:    c,
+		logger:   logging.New(logging.LevelError),
+		items:    []models.FeedItem{},
+		fetchers: []sources.Fetcher{},
+	}
+
+	resp := a.GetItems(models.FilterParams{})
+	if len(resp.Items) != 1 {
+		t.Fatalf("GetItems() should decode generic cached items, got %d", len(resp.Items))
+	}
+	if resp.Items[0].ID != "generic-cache-item" {
+		t.Fatalf("GetItems() first generic cached item = %q, want %q", resp.Items[0].ID, "generic-cache-item")
 	}
 }

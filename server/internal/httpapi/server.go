@@ -24,47 +24,49 @@ import (
 )
 
 type Server struct {
-	agg              *aggregator.Aggregator
-	equipmentSvc     *equipment.Service
-	inventorySvc     inventory.InventoryManager
-	aircraftSvc      *aircraft.Service
-	buildSvc         *builds.Service
-	radioSvc         *radio.Service
-	batterySvc       *battery.Service
-	authSvc          *auth.Service
-	authMiddleware   *auth.Middleware
-	userStore        *database.UserStore
-	aircraftStore    *database.AircraftStore
-	fcConfigStore    *database.FCConfigStore
-	inventoryStore   *database.InventoryStore
-	gearCatalogStore *database.GearCatalogStore
-	imageSvc         *images.Service
-	logger           *logging.Logger
-	server           *http.Server
-	refreshLimiter   ratelimit.RateLimiter
-	tempBuildLimiter ratelimit.RateLimiter
+	agg                 *aggregator.Aggregator
+	equipmentSvc        *equipment.Service
+	inventorySvc        inventory.InventoryManager
+	aircraftSvc         *aircraft.Service
+	buildSvc            *builds.Service
+	radioSvc            *radio.Service
+	batterySvc          *battery.Service
+	authSvc             *auth.Service
+	authMiddleware      *auth.Middleware
+	userStore           *database.UserStore
+	aircraftStore       *database.AircraftStore
+	fcConfigStore       *database.FCConfigStore
+	inventoryStore      *database.InventoryStore
+	gearCatalogStore    *database.GearCatalogStore
+	imageSvc            *images.Service
+	logger              *logging.Logger
+	server              *http.Server
+	refreshLimiter      ratelimit.RateLimiter
+	tempBuildLimiter    ratelimit.RateLimiter
+	enableManualRefresh bool
 }
 
-func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, buildSvc *builds.Service, radioSvc *radio.Service, batterySvc *battery.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, userStore *database.UserStore, aircraftStore *database.AircraftStore, fcConfigStore *database.FCConfigStore, inventoryStore *database.InventoryStore, gearCatalogStore *database.GearCatalogStore, imageSvc *images.Service, refreshLimiter ratelimit.RateLimiter, logger *logging.Logger) *Server {
+func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, buildSvc *builds.Service, radioSvc *radio.Service, batterySvc *battery.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, userStore *database.UserStore, aircraftStore *database.AircraftStore, fcConfigStore *database.FCConfigStore, inventoryStore *database.InventoryStore, gearCatalogStore *database.GearCatalogStore, imageSvc *images.Service, refreshLimiter ratelimit.RateLimiter, enableManualRefresh bool, logger *logging.Logger) *Server {
 	return &Server{
-		agg:              agg,
-		equipmentSvc:     equipmentSvc,
-		inventorySvc:     inventorySvc,
-		aircraftSvc:      aircraftSvc,
-		buildSvc:         buildSvc,
-		radioSvc:         radioSvc,
-		batterySvc:       batterySvc,
-		authSvc:          authSvc,
-		authMiddleware:   authMiddleware,
-		userStore:        userStore,
-		aircraftStore:    aircraftStore,
-		fcConfigStore:    fcConfigStore,
-		inventoryStore:   inventoryStore,
-		gearCatalogStore: gearCatalogStore,
-		imageSvc:         imageSvc,
-		logger:           logger,
-		refreshLimiter:   refreshLimiter,
-		tempBuildLimiter: ratelimit.New(10 * time.Second),
+		agg:                 agg,
+		equipmentSvc:        equipmentSvc,
+		inventorySvc:        inventorySvc,
+		aircraftSvc:         aircraftSvc,
+		buildSvc:            buildSvc,
+		radioSvc:            radioSvc,
+		batterySvc:          batterySvc,
+		authSvc:             authSvc,
+		authMiddleware:      authMiddleware,
+		userStore:           userStore,
+		aircraftStore:       aircraftStore,
+		fcConfigStore:       fcConfigStore,
+		inventoryStore:      inventoryStore,
+		gearCatalogStore:    gearCatalogStore,
+		imageSvc:            imageSvc,
+		logger:              logger,
+		refreshLimiter:      refreshLimiter,
+		tempBuildLimiter:    ratelimit.New(10 * time.Second),
+		enableManualRefresh: enableManualRefresh,
 	}
 }
 
@@ -74,7 +76,9 @@ func (s *Server) Start(addr string) error {
 	// News feed routes (public read, rate-limited refresh)
 	mux.HandleFunc("/api/items", s.corsMiddleware(s.handleGetItems))
 	mux.HandleFunc("/api/sources", s.corsMiddleware(s.handleGetSources))
-	mux.HandleFunc("/api/refresh", s.corsMiddleware(s.handleRefresh))
+	if s.enableManualRefresh {
+		mux.HandleFunc("/api/refresh", s.corsMiddleware(s.handleRefresh))
+	}
 
 	// Auth routes
 	if s.authSvc != nil && s.authMiddleware != nil {
