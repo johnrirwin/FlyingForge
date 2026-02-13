@@ -169,7 +169,7 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
   const [appliedQuery, setAppliedQuery] = useState('');
   const [gearType, setGearType] = useState<GearType | ''>('');
   const [catalogStatus, setCatalogStatus] = useState<CatalogItemStatus | ''>('pending');
-  const [imageStatus, setImageStatus] = useState<ImageStatusFilter | ''>(''); // No image status filter by default
+  const [imageStatus, setImageStatus] = useState<ImageStatusFilter | ''>('all'); // Default to all records
   const pageSize = 30;
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);

@@ -122,6 +122,21 @@ describe('AdminGearModeration', () => {
     expect(screen.getByRole('button', { name: 'Save Changes' })).toBeInTheDocument();
   });
 
+  it('defaults gear moderation filters to all types, pending, and all records', async () => {
+    render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
+
+    expect(await screen.findByText('EMAX')).toBeInTheDocument();
+
+    expect(mockAdminSearchGear).toHaveBeenCalledWith({
+      query: undefined,
+      gearType: undefined,
+      status: 'pending',
+      imageStatus: 'all',
+      limit: 30,
+      offset: 0,
+    });
+  });
+
   it('opens the edit modal with keyboard interaction on a table row', async () => {
     render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
 
