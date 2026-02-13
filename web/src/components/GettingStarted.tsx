@@ -561,7 +561,7 @@ function CreatorCard({ creator, onSelect }: { creator: CreatorSpotlight; onSelec
     <button
       type="button"
       onClick={() => onSelect(creator)}
-      className={`block w-full text-left bg-slate-800 border rounded-xl p-5 hover:border-slate-500 transition-colors group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/80 ${
+      className={`block w-full text-left bg-slate-800 border rounded-xl p-5 hover:border-slate-500 transition-colors group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/80 min-h-[220px] h-full ${
         creator.featured
           ? 'border-primary-500/50 ring-1 ring-primary-500/20'
           : 'border-slate-700'
@@ -578,7 +578,7 @@ function CreatorCard({ creator, onSelect }: { creator: CreatorSpotlight; onSelec
           </svg>
         </div>
         
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 flex flex-col">
           <div className="flex items-start justify-between gap-3 mb-1">
             <div className="flex items-center gap-2 min-w-0">
               <h4 className="text-base font-semibold text-white group-hover:text-primary-400 transition-colors">
@@ -596,8 +596,8 @@ function CreatorCard({ creator, onSelect }: { creator: CreatorSpotlight; onSelec
             {creator.description}
           </p>
           
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex flex-wrap gap-1.5">
+          <div className="flex items-center justify-between gap-2 mt-auto">
+            <div className="flex flex-wrap gap-1.5 max-h-11 overflow-hidden">
               {creator.tags.map(tag => (
                 <span
                   key={tag}
@@ -877,7 +877,7 @@ export function GettingStarted({ onSignIn }: GettingStartedProps) {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 auto-rows-fr gap-4">
             {TAKING_OFF_CREATORS.map(creator => (
               <CreatorCard key={creator.id} creator={creator} onSelect={setSelectedCreator} />
             ))}
