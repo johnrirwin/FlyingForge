@@ -25,7 +25,7 @@ This keeps core AWS service traffic off NAT where possible and removes unnecessa
 ## Deploy
 
 ```bash
-cd /Users/john/Development/FlyingForge/terraform
+cd terraform
 terraform plan \
   -var="google_client_id=<redacted>" \
   -var="google_client_secret=<redacted>" \

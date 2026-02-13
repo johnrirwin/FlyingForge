@@ -70,6 +70,10 @@ locals {
   )
 }
 
+# NOTE: Endpoint policies below use wildcard principals ("*"). This is intentional:
+# - Interface endpoints are only reachable from within the VPC and are further restricted by the endpoint SG
+#   (ingress 443 from the ECS tasks security group).
+# - The S3 gateway endpoint is route-table scoped to the private subnets and is least-privilege restricted by bucket ARNs.
 data "aws_iam_policy_document" "vpc_endpoint_s3" {
   statement {
     sid    = "AllowLayerDownloads"

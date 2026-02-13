@@ -115,9 +115,14 @@ func (a *Aggregator) GetItems(params models.FilterParams) models.AggregatedRespo
 			if len(a.items) == 0 {
 				a.items = cachedItems
 			}
-			items = a.items
 			a.mu.Unlock()
 		}
+
+		// Re-read items after the cache warm-up attempt in case another goroutine
+		// refreshed in-memory state while we were reading from cache.
+		a.mu.RLock()
+		items = a.items
+		a.mu.RUnlock()
 	}
 
 	filtered := a.filterItems(items, params)
