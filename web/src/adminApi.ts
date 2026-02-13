@@ -180,6 +180,40 @@ export async function adminUploadGearImage(
   }
 }
 
+// Persist an approved moderated upload token as a curated gear image (admin only).
+export async function adminSaveGearImageUpload(id: string, uploadId: string): Promise<void> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+  if (!uploadId) {
+    throw new Error('uploadId is required');
+  }
+
+  const response = await fetch(`${API_BASE}/gear/${id}/image`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ uploadId }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Request failed' }));
+    if (response.status === 403) {
+      throw new Error('Admin or content-admin access required');
+    }
+    if (response.status === 404) {
+      throw new Error('Gear item not found');
+    }
+    if (response.status === 422) {
+      throw new Error(data.error || 'Image approval token expired or not approved');
+    }
+    throw new Error(data.error || 'Failed to save approved image');
+  }
+}
+
 // Approve an existing scanned image for a gear item (admin only)
 export async function adminApproveGearImage(id: string): Promise<void> {
   const token = getAuthToken();

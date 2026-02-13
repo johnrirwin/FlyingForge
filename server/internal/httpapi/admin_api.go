@@ -914,10 +914,42 @@ func (api *AdminAPI) handleGearImage(w http.ResponseWriter, r *http.Request, id 
 	}
 }
 
-// uploadGearImage handles POST /api/admin/gear/{id}/image
-// Max file size: 2MB, accepts JPEG/PNG/WebP only
+// uploadGearImage handles POST /api/admin/gear/{id}/image.
+// Supports either:
+//   - multipart image uploads (moderate + persist immediately), or
+//   - JSON {uploadId} for persisting a previously approved moderation token.
 func (api *AdminAPI) uploadGearImage(w http.ResponseWriter, r *http.Request, id string) {
+	if api.imageSvc == nil {
+		api.writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"error": "image moderation unavailable",
+		})
+		return
+	}
+
 	userID := auth.GetUserID(r.Context())
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	// Verify the gear item exists before processing upload payload.
+	existing, err := api.catalogStore.Get(ctx, id)
+	if err != nil {
+		api.logger.Error("Failed to verify gear item", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "Failed to verify gear item",
+		})
+		return
+	}
+	if existing == nil {
+		api.writeJSON(w, http.StatusNotFound, map[string]string{
+			"error": "Gear item not found",
+		})
+		return
+	}
+
+	if isJSONContentType(r.Header.Get("Content-Type")) {
+		api.persistApprovedGearUpload(w, r, ctx, id, userID)
+		return
+	}
 
 	// Limit request body to 3MB (slightly more than 2MB limit to account for multipart overhead)
 	maxSize := int64(3 * 1024 * 1024)
@@ -965,25 +997,6 @@ func (api *AdminAPI) uploadGearImage(w http.ResponseWriter, r *http.Request, id 
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
-	defer cancel()
-
-	// Verify the gear item exists
-	existing, err := api.catalogStore.Get(ctx, id)
-	if err != nil {
-		api.logger.Error("Failed to verify gear item", logging.WithField("error", err.Error()))
-		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "Failed to verify gear item",
-		})
-		return
-	}
-	if existing == nil {
-		api.writeJSON(w, http.StatusNotFound, map[string]string{
-			"error": "Gear item not found",
-		})
-		return
-	}
-
 	// Store the image
 	decision, asset, err := api.imageSvc.ModerateAndPersist(ctx, images.SaveRequest{
 		OwnerUserID: userID,
@@ -1010,20 +1023,15 @@ func (api *AdminAPI) uploadGearImage(w http.ResponseWriter, r *http.Request, id 
 		return
 	}
 
-	previousAssetID, err := api.catalogStore.SetImage(ctx, id, userID, contentType, asset.ID)
-	if err != nil {
+	if err := api.attachAdminGearImageAsset(ctx, id, userID, contentType, asset.ID); err != nil {
 		api.logger.Error("Failed to store gear image", logging.WithFields(map[string]interface{}{
 			"gearId": id,
 			"error":  err.Error(),
 		}))
-		_ = api.imageSvc.Delete(ctx, asset.ID)
 		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "Failed to store image",
 		})
 		return
-	}
-	if previousAssetID != "" && previousAssetID != asset.ID {
-		_ = api.imageSvc.Delete(ctx, previousAssetID)
 	}
 
 	api.logger.Info("Admin uploaded gear image",
@@ -1033,8 +1041,98 @@ func (api *AdminAPI) uploadGearImage(w http.ResponseWriter, r *http.Request, id 
 	)
 
 	api.writeJSON(w, http.StatusOK, map[string]string{
+		"status":  string(models.ImageModerationApproved),
 		"message": "Image uploaded successfully",
 	})
+}
+
+func (api *AdminAPI) persistApprovedGearUpload(w http.ResponseWriter, r *http.Request, ctx context.Context, id string, userID string) {
+	var req struct {
+		UploadID string `json:"uploadId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "invalid request body",
+		})
+		return
+	}
+
+	req.UploadID = strings.TrimSpace(req.UploadID)
+	if req.UploadID == "" {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "uploadId is required",
+		})
+		return
+	}
+
+	asset, err := api.imageSvc.PersistApprovedUpload(ctx, userID, req.UploadID, models.ImageEntityGear, id)
+	if err != nil {
+		switch err {
+		case images.ErrPendingUploadNotFound:
+			api.writeJSON(w, http.StatusUnprocessableEntity, map[string]string{
+				"error": "image approval token expired or missing",
+			})
+			return
+		case images.ErrUploadNotApproved:
+			api.writeJSON(w, http.StatusUnprocessableEntity, map[string]string{
+				"error": "image is not approved",
+			})
+			return
+		default:
+			api.logger.Error("Failed to persist approved gear image upload", logging.WithField("error", err.Error()))
+			api.writeJSON(w, http.StatusInternalServerError, map[string]string{
+				"error": "Failed to store image",
+			})
+			return
+		}
+	}
+
+	contentType, ok := detectAllowedImageContentType(asset.ImageBytes)
+	if !ok {
+		_ = api.imageSvc.Delete(ctx, asset.ID)
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "Image must be JPEG, PNG, or WebP",
+		})
+		return
+	}
+
+	if err := api.attachAdminGearImageAsset(ctx, id, userID, contentType, asset.ID); err != nil {
+		api.logger.Error("Failed to store approved gear upload", logging.WithFields(map[string]interface{}{
+			"gearId": id,
+			"error":  err.Error(),
+		}))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "Failed to store image",
+		})
+		return
+	}
+
+	api.logger.Info("Admin attached approved moderated gear image",
+		logging.WithField("gearId", id),
+		logging.WithField("adminId", userID),
+	)
+
+	api.writeJSON(w, http.StatusOK, map[string]string{
+		"status":  string(models.ImageModerationApproved),
+		"message": "Image uploaded successfully",
+	})
+}
+
+func (api *AdminAPI) attachAdminGearImageAsset(ctx context.Context, gearID string, adminUserID string, contentType string, assetID string) error {
+	previousAssetID, err := api.catalogStore.SetImage(ctx, gearID, adminUserID, contentType, assetID)
+	if err != nil {
+		_ = api.imageSvc.Delete(ctx, assetID)
+		return err
+	}
+	if previousAssetID != "" && previousAssetID != assetID {
+		_ = api.imageSvc.Delete(ctx, previousAssetID)
+	}
+	return nil
+}
+
+func isJSONContentType(raw string) bool {
+	contentType := strings.ToLower(strings.TrimSpace(raw))
+	return strings.HasPrefix(contentType, "application/json")
 }
 
 // getGearImage handles GET /api/admin/gear/{id}/image

@@ -6,6 +6,7 @@ import {
   adminSearchGear,
   adminUpdateGear,
   adminUploadGearImage,
+  adminSaveGearImageUpload,
   adminDeleteGearImage,
   adminDeleteGear,
   adminGetGear,
@@ -18,6 +19,7 @@ import {
   getAdminGearImageUrl,
   getAdminBuildImageUrl,
 } from '../adminApi';
+import { moderateGearCatalogImageUpload } from '../gearCatalogApi';
 import { CatalogSearchModal } from './CatalogSearchModal';
 import { MobileFloatingControls } from './MobileFloatingControls';
 import { ImageUploadModal } from './ImageUploadModal';
@@ -932,7 +934,8 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
         onClose={handleAddGearClose}
         onSelectItem={handleAddGearSelect}
         startInCreateMode
-        onUploadCatalogImage={adminUploadGearImage}
+        onModerateCatalogImage={moderateGearCatalogImageUpload}
+        onSaveCatalogImageUpload={adminSaveGearImageUpload}
       />
 
       {editingBuildId && (

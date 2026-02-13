@@ -13,6 +13,7 @@ import {
   adminDeleteGear,
   adminDeleteGearImage,
   adminGetGear,
+  adminSaveGearImageUpload,
   adminSearchGear,
   adminUpdateGear,
   adminUploadGearImage,
@@ -30,6 +31,7 @@ vi.mock('../adminApi', () => ({
   adminSearchGear: vi.fn(),
   adminUpdateGear: vi.fn(),
   adminUploadGearImage: vi.fn(),
+  adminSaveGearImageUpload: vi.fn(),
   adminDeleteGearImage: vi.fn(),
   adminDeleteGear: vi.fn(),
   adminGetGear: vi.fn(),
@@ -46,6 +48,7 @@ const mockAdminDeleteBuildImage = vi.mocked(adminDeleteBuildImage);
 const mockAdminSearchGear = vi.mocked(adminSearchGear);
 const mockAdminUpdateGear = vi.mocked(adminUpdateGear);
 const mockAdminUploadGearImage = vi.mocked(adminUploadGearImage);
+const mockAdminSaveGearImageUpload = vi.mocked(adminSaveGearImageUpload);
 const mockAdminDeleteGearImage = vi.mocked(adminDeleteGearImage);
 const mockAdminDeleteGear = vi.mocked(adminDeleteGear);
 const mockAdminGetGear = vi.mocked(adminGetGear);
@@ -88,6 +91,7 @@ describe('AdminGearModeration', () => {
     mockAdminGetGear.mockResolvedValue(mockItem);
     mockAdminUpdateGear.mockResolvedValue(mockItem);
     mockAdminUploadGearImage.mockResolvedValue();
+    mockAdminSaveGearImageUpload.mockResolvedValue();
     mockAdminDeleteGearImage.mockResolvedValue();
     mockAdminDeleteGear.mockResolvedValue();
     mockAdminSearchBuilds.mockResolvedValue({ builds: [], totalCount: 0, sort: 'newest' });
