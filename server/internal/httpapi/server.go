@@ -232,7 +232,7 @@ func (s *Server) handleGetItems(w http.ResponseWriter, r *http.Request) {
 		Tag:        query.Get("tag"),
 	}
 
-	response := s.agg.GetItems(params)
+	response := s.agg.GetItems(r.Context(), params)
 
 	s.writeJSON(w, http.StatusOK, response)
 }

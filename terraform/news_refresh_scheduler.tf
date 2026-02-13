@@ -71,6 +71,10 @@ resource "aws_ecs_task_definition" "news_refresh" {
         {
           name  = "RATE_LIMIT"
           value = "1s"
+        },
+        {
+          name  = "FEED_RETENTION_DAYS"
+          value = "90"
         }
       ]
 

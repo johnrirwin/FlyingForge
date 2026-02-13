@@ -28,27 +28,33 @@ type FeedItemStore interface {
 }
 
 type Aggregator struct {
-	fetchers []sources.Fetcher
-	cache    cache.Cache
-	store    FeedItemStore
-	tagger   *tagging.Tagger
-	logger   *logging.Logger
-	mu       sync.RWMutex
-	items    []models.FeedItem
+	fetchers      []sources.Fetcher
+	cache         cache.Cache
+	store         FeedItemStore
+	retentionDays int
+	tagger        *tagging.Tagger
+	logger        *logging.Logger
+	mu            sync.RWMutex
+	items         []models.FeedItem
 }
 
 func New(fetchers []sources.Fetcher, c cache.Cache, tagger *tagging.Tagger, logger *logging.Logger) *Aggregator {
 	return &Aggregator{
-		fetchers: fetchers,
-		cache:    c,
-		tagger:   tagger,
-		logger:   logger,
-		items:    make([]models.FeedItem, 0),
+		fetchers:      fetchers,
+		cache:         c,
+		tagger:        tagger,
+		logger:        logger,
+		retentionDays: 90,
+		items:         make([]models.FeedItem, 0),
 	}
 }
 
 func (a *Aggregator) SetStore(store FeedItemStore) {
 	a.store = store
+}
+
+func (a *Aggregator) SetRetentionDays(days int) {
+	a.retentionDays = days
 }
 
 func (a *Aggregator) Refresh(ctx context.Context) error {
@@ -113,15 +119,18 @@ func (a *Aggregator) Refresh(ctx context.Context) error {
 			return err
 		}
 
-		// Enforce retention policy (90 days) to cap DB growth.
-		cutoff := time.Now().AddDate(0, 0, -90)
-		if deleted, err := a.store.DeleteItemsOlderThan(ctx, cutoff); err != nil {
-			return err
-		} else if deleted > 0 && a.logger != nil {
-			a.logger.Info("Deleted old feed items", logging.WithFields(map[string]interface{}{
-				"count":  deleted,
-				"cutoff": cutoff.Format(time.RFC3339),
-			}))
+		// Enforce retention policy to cap DB growth.
+		// NOTE: configurable via config/env (default: 90 days). A value <= 0 disables retention cleanup.
+		if a.retentionDays > 0 {
+			cutoff := time.Now().AddDate(0, 0, -a.retentionDays)
+			if deleted, err := a.store.DeleteItemsOlderThan(ctx, cutoff); err != nil {
+				return err
+			} else if deleted > 0 && a.logger != nil {
+				a.logger.Info("Deleted old feed items", logging.WithFields(map[string]interface{}{
+					"count":  deleted,
+					"cutoff": cutoff.Format(time.RFC3339),
+				}))
+			}
 		}
 	}
 
@@ -133,17 +142,27 @@ func (a *Aggregator) Refresh(ctx context.Context) error {
 	return nil
 }
 
-func (a *Aggregator) GetItems(params models.FilterParams) models.AggregatedResponse {
+func (a *Aggregator) GetItems(ctx context.Context, params models.FilterParams) models.AggregatedResponse {
 	// When a persistent store is configured, prefer it so we can serve history
 	// across runs (not just the last cached refresh).
 	if a.store != nil {
 		resolvedSources := a.resolveSourceNames(params.Sources)
-		items, total, err := a.store.QueryItems(context.Background(), params, resolvedSources)
+		items, total, err := a.store.QueryItems(ctx, params, resolvedSources)
 		if err == nil {
+			fetchedAt := time.Time{}
+			for _, item := range items {
+				if item.FetchedAt.After(fetchedAt) {
+					fetchedAt = item.FetchedAt
+				}
+			}
+			if fetchedAt.IsZero() {
+				fetchedAt = time.Now()
+			}
+
 			return models.AggregatedResponse{
 				Items:       items,
 				TotalCount:  total,
-				FetchedAt:   time.Now(),
+				FetchedAt:   fetchedAt,
 				SourceCount: len(a.fetchers),
 			}
 		}

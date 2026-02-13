@@ -133,7 +133,7 @@ func (h *Handler) handleGetNews(ctx context.Context, arguments json.RawMessage) 
 		Query:   params.Query,
 	}
 
-	response := h.agg.GetItems(filterParams)
+	response := h.agg.GetItems(ctx, filterParams)
 	return response, nil
 }
 

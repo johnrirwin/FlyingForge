@@ -951,8 +951,22 @@ CREATE TABLE IF NOT EXISTS feed_items (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_feed_items_published_at ON feed_items(published_at DESC);
-CREATE INDEX IF NOT EXISTS idx_feed_items_source ON feed_items(LOWER(source));
-CREATE INDEX IF NOT EXISTS idx_feed_items_source_type ON feed_items(LOWER(source_type));
-CREATE INDEX IF NOT EXISTS idx_feed_items_tags ON feed_items USING GIN(tags);
-`
+	CREATE INDEX IF NOT EXISTS idx_feed_items_published_at ON feed_items(published_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_feed_items_source ON feed_items(LOWER(source));
+	CREATE INDEX IF NOT EXISTS idx_feed_items_source_type ON feed_items(LOWER(source_type));
+	CREATE INDEX IF NOT EXISTS idx_feed_items_tags ON feed_items USING GIN(tags);
+
+	-- Guard against duplicates if ID generation changes (dedupe within a source+URL).
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_feed_items_url_source_unique ON feed_items(LOWER(url), LOWER(source));
+
+	-- Improve ILIKE performance (when pg_trgm is available).
+	DO $$
+	BEGIN
+	    CREATE INDEX IF NOT EXISTS idx_feed_items_title_trgm ON feed_items USING gin(title gin_trgm_ops);
+	    CREATE INDEX IF NOT EXISTS idx_feed_items_summary_trgm ON feed_items USING gin(summary gin_trgm_ops);
+	    CREATE INDEX IF NOT EXISTS idx_feed_items_content_trgm ON feed_items USING gin(content gin_trgm_ops);
+	    CREATE INDEX IF NOT EXISTS idx_feed_items_source_trgm ON feed_items USING gin(source gin_trgm_ops);
+	EXCEPTION WHEN OTHERS THEN
+	    RAISE NOTICE 'Could not create feed_items trigram indexes, using fallback search';
+	END $$;
+	`

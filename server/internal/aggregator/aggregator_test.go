@@ -1,6 +1,7 @@
 package aggregator
 
 import (
+	"context"
 	"sort"
 	"testing"
 	"time"
@@ -289,7 +290,7 @@ func TestAggregator_GetItems_Empty(t *testing.T) {
 		fetchers: []sources.Fetcher{},
 	}
 
-	resp := a.GetItems(models.FilterParams{})
+	resp := a.GetItems(context.Background(), models.FilterParams{})
 
 	if resp.Items == nil {
 		t.Error("GetItems().Items should not be nil")
@@ -357,7 +358,7 @@ func TestAggregator_GetItems_Pagination(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resp := a.GetItems(tt.params)
+			resp := a.GetItems(context.Background(), tt.params)
 			if len(resp.Items) != tt.expectedCount {
 				t.Errorf("GetItems() returned %d items, want %d", len(resp.Items), tt.expectedCount)
 			}
@@ -386,7 +387,7 @@ func TestAggregator_GetItems_LoadsFromTypedCache(t *testing.T) {
 		fetchers: []sources.Fetcher{},
 	}
 
-	resp := a.GetItems(models.FilterParams{})
+	resp := a.GetItems(context.Background(), models.FilterParams{})
 	if len(resp.Items) != 1 {
 		t.Fatalf("GetItems() should load cached typed items, got %d", len(resp.Items))
 	}
@@ -413,7 +414,7 @@ func TestAggregator_GetItems_LoadsFromGenericCachePayload(t *testing.T) {
 		fetchers: []sources.Fetcher{},
 	}
 
-	resp := a.GetItems(models.FilterParams{})
+	resp := a.GetItems(context.Background(), models.FilterParams{})
 	if len(resp.Items) != 1 {
 		t.Fatalf("GetItems() should decode generic cached items, got %d", len(resp.Items))
 	}

@@ -226,6 +226,10 @@ resource "aws_ecs_task_definition" "server" {
           value = "redis"
         },
         {
+          name  = "FEED_RETENTION_DAYS"
+          value = "90"
+        },
+        {
           name  = "GOOGLE_REDIRECT_URI"
           value = var.domain_name != "" ? "https://${var.domain_name}/api/auth/google/callback" : "http://${aws_lb.main.dns_name}/api/auth/google/callback"
         },

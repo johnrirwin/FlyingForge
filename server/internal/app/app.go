@@ -76,6 +76,7 @@ func New(cfg *config.Config) (*App, error) {
 
 	// Initialize aggregator
 	app.Aggregator = aggregator.New(fetchers, app.Cache, tagger, app.Logger)
+	app.Aggregator.SetRetentionDays(cfg.Server.FeedRetentionDays)
 
 	// Initialize seller registry
 	sellerRegistry := app.initSellers(limiter)
