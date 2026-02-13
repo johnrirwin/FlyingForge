@@ -20,23 +20,41 @@ const (
 	allItemsCacheTTL = 36 * time.Hour
 )
 
+// FeedItemStore persists aggregated feed items for long-term history.
+type FeedItemStore interface {
+	UpsertItems(ctx context.Context, items []models.FeedItem) error
+	DeleteItemsOlderThan(ctx context.Context, cutoff time.Time) (int64, error)
+	QueryItems(ctx context.Context, params models.FilterParams, resolvedSources []string) ([]models.FeedItem, int, error)
+}
+
 type Aggregator struct {
-	fetchers []sources.Fetcher
-	cache    cache.Cache
-	tagger   *tagging.Tagger
-	logger   *logging.Logger
-	mu       sync.RWMutex
-	items    []models.FeedItem
+	fetchers      []sources.Fetcher
+	cache         cache.Cache
+	store         FeedItemStore
+	retentionDays int
+	tagger        *tagging.Tagger
+	logger        *logging.Logger
+	mu            sync.RWMutex
+	items         []models.FeedItem
 }
 
 func New(fetchers []sources.Fetcher, c cache.Cache, tagger *tagging.Tagger, logger *logging.Logger) *Aggregator {
 	return &Aggregator{
-		fetchers: fetchers,
-		cache:    c,
-		tagger:   tagger,
-		logger:   logger,
-		items:    make([]models.FeedItem, 0),
+		fetchers:      fetchers,
+		cache:         c,
+		tagger:        tagger,
+		logger:        logger,
+		retentionDays: 90,
+		items:         make([]models.FeedItem, 0),
 	}
+}
+
+func (a *Aggregator) SetStore(store FeedItemStore) {
+	a.store = store
+}
+
+func (a *Aggregator) SetRetentionDays(days int) {
+	a.retentionDays = days
 }
 
 func (a *Aggregator) Refresh(ctx context.Context) error {
@@ -96,6 +114,26 @@ func (a *Aggregator) Refresh(ctx context.Context) error {
 		a.cache.SetWithTTL(allItemsCacheKey, dedupedItems, allItemsCacheTTL)
 	}
 
+	if a.store != nil {
+		if err := a.store.UpsertItems(ctx, dedupedItems); err != nil {
+			return err
+		}
+
+		// Enforce retention policy to cap DB growth.
+		// NOTE: configurable via config/env (default: 90 days). A value <= 0 disables retention cleanup.
+		if a.retentionDays > 0 {
+			cutoff := time.Now().AddDate(0, 0, -a.retentionDays)
+			if deleted, err := a.store.DeleteItemsOlderThan(ctx, cutoff); err != nil {
+				return err
+			} else if deleted > 0 && a.logger != nil {
+				a.logger.Info("Deleted old feed items", logging.WithFields(map[string]interface{}{
+					"count":  deleted,
+					"cutoff": cutoff.Format(time.RFC3339),
+				}))
+			}
+		}
+	}
+
 	a.logger.Info("Aggregation complete", logging.WithFields(map[string]interface{}{
 		"total_items":  len(dedupedItems),
 		"sources_used": len(a.fetchers),
@@ -104,7 +142,35 @@ func (a *Aggregator) Refresh(ctx context.Context) error {
 	return nil
 }
 
-func (a *Aggregator) GetItems(params models.FilterParams) models.AggregatedResponse {
+func (a *Aggregator) GetItems(ctx context.Context, params models.FilterParams) models.AggregatedResponse {
+	// When a persistent store is configured, prefer it so we can serve history
+	// across runs (not just the last cached refresh).
+	if a.store != nil {
+		resolvedSources := a.resolveSourceNames(params.Sources)
+		items, total, err := a.store.QueryItems(ctx, params, resolvedSources)
+		if err == nil {
+			fetchedAt := time.Time{}
+			for _, item := range items {
+				if item.FetchedAt.After(fetchedAt) {
+					fetchedAt = item.FetchedAt
+				}
+			}
+			if fetchedAt.IsZero() {
+				fetchedAt = time.Now()
+			}
+
+			return models.AggregatedResponse{
+				Items:       items,
+				TotalCount:  total,
+				FetchedAt:   fetchedAt,
+				SourceCount: len(a.fetchers),
+			}
+		}
+		if a.logger != nil {
+			a.logger.Warn("Failed to load feed items from database, falling back to cache", logging.WithField("error", err.Error()))
+		}
+	}
+
 	a.mu.RLock()
 	items := a.items
 	a.mu.RUnlock()
@@ -147,6 +213,32 @@ func (a *Aggregator) GetItems(params models.FilterParams) models.AggregatedRespo
 		FetchedAt:   time.Now(),
 		SourceCount: len(a.fetchers),
 	}
+}
+
+// resolveSourceNames maps source IDs (as returned by /api/sources) into the source
+// name values stored on FeedItem.Source.
+func (a *Aggregator) resolveSourceNames(sourceIDs []string) []string {
+	if len(sourceIDs) == 0 {
+		return nil
+	}
+
+	idToName := make(map[string]string)
+	for _, f := range a.fetchers {
+		info := f.SourceInfo()
+		idToName[strings.ToLower(info.ID)] = strings.ToLower(info.Name)
+	}
+
+	resolved := make([]string, 0, len(sourceIDs))
+	for _, srcID := range sourceIDs {
+		srcIDLower := strings.ToLower(srcID)
+		if name, ok := idToName[srcIDLower]; ok {
+			resolved = append(resolved, name)
+		} else {
+			// Fallback: also try the ID as-is in case it matches a name
+			resolved = append(resolved, srcIDLower)
+		}
+	}
+	return resolved
 }
 
 func (a *Aggregator) loadItemsFromCache() ([]models.FeedItem, bool) {
@@ -219,19 +311,11 @@ func (a *Aggregator) filterItems(items []models.FeedItem, params models.FilterPa
 
 	// Parse date filters
 	var fromTime, toTime time.Time
-	if params.FromDate != "" {
-		if t, err := time.Parse("2006-01-02", params.FromDate); err == nil {
-			fromTime = t
-		} else if t, err := time.Parse("01/02/2006", params.FromDate); err == nil {
-			fromTime = t
-		}
+	if t, ok := models.ParseDateFilter(params.FromDate); ok {
+		fromTime = t
 	}
-	if params.ToDate != "" {
-		if t, err := time.Parse("2006-01-02", params.ToDate); err == nil {
-			toTime = t.Add(24*time.Hour - time.Nanosecond) // End of day
-		} else if t, err := time.Parse("01/02/2006", params.ToDate); err == nil {
-			toTime = t.Add(24*time.Hour - time.Nanosecond)
-		}
+	if t, ok := models.ParseDateFilter(params.ToDate); ok {
+		toTime = t.Add(24*time.Hour - time.Nanosecond) // End of day
 	}
 
 	filtered := make([]models.FeedItem, 0)
@@ -241,15 +325,23 @@ func (a *Aggregator) filterItems(items []models.FeedItem, params models.FilterPa
 			continue
 		}
 
-		// Filter by source type
-		if params.SourceType != "" && !strings.EqualFold(item.SourceType, params.SourceType) {
-			// Map reddit to community
-			if params.SourceType == "community" && item.SourceType != "reddit" {
-				continue
-			} else if params.SourceType == "news" && item.SourceType != "rss" {
-				continue
-			} else if params.SourceType != "community" && params.SourceType != "news" {
-				continue
+		// Filter by source type (supports UI groupings like "community" and "news")
+		if params.SourceType != "" {
+			switch strings.ToLower(strings.TrimSpace(params.SourceType)) {
+			case "community":
+				// Community = reddit + forums
+				if !strings.EqualFold(item.SourceType, "reddit") && !strings.EqualFold(item.SourceType, "forum") {
+					continue
+				}
+			case "news":
+				// News = RSS feeds
+				if !strings.EqualFold(item.SourceType, "rss") {
+					continue
+				}
+			default:
+				if !strings.EqualFold(item.SourceType, params.SourceType) {
+					continue
+				}
 			}
 		}
 

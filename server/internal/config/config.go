@@ -26,6 +26,7 @@ type ServerConfig struct {
 	RefreshOnceMode     bool
 	EnableManualRefresh bool
 	RateLimitDur        time.Duration
+	FeedRetentionDays   int
 }
 
 // CacheConfig holds cache configuration
@@ -93,6 +94,7 @@ func Load() *Config {
 	cacheBackend := flag.String("cache-backend", "memory", "Cache backend: memory or redis")
 	redisAddr := flag.String("redis-addr", "localhost:6379", "Redis server address")
 	rateLimitDur := flag.Duration("rate-limit", time.Second, "Minimum delay between requests to same host")
+	feedRetentionDays := flag.Int("feed-retention-days", 90, "Number of days to retain feed items in the database (0 to disable)")
 	logLevel := flag.String("log-level", "info", "Log level (debug, info, warn, error)")
 	dbHost := flag.String("db-host", "localhost", "PostgreSQL host")
 	dbPort := flag.Int("db-port", 5432, "PostgreSQL port")
@@ -109,7 +111,7 @@ func Load() *Config {
 		enableManualRefresh = true
 	}
 
-	applyEnvOverrides(httpAddr, mcpMode, refreshOnceMode, cacheTTL, cacheBackend, redisAddr, rateLimitDur, logLevel, dbHost, dbPort, dbUser, dbPassword, dbName, dbSSLMode)
+	applyEnvOverrides(httpAddr, mcpMode, refreshOnceMode, cacheTTL, cacheBackend, redisAddr, rateLimitDur, feedRetentionDays, logLevel, dbHost, dbPort, dbUser, dbPassword, dbName, dbSSLMode)
 
 	// Build config struct
 	cfg.Server = ServerConfig{
@@ -118,6 +120,7 @@ func Load() *Config {
 		RefreshOnceMode:     *refreshOnceMode,
 		EnableManualRefresh: enableManualRefresh,
 		RateLimitDur:        *rateLimitDur,
+		FeedRetentionDays:   *feedRetentionDays,
 	}
 
 	cfg.Cache = CacheConfig{
@@ -244,6 +247,7 @@ func applyEnvOverrides(
 	cacheBackend *string,
 	redisAddr *string,
 	rateLimitDur *time.Duration,
+	feedRetentionDays *int,
 	logLevel *string,
 	dbHost *string,
 	dbPort *int,
@@ -275,6 +279,11 @@ func applyEnvOverrides(
 	if v := os.Getenv("RATE_LIMIT"); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {
 			*rateLimitDur = d
+		}
+	}
+	if v := os.Getenv("FEED_RETENTION_DAYS"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil {
+			*feedRetentionDays = parsed
 		}
 	}
 	if v := os.Getenv("LOG_LEVEL"); v != "" {
