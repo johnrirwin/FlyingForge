@@ -20,9 +20,17 @@ const (
 	allItemsCacheTTL = 36 * time.Hour
 )
 
+// FeedItemStore persists aggregated feed items for long-term history.
+type FeedItemStore interface {
+	UpsertItems(ctx context.Context, items []models.FeedItem) error
+	DeleteItemsOlderThan(ctx context.Context, cutoff time.Time) (int64, error)
+	QueryItems(ctx context.Context, params models.FilterParams, resolvedSources []string) ([]models.FeedItem, int, error)
+}
+
 type Aggregator struct {
 	fetchers []sources.Fetcher
 	cache    cache.Cache
+	store    FeedItemStore
 	tagger   *tagging.Tagger
 	logger   *logging.Logger
 	mu       sync.RWMutex
@@ -37,6 +45,10 @@ func New(fetchers []sources.Fetcher, c cache.Cache, tagger *tagging.Tagger, logg
 		logger:   logger,
 		items:    make([]models.FeedItem, 0),
 	}
+}
+
+func (a *Aggregator) SetStore(store FeedItemStore) {
+	a.store = store
 }
 
 func (a *Aggregator) Refresh(ctx context.Context) error {
@@ -96,6 +108,23 @@ func (a *Aggregator) Refresh(ctx context.Context) error {
 		a.cache.SetWithTTL(allItemsCacheKey, dedupedItems, allItemsCacheTTL)
 	}
 
+	if a.store != nil {
+		if err := a.store.UpsertItems(ctx, dedupedItems); err != nil {
+			return err
+		}
+
+		// Enforce retention policy (90 days) to cap DB growth.
+		cutoff := time.Now().AddDate(0, 0, -90)
+		if deleted, err := a.store.DeleteItemsOlderThan(ctx, cutoff); err != nil {
+			return err
+		} else if deleted > 0 && a.logger != nil {
+			a.logger.Info("Deleted old feed items", logging.WithFields(map[string]interface{}{
+				"count":  deleted,
+				"cutoff": cutoff.Format(time.RFC3339),
+			}))
+		}
+	}
+
 	a.logger.Info("Aggregation complete", logging.WithFields(map[string]interface{}{
 		"total_items":  len(dedupedItems),
 		"sources_used": len(a.fetchers),
@@ -105,6 +134,24 @@ func (a *Aggregator) Refresh(ctx context.Context) error {
 }
 
 func (a *Aggregator) GetItems(params models.FilterParams) models.AggregatedResponse {
+	// When a persistent store is configured, prefer it so we can serve history
+	// across runs (not just the last cached refresh).
+	if a.store != nil {
+		resolvedSources := a.resolveSourceNames(params.Sources)
+		items, total, err := a.store.QueryItems(context.Background(), params, resolvedSources)
+		if err == nil {
+			return models.AggregatedResponse{
+				Items:       items,
+				TotalCount:  total,
+				FetchedAt:   time.Now(),
+				SourceCount: len(a.fetchers),
+			}
+		}
+		if a.logger != nil {
+			a.logger.Warn("Failed to load feed items from database, falling back to cache", logging.WithField("error", err.Error()))
+		}
+	}
+
 	a.mu.RLock()
 	items := a.items
 	a.mu.RUnlock()
@@ -147,6 +194,32 @@ func (a *Aggregator) GetItems(params models.FilterParams) models.AggregatedRespo
 		FetchedAt:   time.Now(),
 		SourceCount: len(a.fetchers),
 	}
+}
+
+// resolveSourceNames maps source IDs (as returned by /api/sources) into the source
+// name values stored on FeedItem.Source.
+func (a *Aggregator) resolveSourceNames(sourceIDs []string) []string {
+	if len(sourceIDs) == 0 {
+		return nil
+	}
+
+	idToName := make(map[string]string)
+	for _, f := range a.fetchers {
+		info := f.SourceInfo()
+		idToName[strings.ToLower(info.ID)] = strings.ToLower(info.Name)
+	}
+
+	resolved := make([]string, 0, len(sourceIDs))
+	for _, srcID := range sourceIDs {
+		srcIDLower := strings.ToLower(srcID)
+		if name, ok := idToName[srcIDLower]; ok {
+			resolved = append(resolved, name)
+		} else {
+			// Fallback: also try the ID as-is in case it matches a name
+			resolved = append(resolved, srcIDLower)
+		}
+	}
+	return resolved
 }
 
 func (a *Aggregator) loadItemsFromCache() ([]models.FeedItem, bool) {

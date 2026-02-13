@@ -122,6 +122,7 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationGearCatalogPublishedStatus,                // Normalizes catalog status to published/pending/removed
 		migrationGearCatalogPublishAutoApproveScannedImage, // Aligns published items to approved image status
 		migrationBuilds,                                    // Adds user/public/temp builds with part mappings
+		migrationFeedItems,                                 // Adds persistent storage for aggregated feed/news items
 	}
 
 	for i, migration := range migrations {
@@ -923,4 +924,35 @@ BEGIN
         FOREIGN KEY (image_asset_id) REFERENCES image_assets(id) ON DELETE SET NULL;
     END IF;
 END $$;
+`
+
+// Migration to persist aggregated feed items (RSS articles, YouTube videos, etc).
+const migrationFeedItems = `
+CREATE TABLE IF NOT EXISTS feed_items (
+    id VARCHAR(64) PRIMARY KEY,
+    title TEXT NOT NULL,
+    url TEXT NOT NULL,
+    source VARCHAR(255) NOT NULL,
+    source_type VARCHAR(50) NOT NULL,
+    author TEXT,
+    summary TEXT,
+    content TEXT,
+    published_at TIMESTAMPTZ NOT NULL,
+    fetched_at TIMESTAMPTZ NOT NULL,
+    thumbnail TEXT,
+    tags TEXT[] NOT NULL DEFAULT '{}',
+    upvotes INTEGER,
+    comments INTEGER,
+    media_type VARCHAR(20),
+    media_image_url TEXT,
+    media_video_url TEXT,
+    media_duration TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_feed_items_published_at ON feed_items(published_at DESC);
+CREATE INDEX IF NOT EXISTS idx_feed_items_source ON feed_items(LOWER(source));
+CREATE INDEX IF NOT EXISTS idx_feed_items_source_type ON feed_items(LOWER(source_type));
+CREATE INDEX IF NOT EXISTS idx_feed_items_tags ON feed_items USING GIN(tags);
 `

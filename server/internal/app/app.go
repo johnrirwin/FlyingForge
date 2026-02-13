@@ -221,6 +221,11 @@ func (a *App) initDatabaseServices() {
 	}
 
 	a.db = db
+	// Persist aggregated feed items in Postgres when available so we can keep history
+	// across refresh runs.
+	if a.Aggregator != nil {
+		a.Aggregator.SetStore(database.NewFeedItemStore(db))
+	}
 
 	// Initialize encryptor for sensitive data
 	encryptor, err := crypto.NewEncryptor(a.Config.Crypto.EncryptionKey)
