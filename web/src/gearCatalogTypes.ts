@@ -121,7 +121,8 @@ export interface AdminUpdateGearCatalogParams {
   description?: string;
   msrp?: number;
   clearMsrp?: boolean; // Explicitly clear MSRP when true
-  imageUrl?: string;
+  externalImageUrl?: string; // Legacy/external image link (future CDN/S3 URL)
+  imageUrl?: string; // Deprecated alias for externalImageUrl
   imageStatus?: ImageCurationStatus;
   bestFor?: DroneType[]; // Drone types this gear is best suited for
   status?: CatalogItemStatus;

@@ -122,7 +122,7 @@ func (s *GearCatalogStore) Get(ctx context.Context, id string) (*models.GearCata
 	query := `
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key,
-			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   CASE WHEN COALESCE(external_image_url, image_url) IS NOT NULL AND COALESCE(external_image_url, image_url) != '' THEN COALESCE(external_image_url, image_url) WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
 			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
@@ -182,7 +182,7 @@ func (s *GearCatalogStore) GetByCanonicalKey(ctx context.Context, canonicalKey s
 	query := `
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key,
-			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   CASE WHEN COALESCE(external_image_url, image_url) IS NOT NULL AND COALESCE(external_image_url, image_url) != '' THEN COALESCE(external_image_url, image_url) WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
 			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
@@ -318,7 +318,7 @@ func (s *GearCatalogStore) Search(ctx context.Context, params models.GearCatalog
 	query := fmt.Sprintf(`
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key,
-			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   CASE WHEN COALESCE(external_image_url, image_url) IS NOT NULL AND COALESCE(external_image_url, image_url) != '' THEN COALESCE(external_image_url, image_url) WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
 			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
@@ -397,7 +397,7 @@ func (s *GearCatalogStore) FindNearMatches(ctx context.Context, gearType models.
 	query := `
 		SELECT id, gear_type, brand, model, variant, specs, source,
 			   created_by_user_id, status, canonical_key,
-			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM updated_at)*1000)::bigint ELSE NULL END as image_url,
+			   CASE WHEN COALESCE(external_image_url, image_url) IS NOT NULL AND COALESCE(external_image_url, image_url) != '' THEN COALESCE(external_image_url, image_url) WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM updated_at)*1000)::bigint ELSE NULL END as image_url,
 			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
@@ -458,7 +458,7 @@ func (s *GearCatalogStore) findNearMatchesFallback(ctx context.Context, gearType
 	query := `
 		SELECT id, gear_type, brand, model, variant, specs, source,
 			   created_by_user_id, status, canonical_key,
-			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   CASE WHEN COALESCE(external_image_url, image_url) IS NOT NULL AND COALESCE(external_image_url, image_url) != '' THEN COALESCE(external_image_url, image_url) WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
 			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count
@@ -545,7 +545,7 @@ func (s *GearCatalogStore) GetPopular(ctx context.Context, gearType models.GearT
 	query := `
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key,
-			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   CASE WHEN COALESCE(external_image_url, image_url) IS NOT NULL AND COALESCE(external_image_url, image_url) != '' THEN COALESCE(external_image_url, image_url) WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
 			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
@@ -762,7 +762,7 @@ func (s *GearCatalogStore) AdminSearch(ctx context.Context, params models.AdminG
 	query := fmt.Sprintf(`
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key,
-			   CASE WHEN image_url IS NOT NULL AND image_url != '' THEN image_url WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   CASE WHEN COALESCE(external_image_url, image_url) IS NOT NULL AND COALESCE(external_image_url, image_url) != '' THEN COALESCE(external_image_url, image_url) WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
 			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
@@ -949,7 +949,7 @@ func (s *GearCatalogStore) AdminUpdate(ctx context.Context, id string, adminUser
 					     AND (
 					       image_asset_id IS NOT NULL
 					       OR image_data IS NOT NULL
-					       OR (image_url IS NOT NULL AND image_url != '')
+					       OR (COALESCE(external_image_url, image_url) IS NOT NULL AND COALESCE(external_image_url, image_url) != '')
 					     )
 					THEN $%d
 					ELSE COALESCE(image_status, 'missing')
@@ -964,7 +964,7 @@ func (s *GearCatalogStore) AdminUpdate(ctx context.Context, id string, adminUser
 					     AND (
 					       image_asset_id IS NOT NULL
 					       OR image_data IS NOT NULL
-					       OR (image_url IS NOT NULL AND image_url != '')
+					       OR (COALESCE(external_image_url, image_url) IS NOT NULL AND COALESCE(external_image_url, image_url) != '')
 					     )
 					THEN $%d
 					ELSE image_curated_by_user_id
@@ -979,7 +979,7 @@ func (s *GearCatalogStore) AdminUpdate(ctx context.Context, id string, adminUser
 					     AND (
 					       image_asset_id IS NOT NULL
 					       OR image_data IS NOT NULL
-					       OR (image_url IS NOT NULL AND image_url != '')
+					       OR (COALESCE(external_image_url, image_url) IS NOT NULL AND COALESCE(external_image_url, image_url) != '')
 					     )
 					THEN NOW()
 					ELSE image_curated_at
@@ -1005,12 +1005,20 @@ func (s *GearCatalogStore) AdminUpdate(ctx context.Context, id string, adminUser
 			sets = append(sets, "image_curated_at = NULL")
 		}
 	}
-	if params.ImageURL != nil {
-		sets = append(sets, fmt.Sprintf("image_url = $%d", argIdx))
-		args = append(args, *params.ImageURL)
-		argIdx++
-		// Update image curation fields
-		if *params.ImageURL != "" {
+	effectiveExternalImageURL := params.ExternalImageURL
+	if effectiveExternalImageURL == nil {
+		effectiveExternalImageURL = params.ImageURL
+	}
+	if effectiveExternalImageURL != nil {
+		trimmedURL := strings.TrimSpace(*effectiveExternalImageURL)
+		if trimmedURL != "" {
+			// Store external URL in the new column while keeping legacy image_url in sync.
+			sets = append(sets, fmt.Sprintf("external_image_url = $%d", argIdx))
+			sets = append(sets, fmt.Sprintf("image_url = $%d", argIdx))
+			args = append(args, trimmedURL)
+			argIdx++
+
+			// Update image curation fields
 			sets = append(sets, "image_asset_id = NULL")
 			sets = append(sets, "image_data = NULL")
 			sets = append(sets, "image_type = NULL")
@@ -1022,7 +1030,9 @@ func (s *GearCatalogStore) AdminUpdate(ctx context.Context, id string, adminUser
 			argIdx++
 			sets = append(sets, "image_curated_at = NOW()")
 		} else {
-			// Clearing imageURL - reset curation status (also clear binary image data)
+			// Clearing external image URL - reset curation status (also clear binary image data)
+			sets = append(sets, "external_image_url = NULL")
+			sets = append(sets, "image_url = NULL")
 			sets = append(sets, fmt.Sprintf("image_status = $%d", argIdx))
 			args = append(args, models.ImageStatusMissing)
 			argIdx++
@@ -1070,6 +1080,7 @@ func (s *GearCatalogStore) SetImage(ctx context.Context, id string, adminUserID 
 		SET image_asset_id = $1,
 		    image_data = NULL,
 		    image_type = $2, 
+		    external_image_url = NULL,
 		    image_url = NULL,
 		    image_status = $3,
 		    image_curated_by_user_id = $4,
@@ -1130,6 +1141,7 @@ func (s *GearCatalogStore) SetUserSubmittedImage(ctx context.Context, id string,
 		SET image_asset_id = $1,
 		    image_data = NULL,
 		    image_type = $2,
+		    external_image_url = NULL,
 		    image_url = NULL,
 		    image_status = $3,
 		    image_curated_by_user_id = NULL,
@@ -1169,7 +1181,7 @@ func (s *GearCatalogStore) ApproveImage(ctx context.Context, id string, adminUse
 		       (
 		         (image_asset_id IS NOT NULL)
 		         OR (image_data IS NOT NULL)
-		         OR (image_url IS NOT NULL AND image_url != '')
+		         OR (COALESCE(external_image_url, image_url) IS NOT NULL AND COALESCE(external_image_url, image_url) != '')
 		       ) AS has_image
 		FROM gear_catalog
 		WHERE id = $1
@@ -1271,6 +1283,8 @@ func (s *GearCatalogStore) DeleteImage(ctx context.Context, id string) (string, 
 		SET image_asset_id = NULL,
 		    image_data = NULL, 
 		    image_type = NULL, 
+		    external_image_url = NULL,
+		    image_url = NULL,
 		    image_status = $1,
 		    image_curated_by_user_id = NULL,
 		    image_curated_at = NULL,

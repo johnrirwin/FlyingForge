@@ -363,12 +363,12 @@ func validateImageURL(rawURL string) error {
 
 	// Must be HTTPS
 	if parsed.Scheme != "https" {
-		return fmt.Errorf("imageUrl must use HTTPS")
+		return fmt.Errorf("externalImageUrl must use HTTPS")
 	}
 
 	// Must have a valid host
 	if parsed.Host == "" {
-		return fmt.Errorf("imageUrl must have a valid host")
+		return fmt.Errorf("externalImageUrl must have a valid host")
 	}
 
 	// Block localhost and private IPs
@@ -384,13 +384,13 @@ func validateImageURL(rawURL string) error {
 		strings.HasPrefix(host, "172.2") ||
 		strings.HasPrefix(host, "172.30.") ||
 		strings.HasPrefix(host, "172.31.") {
-		return fmt.Errorf("imageUrl cannot point to local or private addresses")
+		return fmt.Errorf("externalImageUrl cannot point to local or private addresses")
 	}
 
 	// Block javascript: and data: schemes (already covered by https check, but be explicit)
 	if strings.Contains(strings.ToLower(rawURL), "javascript:") ||
 		strings.Contains(strings.ToLower(rawURL), "data:") {
-		return fmt.Errorf("imageUrl contains disallowed scheme")
+		return fmt.Errorf("externalImageUrl contains disallowed scheme")
 	}
 
 	return nil

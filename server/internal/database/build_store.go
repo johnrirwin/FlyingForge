@@ -973,7 +973,7 @@ func (s *BuildStore) attachParts(ctx context.Context, builds []*models.Build) er
 			gc.variant,
 			gc.status,
 			CASE
-				WHEN gc.image_url IS NOT NULL AND gc.image_url != '' THEN gc.image_url
+				WHEN COALESCE(gc.external_image_url, gc.image_url) IS NOT NULL AND COALESCE(gc.external_image_url, gc.image_url) != '' THEN COALESCE(gc.external_image_url, gc.image_url)
 				WHEN (gc.image_asset_id IS NOT NULL OR gc.image_data IS NOT NULL) AND COALESCE(gc.image_status, 'missing') IN ('approved', 'scanned')
 					THEN '/api/gear-catalog/' || gc.id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(gc.image_curated_at, gc.updated_at))*1000)::bigint
 				ELSE NULL

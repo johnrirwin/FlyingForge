@@ -228,16 +228,17 @@ type CreateGearCatalogParams struct {
 
 // AdminUpdateGearCatalogParams represents admin-only update parameters
 type AdminUpdateGearCatalogParams struct {
-	Brand       *string            `json:"brand,omitempty"`
-	Model       *string            `json:"model,omitempty"`
-	Variant     *string            `json:"variant,omitempty"`
-	Description *string            `json:"description,omitempty"`
-	MSRP        *float64           `json:"msrp,omitempty"`
-	ClearMSRP   bool               `json:"clearMsrp,omitempty"` // Explicitly clear MSRP when true
-	ImageURL    *string            `json:"imageUrl,omitempty"`  // Admin can set image URL
-	ImageStatus *ImageStatus       `json:"imageStatus,omitempty"`
-	BestFor     []string           `json:"bestFor,omitempty"` // Drone types this gear is best suited for
-	Status      *CatalogItemStatus `json:"status,omitempty"`
+	Brand            *string            `json:"brand,omitempty"`
+	Model            *string            `json:"model,omitempty"`
+	Variant          *string            `json:"variant,omitempty"`
+	Description      *string            `json:"description,omitempty"`
+	MSRP             *float64           `json:"msrp,omitempty"`
+	ClearMSRP        bool               `json:"clearMsrp,omitempty"`        // Explicitly clear MSRP when true
+	ExternalImageURL *string            `json:"externalImageUrl,omitempty"` // Admin can set an external image URL (legacy / future CDN)
+	ImageURL         *string            `json:"imageUrl,omitempty"`         // Deprecated alias for externalImageUrl
+	ImageStatus      *ImageStatus       `json:"imageStatus,omitempty"`
+	BestFor          []string           `json:"bestFor,omitempty"` // Drone types this gear is best suited for
+	Status           *CatalogItemStatus `json:"status,omitempty"`
 }
 
 // AdminGearSearchParams represents admin search parameters with curation filters

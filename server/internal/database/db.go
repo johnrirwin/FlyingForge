@@ -121,6 +121,7 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationGearCatalogImageScanned,                   // Marks moderated user uploads as scanned for admin review
 		migrationGearCatalogPublishedStatus,                // Normalizes catalog status to published/pending/removed
 		migrationGearCatalogPublishAutoApproveScannedImage, // Aligns published items to approved image status
+		migrationGearCatalogExternalImageURL,               // Adds external_image_url alias for legacy gear catalog images
 		migrationBuilds,                                    // Adds user/public/temp builds with part mappings
 		migrationFeedItems,                                 // Adds persistent storage for aggregated feed/news items
 	}
@@ -860,6 +861,26 @@ WHERE status = 'published'
     OR image_data IS NOT NULL
     OR (image_url IS NOT NULL AND image_url != '')
   );
+`
+
+// Migration to introduce external_image_url as a clearer name for legacy/external gear catalog images.
+// NOTE: We keep the existing image_url column for backwards compatibility with older app versions.
+const migrationGearCatalogExternalImageURL = `
+ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS external_image_url TEXT;
+
+-- Backfill from the legacy column.
+UPDATE gear_catalog
+SET external_image_url = image_url
+WHERE (external_image_url IS NULL OR external_image_url = '')
+  AND image_url IS NOT NULL
+  AND image_url != '';
+
+-- Keep the legacy column in sync when external_image_url is set.
+UPDATE gear_catalog
+SET image_url = external_image_url
+WHERE (image_url IS NULL OR image_url = '')
+  AND external_image_url IS NOT NULL
+  AND external_image_url != '';
 `
 
 // Migration to add reusable build definitions (public, draft, and temporary).
