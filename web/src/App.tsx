@@ -78,6 +78,9 @@ function App() {
 
   // Derive activeSection from URL path
   const activeSection: AppSection = (() => {
+    // When authenticated, the root route renders the dashboard.
+    // Treat "/" as "dashboard" so section-driven data loads (aircraft/inventory) run on initial login.
+    if (isAuthenticated && location.pathname === '/') return 'dashboard';
     if (location.pathname.startsWith('/me/builds')) return 'my-builds';
     if (location.pathname.startsWith('/builds')) return 'builds';
     return pathToSection[location.pathname] || 'home';
