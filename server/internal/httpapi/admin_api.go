@@ -375,6 +375,18 @@ func (api *AdminAPI) handleUpdateGear(w http.ResponseWriter, r *http.Request, id
 		}
 	}
 
+	if params.Specs != nil {
+		var decoded any
+		if err := json.Unmarshal(params.Specs, &decoded); err != nil {
+			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid specs JSON"})
+			return
+		}
+		if _, ok := decoded.(map[string]any); !ok {
+			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "specs must be an object"})
+			return
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 

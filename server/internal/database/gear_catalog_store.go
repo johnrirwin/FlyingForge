@@ -1058,6 +1058,12 @@ func (s *GearCatalogStore) AdminUpdate(ctx context.Context, id string, adminUser
 		effectiveVariant = *params.Variant
 	}
 
+	if params.Specs != nil {
+		sets = append(sets, fmt.Sprintf("specs = $%d", argIdx))
+		args = append(args, params.Specs)
+		argIdx++
+	}
+
 	// Recompute canonical_key if brand/model/variant changed
 	if needsCanonicalKeyUpdate {
 		newCanonicalKey := models.BuildCanonicalKey(effectiveGearType, effectiveBrand, effectiveModel, effectiveVariant)

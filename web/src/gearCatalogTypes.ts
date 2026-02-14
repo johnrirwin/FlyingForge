@@ -118,6 +118,7 @@ export interface AdminUpdateGearCatalogParams {
   brand?: string;
   model?: string;
   variant?: string;
+  specs?: Record<string, unknown>;
   description?: string;
   msrp?: number;
   clearMsrp?: boolean; // Explicitly clear MSRP when true

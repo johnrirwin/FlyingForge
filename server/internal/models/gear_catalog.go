@@ -231,6 +231,7 @@ type AdminUpdateGearCatalogParams struct {
 	Brand       *string            `json:"brand,omitempty"`
 	Model       *string            `json:"model,omitempty"`
 	Variant     *string            `json:"variant,omitempty"`
+	Specs       json.RawMessage    `json:"specs,omitempty"`
 	Description *string            `json:"description,omitempty"`
 	MSRP        *float64           `json:"msrp,omitempty"`
 	ClearMSRP   bool               `json:"clearMsrp,omitempty"` // Explicitly clear MSRP when true
