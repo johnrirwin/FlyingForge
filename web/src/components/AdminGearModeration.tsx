@@ -2376,7 +2376,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
                       type="button"
                       onClick={() => removeSpecRow(row.id)}
                       className="w-10 h-10 flex items-center justify-center bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-slate-300 hover:text-white transition-colors"
-                      aria-label={`Remove spec ${row.key || ''}`.trim()}
+                      aria-label={row.key.trim() ? `Remove spec ${row.key.trim()}` : 'Remove spec'}
                       title="Remove spec"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
