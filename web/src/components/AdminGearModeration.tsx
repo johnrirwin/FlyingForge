@@ -2073,7 +2073,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
     const normalizedNextSpecs = normalizeSpecRowsForCompare(specRows);
     if (!specsEqual(normalizedExistingSpecs, normalizedNextSpecs)) {
       const trimmedRows = specRows
-        .map((row) => ({ key: row.key.trim(), value: row.value }))
+        .map((row) => ({ key: row.key.trim(), value: row.value.trim() }))
         .filter((row) => row.key.length > 0);
       const keyCounts = new Map<string, number>();
       for (const row of trimmedRows) {
@@ -2354,13 +2354,14 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
               {specRows.length === 0 ? (
                 <p className="text-xs text-slate-500">No specs yet. Add as many key/value pairs as you want.</p>
               ) : (
-                specRows.map((row) => (
+                specRows.map((row, index) => (
                   <div key={row.id} className="grid grid-cols-[1fr_1fr_auto] gap-2">
                     <input
                       type="text"
                       value={row.key}
                       onChange={(e) => updateSpecRow(row.id, 'key', e.target.value)}
                       placeholder="Key"
+                      aria-label={`Spec key ${index + 1}`}
                       className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
                     />
                     <input
@@ -2368,6 +2369,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
                       value={row.value}
                       onChange={(e) => updateSpecRow(row.id, 'value', e.target.value)}
                       placeholder="Value"
+                      aria-label={`Spec value ${index + 1}`}
                       className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
                     />
                     <button

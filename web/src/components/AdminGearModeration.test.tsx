@@ -240,6 +240,118 @@ describe('AdminGearModeration', () => {
     });
   });
 
+  it('loads existing specs into the edit modal and allows editing', async () => {
+    mockAdminGetGear.mockResolvedValueOnce({
+      ...mockItem,
+      specs: { kv: '1950', stator: '27mm' },
+    });
+
+    render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
+
+    const row = await screen.findByRole('button', { name: 'Open editor for EMAX ECO II 2207' });
+    fireEvent.click(row);
+
+    expect(await screen.findByText('Edit Gear Item')).toBeInTheDocument();
+
+    // Existing specs should be loaded into the form
+    expect(screen.getByDisplayValue('kv')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('1950')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('stator')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('27mm')).toBeInTheDocument();
+
+    // Edit one of the existing specs
+    fireEvent.change(screen.getByDisplayValue('1950'), { target: { value: '2200' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => {
+      expect(mockAdminUpdateGear).toHaveBeenCalledWith(
+        'gear-1',
+        expect.objectContaining({
+          specs: { kv: '2200', stator: '27mm' },
+        })
+      );
+    });
+  });
+
+  it('allows removing a spec before saving', async () => {
+    mockAdminGetGear.mockResolvedValueOnce({
+      ...mockItem,
+      specs: { kv: '1950', stator: '27mm' },
+    });
+
+    render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
+
+    const row = await screen.findByRole('button', { name: 'Open editor for EMAX ECO II 2207' });
+    fireEvent.click(row);
+    expect(await screen.findByText('Edit Gear Item')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove spec stator' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => {
+      expect(mockAdminUpdateGear).toHaveBeenCalledWith(
+        'gear-1',
+        expect.objectContaining({
+          specs: { kv: '1950' },
+        })
+      );
+    });
+  });
+
+  it('prevents saving when duplicate spec keys are entered', async () => {
+    render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
+
+    const row = await screen.findByRole('button', { name: 'Open editor for EMAX ECO II 2207' });
+    fireEvent.click(row);
+    expect(await screen.findByText('Edit Gear Item')).toBeInTheDocument();
+
+    // First spec
+    fireEvent.click(screen.getByRole('button', { name: 'Add Spec' }));
+    fireEvent.change(screen.getByPlaceholderText('Key'), { target: { value: 'kv' } });
+    fireEvent.change(screen.getByPlaceholderText('Value'), { target: { value: '1950' } });
+
+    // Second spec with duplicate key
+    fireEvent.click(screen.getByRole('button', { name: 'Add Spec' }));
+    const keyInputs = screen.getAllByPlaceholderText('Key');
+    const valueInputs = screen.getAllByPlaceholderText('Value');
+
+    fireEvent.change(keyInputs[1], { target: { value: 'kv' } });
+    fireEvent.change(valueInputs[1], { target: { value: '2200' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    expect(await screen.findByText('Duplicate spec key: kv')).toBeInTheDocument();
+    expect(mockAdminUpdateGear).not.toHaveBeenCalled();
+  });
+
+  it('filters out specs with empty keys before saving', async () => {
+    mockAdminGetGear.mockResolvedValueOnce({
+      ...mockItem,
+      specs: { kv: '1950' },
+    });
+
+    render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
+
+    const row = await screen.findByRole('button', { name: 'Open editor for EMAX ECO II 2207' });
+    fireEvent.click(row);
+    expect(await screen.findByText('Edit Gear Item')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByDisplayValue('kv'), { target: { value: '' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => {
+      expect(mockAdminUpdateGear).toHaveBeenCalledWith(
+        'gear-1',
+        expect.objectContaining({
+          specs: {},
+        })
+      );
+    });
+  });
+
   it('deletes from within the edit modal and refreshes list', async () => {
     mockAdminSearchGear
       .mockResolvedValueOnce({ items: [mockItem], totalCount: 1 })

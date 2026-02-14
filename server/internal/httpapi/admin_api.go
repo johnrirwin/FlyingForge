@@ -381,10 +381,6 @@ func (api *AdminAPI) handleUpdateGear(w http.ResponseWriter, r *http.Request, id
 			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid specs JSON"})
 			return
 		}
-		if decoded == nil {
-			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "specs must be an object"})
-			return
-		}
 		if _, ok := decoded.(map[string]any); !ok {
 			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "specs must be an object"})
 			return
