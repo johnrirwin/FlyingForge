@@ -198,11 +198,9 @@ export function CatalogSearchModal({
             initialGearType={gearType || undefined}
             initialQuery={query}
             onSuccess={handleSelectItem}
-            onCancel={() => setMode('search')}
             onUploadCatalogImage={onUploadCatalogImage}
             onModerateCatalogImage={onModerateCatalogImage}
             onSaveCatalogImageUpload={onSaveCatalogImageUpload}
-            onImportJson={enableJsonImport ? () => setMode('import-json') : undefined}
           />
         ) : mode === 'import-json' ? (
           <ImportCatalogItemsForm
@@ -404,8 +402,6 @@ interface CreateCatalogItemFormProps {
   initialGearType?: GearType;
   initialQuery?: string;
   onSuccess: (item: GearCatalogItem) => void;
-  onCancel: () => void;
-  onImportJson?: () => void;
   onUploadCatalogImage?: (itemId: string, imageFile: File) => Promise<void>;
   onModerateCatalogImage?: (imageFile: File) => Promise<ModerationResult>;
   onSaveCatalogImageUpload?: (itemId: string, uploadId: string) => Promise<void>;
@@ -415,8 +411,6 @@ function CreateCatalogItemForm({
   initialGearType,
   initialQuery,
   onSuccess,
-  onCancel,
-  onImportJson,
   onUploadCatalogImage,
   onModerateCatalogImage,
   onSaveCatalogImageUpload,
@@ -908,28 +902,7 @@ function CreateCatalogItemForm({
       </div>
 
       {/* Footer */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-6 py-4 border-t border-slate-700 bg-slate-800/50 flex-shrink-0">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-          >
-            Back to Search
-          </button>
-          {onImportJson && (
-            <button
-              type="button"
-              onClick={onImportJson}
-              className="text-primary-400 hover:text-primary-300 text-sm font-medium transition-colors flex items-center gap-1 justify-center sm:justify-start"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              Import from JSON
-            </button>
-          )}
-        </div>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3 px-6 py-4 border-t border-slate-700 bg-slate-800/50 flex-shrink-0">
         <button
           type="submit"
           disabled={isSubmitting || !brand.trim() || !model.trim() || checkingDuplicates}
