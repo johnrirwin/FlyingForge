@@ -1009,8 +1009,8 @@ func (s *GearCatalogStore) AdminSearch(ctx context.Context, params models.AdminG
 
 // AdminUpdate updates a gear catalog item with admin-provided values
 func (s *GearCatalogStore) AdminUpdate(ctx context.Context, id string, adminUserID string, params models.AdminUpdateGearCatalogParams) (*models.GearCatalogItem, error) {
-	// If brand/model/variant is changing, we need to recompute canonical_key
-	needsCanonicalKeyUpdate := params.Brand != nil || params.Model != nil || params.Variant != nil
+	// If gearType/brand/model/variant is changing, we need to recompute canonical_key
+	needsCanonicalKeyUpdate := params.GearType != nil || params.Brand != nil || params.Model != nil || params.Variant != nil
 
 	var currentItem *models.GearCatalogItem
 	var err error
@@ -1037,6 +1037,13 @@ func (s *GearCatalogStore) AdminUpdate(ctx context.Context, id string, adminUser
 		effectiveModel = currentItem.Model
 		effectiveVariant = currentItem.Variant
 		effectiveGearType = currentItem.GearType
+	}
+
+	if params.GearType != nil {
+		sets = append(sets, fmt.Sprintf("gear_type = $%d", argIdx))
+		args = append(args, *params.GearType)
+		argIdx++
+		effectiveGearType = *params.GearType
 	}
 
 	if params.Brand != nil {
@@ -1074,7 +1081,7 @@ func (s *GearCatalogStore) AdminUpdate(ctx context.Context, id string, adminUser
 				return nil, fmt.Errorf("failed to check for canonical key conflict: %w", err)
 			}
 			if existing != nil {
-				return nil, fmt.Errorf("cannot update: another item already exists with brand=%q model=%q variant=%q", effectiveBrand, effectiveModel, effectiveVariant)
+				return nil, fmt.Errorf("cannot update: another item already exists with gearType=%q brand=%q model=%q variant=%q", effectiveGearType, effectiveBrand, effectiveModel, effectiveVariant)
 			}
 			sets = append(sets, fmt.Sprintf("canonical_key = $%d", argIdx))
 			args = append(args, newCanonicalKey)

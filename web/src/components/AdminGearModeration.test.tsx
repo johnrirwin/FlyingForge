@@ -240,6 +240,27 @@ describe('AdminGearModeration', () => {
     });
   });
 
+  it('updates gear type from within the edit modal', async () => {
+    render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
+
+    const row = await screen.findByRole('button', { name: 'Open editor for EMAX ECO II 2207' });
+    fireEvent.click(row);
+    expect(await screen.findByText('Edit Gear Item')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Gear Type' }), { target: { value: 'esc' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => {
+      expect(mockAdminUpdateGear).toHaveBeenCalledWith(
+        'gear-1',
+        expect.objectContaining({
+          gearType: 'esc',
+        })
+      );
+    });
+  });
+
   it('loads existing specs into the edit modal and allows editing', async () => {
     mockAdminGetGear.mockResolvedValueOnce({
       ...mockItem,

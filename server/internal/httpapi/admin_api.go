@@ -365,6 +365,27 @@ func (api *AdminAPI) handleUpdateGear(w http.ResponseWriter, r *http.Request, id
 		params.Status = &normalizedStatus
 	}
 
+	if params.GearType != nil {
+		normalizedGearType := models.GearType(strings.ToLower(strings.TrimSpace(string(*params.GearType))))
+		if normalizedGearType == "" {
+			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid gearType"})
+			return
+		}
+
+		valid := false
+		for _, gt := range models.AllGearTypes() {
+			if gt == normalizedGearType {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid gearType"})
+			return
+		}
+		params.GearType = &normalizedGearType
+	}
+
 	if params.ImageStatus != nil {
 		switch *params.ImageStatus {
 		case models.ImageStatusMissing, models.ImageStatusScanned, models.ImageStatusApproved:

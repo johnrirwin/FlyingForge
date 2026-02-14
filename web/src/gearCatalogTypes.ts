@@ -115,6 +115,7 @@ export interface CreateGearCatalogParams {
 
 // Admin update parameters
 export interface AdminUpdateGearCatalogParams {
+  gearType?: GearType;
   brand?: string;
   model?: string;
   variant?: string;

@@ -228,6 +228,7 @@ type CreateGearCatalogParams struct {
 
 // AdminUpdateGearCatalogParams represents admin-only update parameters
 type AdminUpdateGearCatalogParams struct {
+	GearType    *GearType          `json:"gearType,omitempty"`
 	Brand       *string            `json:"brand,omitempty"`
 	Model       *string            `json:"model,omitempty"`
 	Variant     *string            `json:"variant,omitempty"`
