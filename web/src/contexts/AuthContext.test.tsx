@@ -12,6 +12,15 @@ function createResponse(status: number) {
   });
 }
 
+function createJsonResponse(status: number, body: unknown) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+}
+
 describe('AuthProvider fetch 401 handling', () => {
   const nativeFetch = window.fetch;
 
@@ -81,6 +90,70 @@ describe('AuthProvider fetch 401 handling', () => {
       await expect(window.fetch('/api/news')).resolves.toBeInstanceOf(Response);
     });
     expect(authExpiredListener).not.toHaveBeenCalled();
+
+    window.removeEventListener(AUTH_EXPIRED_EVENT, authExpiredListener as EventListener);
+    view.unmount();
+  });
+
+  it('refreshes tokens and retries authorized requests when access token expires', async () => {
+    localStorage.setItem('access_token', 'token-a');
+    localStorage.setItem('refresh_token', 'token-b');
+
+    const baseFetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string'
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+
+      const pathname = new URL(url, 'http://localhost').pathname;
+
+      if (pathname === '/api/auth/me') {
+        return createJsonResponse(200, { id: 'user-1' });
+      }
+
+      if (pathname === '/api/auth/refresh') {
+        return createJsonResponse(200, {
+          accessToken: 'token-new',
+          refreshToken: 'refresh-new',
+          tokenType: 'Bearer',
+          expiresIn: 900,
+        });
+      }
+
+      if (pathname === '/api/inventory') {
+        const authHeader = input instanceof Request ? input.headers.get('Authorization') : null;
+        if (authHeader === 'Bearer token-new') {
+          return createJsonResponse(200, { ok: true });
+        }
+        return createResponse(401);
+      }
+
+      return createJsonResponse(200, {});
+    });
+
+    window.fetch = baseFetch as unknown as typeof window.fetch;
+
+    const authExpiredListener = vi.fn();
+    window.addEventListener(AUTH_EXPIRED_EVENT, authExpiredListener as EventListener);
+
+    const view = render(
+      <AuthProvider>
+        <div>child</div>
+      </AuthProvider>,
+    );
+
+    await act(async () => {
+      await expect(window.fetch('/api/inventory', {
+        headers: {
+          Authorization: 'Bearer token-a',
+        },
+      })).resolves.toBeInstanceOf(Response);
+    });
+
+    expect(authExpiredListener).not.toHaveBeenCalled();
+    expect(localStorage.getItem('access_token')).toBe('token-new');
+    expect(localStorage.getItem('refresh_token')).toBe('refresh-new');
 
     window.removeEventListener(AUTH_EXPIRED_EVENT, authExpiredListener as EventListener);
     view.unmount();

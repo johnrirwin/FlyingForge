@@ -84,14 +84,45 @@ function installAuthFetchWrapper() {
     originalWindowFetch = window.fetch;
 
     const wrappedFetch: typeof window.fetch = async (input, init) => {
-      const response = await originalWindowFetch!(input, init);
+      // Normalize to an absolute URL so Request construction works in both browser and
+      // test (Node/undici) environments.
+      const request = input instanceof Request
+        ? new Request(input, init)
+        : new Request(new URL(typeof input === 'string' ? input : input.toString(), window.location.origin), init);
+      const retryBase = request.clone();
 
-      if (shouldHandleAuth401(input, init, response)) {
+      const response = await originalWindowFetch!(request);
+
+      if (!shouldHandleAuth401(request, undefined, response)) {
+        return response;
+      }
+
+      // Attempt a refresh once, then retry the original request with the new access token.
+      try {
+        await authApi.refreshTokens();
+      } catch {
         notifyAuth401Listeners();
         throw new SessionExpiredError();
       }
 
-      return response;
+      const tokens = authApi.getStoredTokens();
+      if (!tokens?.accessToken) {
+        notifyAuth401Listeners();
+        throw new SessionExpiredError();
+      }
+
+      const headers = new Headers(retryBase.headers);
+      headers.set('Authorization', `Bearer ${tokens.accessToken}`);
+      const retryRequest = new Request(retryBase, { headers });
+
+      const retryResponse = await originalWindowFetch!(retryRequest);
+
+      if (shouldHandleAuth401(retryRequest, undefined, retryResponse)) {
+        notifyAuth401Listeners();
+        throw new SessionExpiredError();
+      }
+
+      return retryResponse;
     };
 
     window.fetch = wrappedFetch;

@@ -12,6 +12,8 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 const ACCESS_TOKEN_KEY = 'access_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
 
+let refreshInFlight: Promise<AuthTokens> | null = null;
+
 // Get stored tokens
 export function getStoredTokens(): AuthTokens | null {
   const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
@@ -41,15 +43,31 @@ export function clearStoredTokens(): void {
   localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
 
+function decodeJwtPayload(token: string): { exp?: number } | null {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) {
+      return null;
+    }
+
+    // JWT uses base64url encoding without padding.
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
+    return JSON.parse(atob(padded));
+  } catch {
+    return null;
+  }
+}
+
 // Check if token is expired (with 60s buffer)
 export function isTokenExpired(token: string): boolean {
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    const exp = payload.exp * 1000; // Convert to milliseconds
-    return Date.now() >= exp - 60000; // 60 second buffer
-  } catch {
+  const payload = decodeJwtPayload(token);
+  if (!payload?.exp) {
     return true;
   }
+
+  const exp = payload.exp * 1000; // Convert to milliseconds
+  return Date.now() >= exp - 60000; // 60 second buffer
 }
 
 // Make authenticated request
@@ -102,23 +120,43 @@ export async function loginWithGoogle(params: GoogleLoginParams): Promise<AuthRe
 }
 
 export async function refreshTokens(): Promise<AuthTokens> {
+  if (refreshInFlight) {
+    return refreshInFlight;
+  }
+
   const tokens = getStoredTokens();
-  
   if (!tokens?.refreshToken) {
     throw { code: 'no_refresh_token', message: 'No refresh token available' };
   }
-  
-  const params: RefreshParams = { refreshToken: tokens.refreshToken };
-  
-  const response = await fetch(`${API_BASE}/api/auth/refresh`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(params),
-  });
-  
-  const data = await handleResponse<AuthTokens>(response);
-  storeTokens(data);
-  return data;
+
+  const refreshTokenAttempt = tokens.refreshToken;
+
+  refreshInFlight = (async () => {
+    try {
+      const params: RefreshParams = { refreshToken: refreshTokenAttempt };
+
+      const response = await fetch(`${API_BASE}/api/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      });
+
+      const data = await handleResponse<AuthTokens>(response);
+      storeTokens(data);
+      return data;
+    } catch (error) {
+      // If another tab refreshed while we were in-flight, don't blow away the new tokens.
+      const latest = getStoredTokens();
+      if (latest?.refreshToken && latest.refreshToken !== refreshTokenAttempt) {
+        return latest;
+      }
+      throw error;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+
+  return refreshInFlight;
 }
 
 export async function logout(): Promise<void> {
