@@ -5,6 +5,8 @@ import type {
   GearCatalogSearchResponse,
   AdminGearSearchParams,
   AdminUpdateGearCatalogParams,
+  NearMatchParams,
+  NearMatchResponse,
 } from './gearCatalogTypes';
 import type { Build, BuildListResponse, BuildPublishResponse, BuildStatus, UpdateBuildParams } from './buildTypes';
 import type {
@@ -68,6 +70,32 @@ export async function adminSearchGear(
       throw new Error('Admin or content-admin access required');
     }
     throw new Error(data.error || 'Failed to search gear');
+  }
+
+  return response.json();
+}
+
+export async function adminFindNearMatches(params: NearMatchParams): Promise<NearMatchResponse> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const response = await fetch(`${API_BASE}/gear/near-matches`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(params),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Request failed' }));
+    if (response.status === 403) {
+      throw new Error('Admin or content-admin access required');
+    }
+    throw new Error(data.error || 'Failed to check for duplicates');
   }
 
   return response.json();

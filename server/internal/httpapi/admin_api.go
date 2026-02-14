@@ -50,6 +50,7 @@ func (api *AdminAPI) RegisterRoutes(mux *http.ServeMux, corsMiddleware func(http
 
 	// Content moderation routes: admin OR content-admin role.
 	mux.HandleFunc("/api/admin/gear", corsMiddleware(api.authMiddleware.RequireAuth(api.requireContentModerator(api.handleAdminGear))))
+	mux.HandleFunc("/api/admin/gear/near-matches", corsMiddleware(api.authMiddleware.RequireAuth(api.requireContentModerator(api.handleAdminGearNearMatches))))
 	mux.HandleFunc("/api/admin/gear/", corsMiddleware(api.authMiddleware.RequireAuth(api.requireContentModerator(api.handleAdminGearByID))))
 	if api.buildSvc != nil {
 		mux.HandleFunc("/api/admin/builds", corsMiddleware(api.authMiddleware.RequireAuth(api.requireContentModerator(api.handleAdminBuilds))))
@@ -154,6 +155,49 @@ func (api *AdminAPI) handleAdminGear(w http.ResponseWriter, r *http.Request) {
 	}
 
 	api.writeJSON(w, http.StatusOK, response)
+}
+
+// handleAdminGearNearMatches handles POST /api/admin/gear/near-matches.
+// Used by content admins to warn about potential duplicates during bulk imports.
+func (api *AdminAPI) handleAdminGearNearMatches(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		api.writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	var body struct {
+		GearType  models.GearType `json:"gearType"`
+		Brand     string          `json:"brand"`
+		Model     string          `json:"model"`
+		Threshold float64         `json:"threshold,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	body.Brand = strings.TrimSpace(body.Brand)
+	body.Model = strings.TrimSpace(body.Model)
+	if body.GearType == "" || body.Brand == "" || body.Model == "" {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "gearType, brand, and model are required"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	matches, err := api.catalogStore.FindNearMatchesAdmin(ctx, body.GearType, body.Brand, body.Model, body.Threshold)
+	if err != nil {
+		api.logger.Error("Failed to find near matches (admin)", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	api.writeJSON(w, http.StatusOK, models.NearMatchResponse{
+		Matches: matches,
+	})
 }
 
 // handleAdminGearByID handles GET/PUT/DELETE /api/admin/gear/{id} and /api/admin/gear/{id}/image

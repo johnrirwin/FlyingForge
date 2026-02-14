@@ -519,6 +519,182 @@ func (s *GearCatalogStore) findNearMatchesFallback(ctx context.Context, gearType
 	return matches, nil
 }
 
+// FindNearMatchesAdmin finds potential duplicates across all catalog statuses.
+// This is used for admin/import workflows so editors can see already-imported/pending/removed items.
+func (s *GearCatalogStore) FindNearMatchesAdmin(ctx context.Context, gearType models.GearType, brand, model string, threshold float64) ([]models.NearMatch, error) {
+	if threshold <= 0 {
+		threshold = 0.3 // Default similarity threshold
+	}
+
+	// Try to use pg_trgm similarity if available, fall back to ILIKE.
+	// NOTE: Unlike FindNearMatches, we do not filter by status.
+	query := `
+		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
+			   created_by_user_id, status, canonical_key,
+			   CASE WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   description,
+			   created_at, updated_at,
+			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
+			   COALESCE(image_status, 'missing'), image_curated_by_user_id, image_curated_at,
+			   COALESCE(description_status, 'missing'), description_curated_by_user_id, description_curated_at,
+			   COALESCE(similarity(LOWER(brand || ' ' || model), LOWER($2 || ' ' || $3)), 0) as sim_score
+		FROM gear_catalog
+		WHERE gear_type = $1
+		  AND (
+			COALESCE(similarity(LOWER(brand || ' ' || model), LOWER($2 || ' ' || $3)), 0) >= $4
+			OR LOWER(brand) = LOWER($2)
+			OR LOWER(model) LIKE LOWER('%' || $3 || '%')
+		  )
+		ORDER BY sim_score DESC
+		LIMIT 10
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, gearType, brand, model, threshold)
+	if err != nil {
+		// If pg_trgm is not available, fall back to simpler matching
+		if strings.Contains(err.Error(), "function similarity") || strings.Contains(err.Error(), "does not exist") {
+			return s.findNearMatchesAdminFallback(ctx, gearType, brand, model)
+		}
+		return nil, fmt.Errorf("failed to find near matches (admin): %w", err)
+	}
+	defer rows.Close()
+
+	matches := make([]models.NearMatch, 0)
+	for rows.Next() {
+		var item models.GearCatalogItem
+		var variant, imageURL, description, createdByUserID sql.NullString
+		var imageCuratedByUserID, descriptionCuratedByUserID sql.NullString
+		var imageCuratedAt, descriptionCuratedAt sql.NullTime
+		var msrp sql.NullFloat64
+		var simScore float64
+
+		if err := rows.Scan(
+			&item.ID, &item.GearType, &item.Brand, &item.Model, &variant,
+			&item.Specs, pq.Array(&item.BestFor), &msrp, &item.Source, &createdByUserID, &item.Status,
+			&item.CanonicalKey, &imageURL, &description,
+			&item.CreatedAt, &item.UpdatedAt, &item.UsageCount,
+			&item.ImageStatus, &imageCuratedByUserID, &imageCuratedAt,
+			&item.DescriptionStatus, &descriptionCuratedByUserID, &descriptionCuratedAt,
+			&simScore,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan near match (admin): %w", err)
+		}
+
+		item.Variant = variant.String
+		item.ImageURL = imageURL.String
+		item.Description = description.String
+		item.CreatedByUserID = createdByUserID.String
+		if msrp.Valid {
+			item.MSRP = &msrp.Float64
+		}
+		if imageCuratedByUserID.Valid {
+			item.ImageCuratedByUserID = imageCuratedByUserID.String
+		}
+		if imageCuratedAt.Valid {
+			item.ImageCuratedAt = &imageCuratedAt.Time
+		}
+		if descriptionCuratedByUserID.Valid {
+			item.DescriptionCuratedByUserID = descriptionCuratedByUserID.String
+		}
+		if descriptionCuratedAt.Valid {
+			item.DescriptionCuratedAt = &descriptionCuratedAt.Time
+		}
+
+		matches = append(matches, models.NearMatch{
+			Item:       item,
+			Similarity: simScore,
+		})
+	}
+
+	return matches, nil
+}
+
+func (s *GearCatalogStore) findNearMatchesAdminFallback(ctx context.Context, gearType models.GearType, brand, model string) ([]models.NearMatch, error) {
+	query := `
+		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
+			   created_by_user_id, status, canonical_key,
+			   CASE WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   description,
+			   created_at, updated_at,
+			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
+			   COALESCE(image_status, 'missing'), image_curated_by_user_id, image_curated_at,
+			   COALESCE(description_status, 'missing'), description_curated_by_user_id, description_curated_at
+		FROM gear_catalog
+		WHERE gear_type = $1
+		  AND (
+			LOWER(brand) = LOWER($2)
+			OR LOWER(model) LIKE LOWER('%' || $3 || '%')
+			OR LOWER(brand || ' ' || model) LIKE LOWER('%' || $2 || '%' || $3 || '%')
+		  )
+		ORDER BY 
+			CASE WHEN LOWER(brand) = LOWER($2) THEN 0 ELSE 1 END,
+			brand, model
+		LIMIT 10
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, gearType, brand, model)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find near matches (admin fallback): %w", err)
+	}
+	defer rows.Close()
+
+	matches := make([]models.NearMatch, 0)
+	for rows.Next() {
+		var item models.GearCatalogItem
+		var variant, imageURL, description, createdByUserID sql.NullString
+		var imageCuratedByUserID, descriptionCuratedByUserID sql.NullString
+		var imageCuratedAt, descriptionCuratedAt sql.NullTime
+		var msrp sql.NullFloat64
+
+		if err := rows.Scan(
+			&item.ID, &item.GearType, &item.Brand, &item.Model, &variant,
+			&item.Specs, pq.Array(&item.BestFor), &msrp, &item.Source, &createdByUserID, &item.Status,
+			&item.CanonicalKey, &imageURL, &description,
+			&item.CreatedAt, &item.UpdatedAt, &item.UsageCount,
+			&item.ImageStatus, &imageCuratedByUserID, &imageCuratedAt,
+			&item.DescriptionStatus, &descriptionCuratedByUserID, &descriptionCuratedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan near match (admin fallback): %w", err)
+		}
+
+		item.Variant = variant.String
+		item.ImageURL = imageURL.String
+		item.Description = description.String
+		item.CreatedByUserID = createdByUserID.String
+		if msrp.Valid {
+			item.MSRP = &msrp.Float64
+		}
+		if imageCuratedByUserID.Valid {
+			item.ImageCuratedByUserID = imageCuratedByUserID.String
+		}
+		if imageCuratedAt.Valid {
+			item.ImageCuratedAt = &imageCuratedAt.Time
+		}
+		if descriptionCuratedByUserID.Valid {
+			item.DescriptionCuratedByUserID = descriptionCuratedByUserID.String
+		}
+		if descriptionCuratedAt.Valid {
+			item.DescriptionCuratedAt = &descriptionCuratedAt.Time
+		}
+
+		// Estimate similarity based on string matching (keep consistent with FindNearMatches fallback).
+		similarity := 0.5 // Base similarity for matching items
+		if strings.EqualFold(item.Brand, brand) {
+			similarity += 0.25
+		}
+		if strings.Contains(strings.ToLower(item.Model), strings.ToLower(model)) {
+			similarity += 0.25
+		}
+
+		matches = append(matches, models.NearMatch{
+			Item:       item,
+			Similarity: similarity,
+		})
+	}
+
+	return matches, nil
+}
+
 // UpdateStatus updates the status of a catalog item (for moderation)
 func (s *GearCatalogStore) UpdateStatus(ctx context.Context, id string, status models.CatalogItemStatus) error {
 	query := `UPDATE gear_catalog SET status = $1, updated_at = NOW() WHERE id = $2`

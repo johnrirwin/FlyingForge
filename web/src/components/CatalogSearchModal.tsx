@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { GearCatalogItem, GearType, CreateGearCatalogParams, DroneType } from '../gearCatalogTypes';
+import type { GearCatalogItem, GearType, CreateGearCatalogParams, DroneType, NearMatch } from '../gearCatalogTypes';
 import { GEAR_TYPES, DRONE_TYPES, getCatalogItemDisplayName } from '../gearCatalogTypes';
 import { searchGearCatalog, createGearCatalogItem, findNearMatches, getPopularGear } from '../gearCatalogApi';
+import { adminFindNearMatches } from '../adminApi';
 import { ImageUploadModal } from './ImageUploadModal';
 
 type ModerationStatus = 'APPROVED' | 'REJECTED' | 'PENDING_REVIEW';
@@ -980,6 +981,8 @@ interface ImportCatalogItemsFormProps {
 type ImportCatalogRow = {
   id: string;
   params: CreateGearCatalogParams;
+  duplicates?: NearMatch[];
+  duplicateError?: string;
   result?: 'created' | 'existing' | 'error';
   error?: string;
 };
@@ -993,6 +996,9 @@ function ImportCatalogItemsForm({ onSuccess, onCancel }: ImportCatalogItemsFormP
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
   const [summary, setSummary] = useState<{ created: number; existing: number; failed: number } | null>(null);
+  const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
+  const [duplicateProgress, setDuplicateProgress] = useState<{ current: number; total: number } | null>(null);
+  const duplicateCheckRequestIdRef = useRef(0);
 
   const createRowId = () => {
     if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -1004,11 +1010,68 @@ function ImportCatalogItemsForm({ onSuccess, onCancel }: ImportCatalogItemsFormP
   const validGearTypes = useRef(new Set(GEAR_TYPES.map((t) => t.value)));
   const validDroneTypes = useRef(new Set(DRONE_TYPES.map((t) => t.value)));
 
+  useEffect(() => {
+    return () => {
+      // Cancel any in-flight duplicate checks.
+      duplicateCheckRequestIdRef.current += 1;
+    };
+  }, []);
+
+  const cancelDuplicateChecks = useCallback(() => {
+    duplicateCheckRequestIdRef.current += 1;
+    setIsCheckingDuplicates(false);
+    setDuplicateProgress(null);
+  }, []);
+
+  const checkDuplicates = useCallback(async (targetRows: ImportCatalogRow[]) => {
+    if (targetRows.length === 0) return;
+
+    const requestId = ++duplicateCheckRequestIdRef.current;
+    setIsCheckingDuplicates(true);
+    setDuplicateProgress({ current: 0, total: targetRows.length });
+    setRows((prev) => prev.map((row) => ({ ...row, duplicates: undefined, duplicateError: undefined })));
+
+    for (let i = 0; i < targetRows.length; i++) {
+      setDuplicateProgress({ current: i + 1, total: targetRows.length });
+      const row = targetRows[i];
+
+      try {
+        const response = await adminFindNearMatches({
+          gearType: row.params.gearType,
+          brand: row.params.brand,
+          model: row.params.model,
+          threshold: 0.3,
+        });
+
+        if (duplicateCheckRequestIdRef.current !== requestId) return;
+        setRows((prev) =>
+          prev.map((candidate) =>
+            candidate.id === row.id ? { ...candidate, duplicates: response.matches ?? [] } : candidate
+          )
+        );
+      } catch (err) {
+        if (duplicateCheckRequestIdRef.current !== requestId) return;
+        const message = err instanceof Error ? err.message : 'Failed to check for duplicates';
+        setRows((prev) =>
+          prev.map((candidate) =>
+            candidate.id === row.id ? { ...candidate, duplicates: [], duplicateError: message } : candidate
+          )
+        );
+      }
+    }
+
+    if (duplicateCheckRequestIdRef.current === requestId) {
+      setIsCheckingDuplicates(false);
+      setDuplicateProgress(null);
+    }
+  }, []);
+
   const parseFile = useCallback(
     async (file: File) => {
       setError(null);
       setSummary(null);
       setProgress(null);
+      cancelDuplicateChecks();
 
       const text = await file.text();
       let data: unknown;
@@ -1107,8 +1170,9 @@ function ImportCatalogItemsForm({ onSuccess, onCancel }: ImportCatalogItemsFormP
       setFileName(file.name);
       setParseErrors(nextErrors);
       setRows(nextRows);
+      void checkDuplicates(nextRows);
     },
-    []
+    [cancelDuplicateChecks, checkDuplicates]
   );
 
   const handleFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1147,6 +1211,7 @@ function ImportCatalogItemsForm({ onSuccess, onCancel }: ImportCatalogItemsFormP
       return;
     }
 
+    cancelDuplicateChecks();
     setIsSubmitting(true);
     setError(null);
     setSummary(null);
@@ -1188,6 +1253,8 @@ function ImportCatalogItemsForm({ onSuccess, onCancel }: ImportCatalogItemsFormP
     }
   };
 
+  const possibleDuplicateCount = rows.filter((row) => (row.duplicates?.length ?? 0) > 0).length;
+
   return (
     <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
       <div className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0">
@@ -1226,6 +1293,16 @@ function ImportCatalogItemsForm({ onSuccess, onCancel }: ImportCatalogItemsFormP
               >
                 Choose File
               </button>
+              {rows.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void checkDuplicates(rows)}
+                  disabled={isSubmitting || isCheckingDuplicates}
+                  className="px-3 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-sm text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isCheckingDuplicates ? 'Checking…' : 'Re-check duplicates'}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1243,6 +1320,19 @@ function ImportCatalogItemsForm({ onSuccess, onCancel }: ImportCatalogItemsFormP
                 And {parseErrors.length - 8} more…
               </p>
             )}
+          </div>
+        )}
+
+        {duplicateProgress && (
+          <div className="flex items-center gap-3 text-sm text-slate-300">
+            <div className="w-4 h-4 border-2 border-slate-500/40 border-t-yellow-400 rounded-full animate-spin" />
+            Checking duplicates {duplicateProgress.current} / {duplicateProgress.total}…
+          </div>
+        )}
+
+        {possibleDuplicateCount > 0 && (
+          <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-yellow-300 text-sm">
+            Possible duplicates found for {possibleDuplicateCount} item{possibleDuplicateCount === 1 ? '' : 's'}. Review before saving.
           </div>
         )}
 
@@ -1280,61 +1370,100 @@ function ImportCatalogItemsForm({ onSuccess, onCancel }: ImportCatalogItemsFormP
             </div>
           ) : (
             <div className="space-y-2">
-              {rows.map((row) => (
-                <div
-                  key={row.id}
-                  className={`p-3 rounded-lg border bg-slate-700/30 flex items-start justify-between gap-3 ${
-                    row.result === 'error'
-                      ? 'border-red-500/40'
-                      : row.result === 'created'
-                        ? 'border-green-500/30'
-                        : row.result === 'existing'
-                          ? 'border-blue-500/30'
-                          : 'border-slate-600'
-                  }`}
-                >
-                  <div className="min-w-0">
-                    <p className="text-white font-medium truncate">
-                      {row.params.brand} {row.params.model}
-                      {row.params.variant ? ` ${row.params.variant}` : ''}
-                    </p>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      <span className="px-2 py-0.5 bg-slate-600/60 text-slate-200 rounded text-[11px]">
-                        {row.params.gearType}
-                      </span>
-                      {row.params.bestFor && row.params.bestFor.length > 0 && (
-                        <span className="ml-2 text-slate-500">
-                          • bestFor: {row.params.bestFor.join(', ')}
-                        </span>
-                      )}
-                      {typeof row.params.msrp === 'number' && (
-                        <span className="ml-2 text-slate-500">• MSRP: ${row.params.msrp}</span>
-                      )}
-                    </p>
+              {rows.map((row) => {
+                const duplicates = row.duplicates ?? [];
+                const hasDuplicates = duplicates.length > 0;
+                const borderClass =
+                  row.result === 'error'
+                    ? 'border-red-500/40'
+                    : row.result === 'created'
+                      ? 'border-green-500/30'
+                      : row.result === 'existing'
+                        ? 'border-blue-500/30'
+                        : hasDuplicates
+                          ? 'border-yellow-500/30'
+                          : 'border-slate-600';
 
-                    {row.result === 'created' && (
-                      <p className="mt-1 text-xs text-green-300">Created</p>
-                    )}
-                    {row.result === 'existing' && (
-                      <p className="mt-1 text-xs text-blue-300">Already exists</p>
-                    )}
-                    {row.result === 'error' && row.error && (
-                      <p className="mt-1 text-xs text-red-300">Error: {row.error}</p>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteRow(row.id)}
-                    disabled={isSubmitting}
-                    className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    aria-label={`Remove ${row.params.brand} ${row.params.model}`}
+                return (
+                  <div
+                    key={row.id}
+                    className={`p-3 rounded-lg border bg-slate-700/30 flex items-start justify-between gap-3 ${borderClass}`}
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              ))}
+                    <div className="min-w-0">
+                      <p className="text-white font-medium truncate">
+                        {row.params.brand} {row.params.model}
+                        {row.params.variant ? ` ${row.params.variant}` : ''}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        <span className="px-2 py-0.5 bg-slate-600/60 text-slate-200 rounded text-[11px]">
+                          {row.params.gearType}
+                        </span>
+                        {row.params.bestFor && row.params.bestFor.length > 0 && (
+                          <span className="ml-2 text-slate-500">
+                            • bestFor: {row.params.bestFor.join(', ')}
+                          </span>
+                        )}
+                        {typeof row.params.msrp === 'number' && (
+                          <span className="ml-2 text-slate-500">• MSRP: ${row.params.msrp}</span>
+                        )}
+                      </p>
+
+                      {row.result === 'created' && (
+                        <p className="mt-1 text-xs text-green-300">Created</p>
+                      )}
+                      {row.result === 'existing' && (
+                        <p className="mt-1 text-xs text-blue-300">Already exists</p>
+                      )}
+                      {row.result === 'error' && row.error && (
+                        <p className="mt-1 text-xs text-red-300">Error: {row.error}</p>
+                      )}
+
+                      {row.duplicateError && (
+                        <p className="mt-2 text-xs text-yellow-300">
+                          Unable to check duplicates: {row.duplicateError}
+                        </p>
+                      )}
+
+                      {hasDuplicates && (
+                        <div className="mt-2 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded text-xs text-yellow-300">
+                          <p className="font-medium">
+                            Possible duplicate{duplicates.length === 1 ? '' : 's'}:
+                          </p>
+                          <ul className="list-disc list-inside mt-1 space-y-0.5">
+                            {duplicates.slice(0, 3).map((match) => {
+                              const label = getCatalogItemDisplayName(match.item);
+                              const status = match.item.status ? ` • ${match.item.status}` : '';
+                              const similarity =
+                                typeof match.similarity === 'number' && match.similarity > 0
+                                  ? ` • ${Math.round(match.similarity * 100)}%`
+                                  : '';
+
+                              return (
+                                <li key={match.item.id} className="text-yellow-200/90">
+                                  {label}
+                                  {status}
+                                  {similarity}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteRow(row.id)}
+                      disabled={isSubmitting}
+                      className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      aria-label={`Remove ${row.params.brand} ${row.params.model}`}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1351,7 +1480,7 @@ function ImportCatalogItemsForm({ onSuccess, onCancel }: ImportCatalogItemsFormP
         </button>
         <button
           type="submit"
-          disabled={isSubmitting || rows.length === 0}
+          disabled={isSubmitting || isCheckingDuplicates || rows.length === 0}
           className="px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors flex items-center gap-2 justify-center"
         >
           {isSubmitting ? (
