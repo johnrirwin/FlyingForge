@@ -82,7 +82,8 @@ describe('TempBuildPage', () => {
 
     expect(screen.queryByRole('button', { name: /^share$/i })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /copy share url/i }));
+    const copyButton = await screen.findByRole('button', { name: /copy share url/i });
+    await user.click(copyButton);
 
     await waitFor(() => {
       expect(mockedShareTempBuild).toHaveBeenCalledWith('abc123');

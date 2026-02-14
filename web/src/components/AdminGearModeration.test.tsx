@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { render } from '../test/test-utils';
 import { AdminGearModeration } from './AdminGearModeration';
@@ -16,10 +16,10 @@ import {
   adminSaveGearImageUpload,
   adminSearchGear,
   adminUpdateGear,
-  adminUploadGearImage,
   getAdminBuildImageUrl,
   getAdminGearImageUrl,
 } from '../adminApi';
+import { moderateGearCatalogImageUpload } from '../gearCatalogApi';
 
 vi.mock('../adminApi', () => ({
   adminSearchBuilds: vi.fn(),
@@ -30,13 +30,36 @@ vi.mock('../adminApi', () => ({
   adminDeleteBuildImage: vi.fn(),
   adminSearchGear: vi.fn(),
   adminUpdateGear: vi.fn(),
-  adminUploadGearImage: vi.fn(),
   adminSaveGearImageUpload: vi.fn(),
   adminDeleteGearImage: vi.fn(),
   adminDeleteGear: vi.fn(),
   adminGetGear: vi.fn(),
   getAdminBuildImageUrl: vi.fn(() => '/mock-build-image.png'),
   getAdminGearImageUrl: vi.fn(() => '/mock-image.png'),
+}));
+
+vi.mock('../gearCatalogApi', () => ({
+  searchGearCatalog: vi.fn().mockResolvedValue({ items: [], totalCount: 0 }),
+  createGearCatalogItem: vi.fn().mockResolvedValue({
+    item: {
+      id: 'mock-gear',
+      gearType: 'other',
+      brand: 'Mock',
+      model: 'Item',
+      source: 'admin',
+      status: 'pending',
+      canonicalKey: 'other|mock|item',
+      usageCount: 0,
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      imageStatus: 'missing',
+      descriptionStatus: 'missing',
+    },
+    existing: true,
+  }),
+  findNearMatches: vi.fn().mockResolvedValue({ matches: [] }),
+  getPopularGear: vi.fn().mockResolvedValue({ items: [] }),
+  moderateGearCatalogImageUpload: vi.fn(),
 }));
 
 const mockAdminSearchBuilds = vi.mocked(adminSearchBuilds);
@@ -47,13 +70,18 @@ const mockAdminUploadBuildImage = vi.mocked(adminUploadBuildImage);
 const mockAdminDeleteBuildImage = vi.mocked(adminDeleteBuildImage);
 const mockAdminSearchGear = vi.mocked(adminSearchGear);
 const mockAdminUpdateGear = vi.mocked(adminUpdateGear);
-const mockAdminUploadGearImage = vi.mocked(adminUploadGearImage);
 const mockAdminSaveGearImageUpload = vi.mocked(adminSaveGearImageUpload);
 const mockAdminDeleteGearImage = vi.mocked(adminDeleteGearImage);
 const mockAdminDeleteGear = vi.mocked(adminDeleteGear);
 const mockAdminGetGear = vi.mocked(adminGetGear);
 const mockGetAdminBuildImageUrl = vi.mocked(getAdminBuildImageUrl);
 const mockGetAdminGearImageUrl = vi.mocked(getAdminGearImageUrl);
+const mockModerateGearCatalogImageUpload = vi.mocked(moderateGearCatalogImageUpload);
+
+type ObjectUrlStatics = {
+  createObjectURL?: (obj: Blob) => string;
+  revokeObjectURL?: (url: string) => void;
+};
 
 const mockItem: GearCatalogItem = {
   id: 'gear-1',
@@ -82,15 +110,29 @@ const mockItem: GearCatalogItem = {
 };
 
 describe('AdminGearModeration', () => {
+  let hadCreateObjectURL = false;
+  let hadRevokeObjectURL = false;
+  let originalCreateObjectURL: ObjectUrlStatics['createObjectURL'];
+  let originalRevokeObjectURL: ObjectUrlStatics['revokeObjectURL'];
+
   beforeEach(() => {
     vi.clearAllMocks();
+    // JSDOM doesn't implement these; gear/build moderation UIs rely on them.
+    // Restore in afterEach to avoid leaking state into other test files.
+    const urlStatics = URL as unknown as ObjectUrlStatics;
+    hadCreateObjectURL = typeof urlStatics.createObjectURL === 'function';
+    hadRevokeObjectURL = typeof urlStatics.revokeObjectURL === 'function';
+    originalCreateObjectURL = urlStatics.createObjectURL;
+    originalRevokeObjectURL = urlStatics.revokeObjectURL;
+    urlStatics.createObjectURL = vi.fn(() => 'blob:mock-url');
+    urlStatics.revokeObjectURL = vi.fn();
+
     mockAdminSearchGear.mockResolvedValue({
       items: [mockItem],
       totalCount: 1,
     });
     mockAdminGetGear.mockResolvedValue(mockItem);
     mockAdminUpdateGear.mockResolvedValue(mockItem);
-    mockAdminUploadGearImage.mockResolvedValue();
     mockAdminSaveGearImageUpload.mockResolvedValue();
     mockAdminDeleteGearImage.mockResolvedValue();
     mockAdminDeleteGear.mockResolvedValue();
@@ -102,6 +144,22 @@ describe('AdminGearModeration', () => {
     mockAdminDeleteBuildImage.mockResolvedValue();
     mockGetAdminBuildImageUrl.mockReturnValue('/mock-build-image.png');
     mockGetAdminGearImageUrl.mockReturnValue('/mock-image.png');
+    mockModerateGearCatalogImageUpload.mockResolvedValue({ status: 'APPROVED', uploadId: 'upload-1' });
+  });
+
+  afterEach(() => {
+    const urlStatics = URL as unknown as ObjectUrlStatics;
+    if (hadCreateObjectURL) {
+      urlStatics.createObjectURL = originalCreateObjectURL;
+    } else {
+      delete urlStatics.createObjectURL;
+    }
+
+    if (hadRevokeObjectURL) {
+      urlStatics.revokeObjectURL = originalRevokeObjectURL;
+    } else {
+      delete urlStatics.revokeObjectURL;
+    }
   });
 
   it('shows upload and last edit columns and opens modal by clicking a row', async () => {
@@ -194,5 +252,36 @@ describe('AdminGearModeration', () => {
     fireEvent.change(fileInput, { target: { files: [oversizedFile] } });
 
     expect(await screen.findByText('Image file is too large. Maximum size is 2MB.')).toBeInTheDocument();
+  });
+
+  it('moderates and saves a scanned image when updating a gear record', async () => {
+    render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
+
+    const row = await screen.findByRole('button', { name: 'Open editor for EMAX ECO II 2207' });
+    fireEvent.click(row);
+    expect(await screen.findByText('Edit Gear Item')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Image' }));
+    expect(await screen.findByText('Edit Gear Image')).toBeInTheDocument();
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const validFile = new File([new Uint8Array(128)], 'ok.jpg', { type: 'image/jpeg' });
+    fireEvent.change(fileInput, { target: { files: [validFile] } });
+
+    await waitFor(() => {
+      expect(mockModerateGearCatalogImageUpload).toHaveBeenCalled();
+    });
+    expect(await screen.findByText('Approved')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => {
+      expect(mockAdminSaveGearImageUpload).toHaveBeenCalledWith('gear-1', 'upload-1');
+    });
+    await waitFor(() => {
+      expect(mockAdminUpdateGear).toHaveBeenCalledWith('gear-1', expect.objectContaining({ imageStatus: 'scanned' }));
+    });
   });
 });

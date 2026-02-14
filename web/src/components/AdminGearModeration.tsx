@@ -5,7 +5,6 @@ import type { Build, BuildStatus, BuildValidationError } from '../buildTypes';
 import {
   adminSearchGear,
   adminUpdateGear,
-  adminUploadGearImage,
   adminSaveGearImageUpload,
   adminDeleteGearImage,
   adminDeleteGear,
@@ -1345,9 +1344,15 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
   const [selectedImageStatus, setSelectedImageStatus] = useState<GearCatalogItem['imageStatus']>('missing');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageUploadId, setImageUploadId] = useState<string | null>(null);
   const [showImageModal, setShowImageModal] = useState(false);
   const [modalImageFile, setModalImageFile] = useState<File | null>(null);
   const [modalImagePreview, setModalImagePreview] = useState<string | null>(null);
+  const [modalImageUploadId, setModalImageUploadId] = useState<string | null>(null);
+  const [imageModalStatusText, setImageModalStatusText] = useState<string | null>(null);
+  const [imageModalStatusTone, setImageModalStatusTone] = useState<'neutral' | 'success' | 'error'>('neutral');
+  const [imageModalStatusReason, setImageModalStatusReason] = useState<string | null>(null);
+  const [isModeratingImage, setIsModeratingImage] = useState(false);
   const [imageModalError, setImageModalError] = useState<string | null>(null);
   const [deleteImage, setDeleteImage] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -1357,6 +1362,25 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
   const [error, setError] = useState<string | null>(null);
   const deleteDialogRef = useRef<HTMLDivElement>(null);
   const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
+  const imagePreviewRef = useRef<string | null>(null);
+  const modalImagePreviewRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    imagePreviewRef.current = imagePreview;
+  }, [imagePreview]);
+
+  useEffect(() => {
+    modalImagePreviewRef.current = modalImagePreview;
+  }, [modalImagePreview]);
+
+  useEffect(() => {
+    return () => {
+      const urls = new Set<string>();
+      if (imagePreviewRef.current?.startsWith('blob:')) urls.add(imagePreviewRef.current);
+      if (modalImagePreviewRef.current?.startsWith('blob:')) urls.add(modalImagePreviewRef.current);
+      urls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, []);
   
   // Fetch fresh item data when modal opens
   useEffect(() => {
@@ -1408,7 +1432,9 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
     });
   }, [willHaveImage]);
 
-  const handleFileChange = (file: File) => {
+  const moderationRequestRef = useRef(0);
+
+  const handleFileChange = async (file: File) => {
     // Validate file size (2MB max)
     if (file.size > 2 * 1024 * 1024) {
       setImageModalError('Image file is too large. Maximum size is 2MB.');
@@ -1422,16 +1448,63 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
       return;
     }
     
+    const requestId = ++moderationRequestRef.current;
+
     setError(null);
     setImageModalError(null);
+    setImageModalStatusTone('neutral');
+    setImageModalStatusReason(null);
+    setImageModalStatusText('Checking image for safety…');
+    setIsModeratingImage(true);
+    setModalImageUploadId(null);
+
+    const previewUrl = URL.createObjectURL(file);
+    if (modalImagePreview?.startsWith('blob:') && modalImagePreview !== imagePreview) {
+      URL.revokeObjectURL(modalImagePreview);
+    }
+
     setModalImageFile(file);
-    
-    // Create preview
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setModalImagePreview(event.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+    setModalImagePreview(previewUrl);
+
+    try {
+      const moderation = await moderateGearCatalogImageUpload(file);
+      if (requestId !== moderationRequestRef.current) {
+        return;
+      }
+
+      if (moderation.status === 'APPROVED' && moderation.uploadId) {
+        setModalImageUploadId(moderation.uploadId);
+        setImageModalStatusTone('success');
+        setImageModalStatusText('Approved');
+        setImageModalStatusReason(null);
+        return;
+      }
+
+      if (moderation.status === 'REJECTED') {
+        setImageModalStatusTone('error');
+        setImageModalStatusText('Not allowed');
+        setImageModalStatusReason(moderation.reason ?? 'Image failed safety checks');
+        return;
+      }
+
+      setImageModalStatusTone('error');
+      setImageModalStatusText('Unable to verify right now');
+      setImageModalStatusReason(moderation.reason ?? 'Unable to verify image right now');
+    } catch (err) {
+      if (requestId !== moderationRequestRef.current) {
+        return;
+      }
+      const message = err instanceof Error ? err.message : 'Unable to verify image right now';
+      setImageModalStatusTone('error');
+      setImageModalStatusText('Unable to verify right now');
+      setImageModalStatusReason(message);
+      setImageModalError(message);
+      setError(message);
+    } finally {
+      if (requestId === moderationRequestRef.current) {
+        setIsModeratingImage(false);
+      }
+    }
   };
 
   const handleOpenImageModal = () => {
@@ -1439,32 +1512,65 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
     setImageModalError(null);
     setModalImageFile(imageFile);
     setModalImagePreview(imagePreview);
+    setModalImageUploadId(imageUploadId);
+    setImageModalStatusText(null);
+    setImageModalStatusTone('neutral');
+    setImageModalStatusReason(null);
+    setIsModeratingImage(false);
   };
 
   const handleCloseImageModal = () => {
     setShowImageModal(false);
+    moderationRequestRef.current += 1;
+    if (modalImagePreview?.startsWith('blob:') && modalImagePreview !== imagePreview) {
+      URL.revokeObjectURL(modalImagePreview);
+    }
     setModalImageFile(null);
     setModalImagePreview(null);
+    setModalImageUploadId(null);
+    setImageModalStatusText(null);
+    setImageModalStatusTone('neutral');
+    setImageModalStatusReason(null);
+    setIsModeratingImage(false);
     setImageModalError(null);
   };
 
   const handleSaveImageSelection = () => {
-    if (!modalImageFile || !modalImagePreview) return;
+    if (!modalImageFile || !modalImagePreview || !modalImageUploadId) return;
 
     setDeleteImage(false);
+    if (imagePreview?.startsWith('blob:')) {
+      URL.revokeObjectURL(imagePreview);
+    }
     setImageFile(modalImageFile);
     setImagePreview(modalImagePreview);
+    setImageUploadId(modalImageUploadId);
     setSelectedImageStatus('scanned');
     setError(null);
     setImageModalError(null);
-    handleCloseImageModal();
+    setShowImageModal(false);
+    setModalImageFile(null);
+    setModalImagePreview(null);
+    setModalImageUploadId(null);
+    setImageModalStatusText(null);
+    setImageModalStatusTone('neutral');
+    setImageModalStatusReason(null);
+    setIsModeratingImage(false);
   };
 
   const handleDeleteImage = () => {
     setDeleteImage(true);
     setImageFile(null);
+    setImageUploadId(null);
+    if (imagePreview?.startsWith('blob:')) {
+      URL.revokeObjectURL(imagePreview);
+    }
     setImagePreview(null);
     setModalImageFile(null);
+    setModalImageUploadId(null);
+    if (modalImagePreview?.startsWith('blob:')) {
+      URL.revokeObjectURL(modalImagePreview);
+    }
     setModalImagePreview(null);
     setImageModalError(null);
     setSelectedImageStatus('missing');
@@ -1607,9 +1713,8 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
     }
 
     // Handle image: upload new, delete existing, or no change
-    if (imageFile) {
-      // Upload new image
-      await adminUploadGearImage(item.id, imageFile);
+    if (imageUploadId) {
+      await adminSaveGearImageUpload(item.id, imageUploadId);
     } else if (deleteImage && hasExistingImage) {
       // Delete existing image
       await adminDeleteGearImage(item.id);
@@ -2008,7 +2113,11 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
         onSelectFile={handleFileChange}
         onClose={handleCloseImageModal}
         onSave={handleSaveImageSelection}
-        disableSave={!modalImageFile || !modalImagePreview}
+        disableSelect={isModeratingImage}
+        disableSave={!modalImageFile || !modalImagePreview || !modalImageUploadId || isModeratingImage}
+        statusText={imageModalStatusText}
+        statusTone={imageModalStatusTone}
+        statusReason={imageModalStatusReason ?? undefined}
         errorMessage={imageModalError}
       />
 
