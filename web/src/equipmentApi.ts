@@ -143,7 +143,6 @@ export async function addEquipmentToInventory(
   price: number,
   seller: string,
   productUrl: string,
-  imageUrl?: string,
   specs?: Record<string, unknown>,
   quantity = 1,
   notes?: string
@@ -157,7 +156,6 @@ export async function addEquipmentToInventory(
     purchasePrice: price,
     purchaseSeller: seller,
     productUrl,
-    imageUrl,
     specs,
     sourceEquipmentId: equipmentId,
   });

@@ -121,7 +121,6 @@ export interface AdminUpdateGearCatalogParams {
   description?: string;
   msrp?: number;
   clearMsrp?: boolean; // Explicitly clear MSRP when true
-  imageUrl?: string;
   imageStatus?: ImageCurationStatus;
   bestFor?: DroneType[]; // Drone types this gear is best suited for
   status?: CatalogItemStatus;

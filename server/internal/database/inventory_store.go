@@ -36,8 +36,8 @@ func (s *InventoryStore) Add(ctx context.Context, userID string, params models.A
 		INSERT INTO inventory_items (
 			user_id, name, category, manufacturer, quantity, notes,
 			build_id, purchase_price, purchase_seller,
-			product_url, image_url, specs, source_equipment_id, catalog_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+			product_url, specs, source_equipment_id, catalog_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING id, created_at, updated_at
 	`
 
@@ -52,7 +52,6 @@ func (s *InventoryStore) Add(ctx context.Context, userID string, params models.A
 		PurchasePrice:     params.PurchasePrice,
 		PurchaseSeller:    params.PurchaseSeller,
 		ProductURL:        params.ProductURL,
-		ImageURL:          params.ImageURL,
 		Specs:             specs,
 		SourceEquipmentID: params.SourceEquipmentID,
 		CatalogID:         params.CatalogID,
@@ -61,7 +60,7 @@ func (s *InventoryStore) Add(ctx context.Context, userID string, params models.A
 	err := s.db.QueryRowContext(ctx, query,
 		nullString(userID), item.Name, item.Category, item.Manufacturer, item.Quantity, item.Notes,
 		nullString(item.BuildID), item.PurchasePrice, nullString(item.PurchaseSeller),
-		nullString(item.ProductURL), nullString(item.ImageURL), item.Specs, nullString(item.SourceEquipmentID),
+		nullString(item.ProductURL), item.Specs, nullString(item.SourceEquipmentID),
 		nullString(item.CatalogID),
 	).Scan(&item.ID, &item.CreatedAt, &item.UpdatedAt)
 
@@ -95,30 +94,30 @@ func (s *InventoryStore) AddOrIncrement(ctx context.Context, userID string, para
 		INSERT INTO inventory_items (
 			user_id, name, category, manufacturer, quantity, notes,
 			build_id, purchase_price, purchase_seller,
-			product_url, image_url, specs, source_equipment_id, catalog_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+			product_url, specs, source_equipment_id, catalog_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		ON CONFLICT (user_id, catalog_id) WHERE user_id IS NOT NULL AND catalog_id IS NOT NULL
 		DO UPDATE SET quantity = inventory_items.quantity + EXCLUDED.quantity, updated_at = NOW()
 		RETURNING id, user_id, name, category, manufacturer, quantity, notes,
 			build_id, purchase_price, purchase_seller,
-			product_url, image_url, specs, source_equipment_id, catalog_id, created_at, updated_at
+			product_url, specs, source_equipment_id, catalog_id, created_at, updated_at
 	`
 
 	item := &models.InventoryItem{}
 	var itemUserID sql.NullString
-	var buildID, purchaseSeller, productURL, imageURL, sourceEquipmentID, catalogID sql.NullString
+	var buildID, purchaseSeller, productURL, sourceEquipmentID, catalogID sql.NullString
 	var purchasePriceNull sql.NullFloat64
 
 	err := s.db.QueryRowContext(ctx, query,
 		nullString(userID), params.Name, params.Category, params.Manufacturer, quantity, params.Notes,
 		nullString(params.BuildID), params.PurchasePrice, nullString(params.PurchaseSeller),
-		nullString(params.ProductURL), nullString(params.ImageURL), specs, nullString(params.SourceEquipmentID),
+		nullString(params.ProductURL), specs, nullString(params.SourceEquipmentID),
 		nullString(params.CatalogID),
 	).Scan(
 		&item.ID, &itemUserID, &item.Name, &item.Category, &item.Manufacturer,
 		&item.Quantity, &item.Notes,
 		&buildID, &purchasePriceNull, &purchaseSeller,
-		&productURL, &imageURL, &item.Specs, &sourceEquipmentID, &catalogID,
+		&productURL, &item.Specs, &sourceEquipmentID, &catalogID,
 		&item.CreatedAt, &item.UpdatedAt,
 	)
 
@@ -132,7 +131,6 @@ func (s *InventoryStore) AddOrIncrement(ctx context.Context, userID string, para
 	item.BuildID = buildID.String
 	item.PurchaseSeller = purchaseSeller.String
 	item.ProductURL = productURL.String
-	item.ImageURL = imageURL.String
 	item.SourceEquipmentID = sourceEquipmentID.String
 	item.CatalogID = catalogID.String
 
@@ -149,12 +147,12 @@ func (s *InventoryStore) Get(ctx context.Context, id string, userID string) (*mo
 		SELECT i.id, i.user_id, i.name, i.category, i.manufacturer, i.quantity, i.notes,
 			   i.build_id, i.purchase_price, i.purchase_seller,
 			   i.product_url, 
-			   COALESCE(i.image_url, 
-			       CASE WHEN gc.image_url IS NOT NULL AND gc.image_url != '' THEN gc.image_url 
-			            WHEN COALESCE(gc.image_status, 'missing') IN ('approved', 'scanned') AND (gc.image_asset_id IS NOT NULL OR gc.image_data IS NOT NULL)
-			                 THEN '/api/gear-catalog/' || gc.id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(gc.image_curated_at, gc.updated_at))*1000)::bigint 
-			            ELSE NULL END
-			   ) as image_url,
+			   CASE
+			        WHEN COALESCE(gc.image_status, 'missing') IN ('approved', 'scanned')
+			             AND (gc.image_asset_id IS NOT NULL OR gc.image_data IS NOT NULL)
+			             THEN '/api/gear-catalog/' || gc.id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(gc.image_curated_at, gc.updated_at))*1000)::bigint
+			        ELSE NULL
+			   END as image_url,
 			   i.specs, i.source_equipment_id, i.catalog_id, i.created_at, i.updated_at
 		FROM inventory_items i
 		LEFT JOIN gear_catalog gc ON i.catalog_id = gc.id
@@ -168,12 +166,12 @@ func (s *InventoryStore) Get(ctx context.Context, id string, userID string) (*mo
 			SELECT i.id, i.user_id, i.name, i.category, i.manufacturer, i.quantity, i.notes,
 				   i.build_id, i.purchase_price, i.purchase_seller,
 				   i.product_url, 
-				   COALESCE(i.image_url, 
-				       CASE WHEN gc.image_url IS NOT NULL AND gc.image_url != '' THEN gc.image_url 
-				            WHEN COALESCE(gc.image_status, 'missing') IN ('approved', 'scanned') AND (gc.image_asset_id IS NOT NULL OR gc.image_data IS NOT NULL)
-				                 THEN '/api/gear-catalog/' || gc.id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(gc.image_curated_at, gc.updated_at))*1000)::bigint 
-				            ELSE NULL END
-				   ) as image_url,
+				   CASE
+				        WHEN COALESCE(gc.image_status, 'missing') IN ('approved', 'scanned')
+				             AND (gc.image_asset_id IS NOT NULL OR gc.image_data IS NOT NULL)
+				             THEN '/api/gear-catalog/' || gc.id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(gc.image_curated_at, gc.updated_at))*1000)::bigint
+				        ELSE NULL
+				   END as image_url,
 				   i.specs, i.source_equipment_id, i.catalog_id, i.created_at, i.updated_at
 			FROM inventory_items i
 			LEFT JOIN gear_catalog gc ON i.catalog_id = gc.id
@@ -277,12 +275,12 @@ func (s *InventoryStore) List(ctx context.Context, userID string, params models.
 		SELECT i.id, i.user_id, i.name, i.category, i.manufacturer, i.quantity, i.notes,
 			   i.build_id, i.purchase_price, i.purchase_seller,
 			   i.product_url, 
-			   COALESCE(i.image_url, 
-			       CASE WHEN gc.image_url IS NOT NULL AND gc.image_url != '' THEN gc.image_url 
-			            WHEN COALESCE(gc.image_status, 'missing') IN ('approved', 'scanned') AND (gc.image_asset_id IS NOT NULL OR gc.image_data IS NOT NULL)
-			                 THEN '/api/gear-catalog/' || gc.id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(gc.image_curated_at, gc.updated_at))*1000)::bigint 
-			            ELSE NULL END
-			   ) as image_url,
+			   CASE
+			        WHEN COALESCE(gc.image_status, 'missing') IN ('approved', 'scanned')
+			             AND (gc.image_asset_id IS NOT NULL OR gc.image_data IS NOT NULL)
+			             THEN '/api/gear-catalog/' || gc.id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(gc.image_curated_at, gc.updated_at))*1000)::bigint
+			        ELSE NULL
+			   END as image_url,
 			   i.specs, i.source_equipment_id, i.catalog_id, i.created_at, i.updated_at
 		FROM inventory_items i
 		LEFT JOIN gear_catalog gc ON i.catalog_id = gc.id
@@ -397,12 +395,6 @@ func (s *InventoryStore) Update(ctx context.Context, userID string, params model
 	if params.ProductURL != nil {
 		sets = append(sets, fmt.Sprintf("product_url = $%d", argIndex))
 		args = append(args, nullString(*params.ProductURL))
-		argIndex++
-	}
-
-	if params.ImageURL != nil {
-		sets = append(sets, fmt.Sprintf("image_url = $%d", argIndex))
-		args = append(args, nullString(*params.ImageURL))
 		argIndex++
 	}
 
@@ -530,12 +522,12 @@ func (s *InventoryStore) GetByCatalogID(ctx context.Context, userID, catalogID s
 		SELECT i.id, i.user_id, i.name, i.category, i.manufacturer, i.quantity, i.notes,
 			   i.build_id, i.purchase_price, i.purchase_seller,
 			   i.product_url, 
-			   COALESCE(i.image_url, 
-			       CASE WHEN gc.image_url IS NOT NULL AND gc.image_url != '' THEN gc.image_url 
-			            WHEN COALESCE(gc.image_status, 'missing') IN ('approved', 'scanned') AND (gc.image_asset_id IS NOT NULL OR gc.image_data IS NOT NULL)
-			                 THEN '/api/gear-catalog/' || gc.id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(gc.image_curated_at, gc.updated_at))*1000)::bigint 
-			            ELSE NULL END
-			   ) as image_url,
+			   CASE
+			        WHEN COALESCE(gc.image_status, 'missing') IN ('approved', 'scanned')
+			             AND (gc.image_asset_id IS NOT NULL OR gc.image_data IS NOT NULL)
+			             THEN '/api/gear-catalog/' || gc.id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(gc.image_curated_at, gc.updated_at))*1000)::bigint
+			        ELSE NULL
+			   END as image_url,
 			   i.specs, i.source_equipment_id, i.catalog_id, i.created_at, i.updated_at
 		FROM inventory_items i
 		LEFT JOIN gear_catalog gc ON i.catalog_id = gc.id

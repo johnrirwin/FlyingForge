@@ -108,7 +108,6 @@ func (s *Service) AddFromEquipment(ctx context.Context, userID string, equipment
 		PurchasePrice:     &equipment.Price,
 		PurchaseSeller:    equipment.Seller,
 		ProductURL:        equipment.ProductURL,
-		ImageURL:          equipment.ImageURL,
 		Specs:             equipment.KeySpecs,
 		SourceEquipmentID: equipment.ID,
 	}
@@ -215,7 +214,6 @@ func (s *InMemoryService) AddItem(ctx context.Context, userID string, params mod
 		PurchasePrice:     params.PurchasePrice,
 		PurchaseSeller:    params.PurchaseSeller,
 		ProductURL:        params.ProductURL,
-		ImageURL:          params.ImageURL,
 		Specs:             params.Specs,
 		SourceEquipmentID: params.SourceEquipmentID,
 		CreatedAt:         now,
@@ -243,7 +241,6 @@ func (s *InMemoryService) AddFromEquipment(ctx context.Context, userID string, e
 		PurchasePrice:     &equipment.Price,
 		PurchaseSeller:    equipment.Seller,
 		ProductURL:        equipment.ProductURL,
-		ImageURL:          equipment.ImageURL,
 		Specs:             equipment.KeySpecs,
 		SourceEquipmentID: equipment.ID,
 	})
@@ -352,9 +349,6 @@ func (s *InMemoryService) UpdateItem(ctx context.Context, userID string, params 
 	}
 	if params.ProductURL != nil {
 		item.ProductURL = *params.ProductURL
-	}
-	if params.ImageURL != nil {
-		item.ImageURL = *params.ImageURL
 	}
 	if params.Specs != nil {
 		item.Specs = params.Specs

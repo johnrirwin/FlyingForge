@@ -50,7 +50,6 @@ type AddInventoryParams struct {
 	PurchasePrice     *float64          `json:"purchasePrice,omitempty"`
 	PurchaseSeller    string            `json:"purchaseSeller,omitempty"`
 	ProductURL        string            `json:"productUrl,omitempty"`
-	ImageURL          string            `json:"imageUrl,omitempty"`
 	Specs             json.RawMessage   `json:"specs,omitempty"`
 	SourceEquipmentID string            `json:"sourceEquipmentId,omitempty"`
 	CatalogID         string            `json:"catalogId,omitempty"` // Link to gear catalog item
@@ -68,7 +67,6 @@ type UpdateInventoryParams struct {
 	PurchasePrice  *float64           `json:"purchasePrice,omitempty"`
 	PurchaseSeller *string            `json:"purchaseSeller,omitempty"`
 	ProductURL     *string            `json:"productUrl,omitempty"`
-	ImageURL       *string            `json:"imageUrl,omitempty"`
 	Specs          json.RawMessage    `json:"specs,omitempty"`
 }
 

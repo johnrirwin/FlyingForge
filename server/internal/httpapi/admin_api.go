@@ -250,14 +250,6 @@ func (api *AdminAPI) handleUpdateGear(w http.ResponseWriter, r *http.Request, id
 		}
 	}
 
-	// Validate ImageURL if provided
-	if params.ImageURL != nil && *params.ImageURL != "" {
-		if err := validateImageURL(*params.ImageURL); err != nil {
-			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-	}
-
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 

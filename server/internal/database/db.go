@@ -123,6 +123,7 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationGearCatalogPublishAutoApproveScannedImage, // Aligns published items to approved image status
 		migrationBuilds,                                    // Adds user/public/temp builds with part mappings
 		migrationFeedItems,                                 // Adds persistent storage for aggregated feed/news items
+		migrationDropLegacyImageURLs,                       // Drops legacy image_url columns in favor of image_assets
 	}
 
 	for i, migration := range migrations {
@@ -206,7 +207,6 @@ CREATE TABLE IF NOT EXISTS equipment_items (
     seller_id VARCHAR(50) REFERENCES sellers(id),
     seller_name VARCHAR(255) NOT NULL,
     product_url VARCHAR(1024) NOT NULL,
-    image_url VARCHAR(1024),
     key_specs JSONB DEFAULT '{}',
     in_stock BOOLEAN DEFAULT false,
     stock_qty INTEGER,
@@ -233,7 +233,6 @@ CREATE TABLE IF NOT EXISTS inventory_items (
     purchase_price DECIMAL(10,2),
     purchase_seller VARCHAR(255),
     product_url VARCHAR(1024),
-    image_url VARCHAR(1024),
     specs JSONB DEFAULT '{}',
     source_equipment_id VARCHAR(100),
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -262,7 +261,6 @@ CREATE TABLE IF NOT EXISTS aircraft (
     name VARCHAR(255) NOT NULL,
     nickname VARCHAR(255),
     type VARCHAR(50),
-    image_url VARCHAR(1024),
     description TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -551,7 +549,6 @@ CREATE TABLE IF NOT EXISTS gear_catalog (
     created_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'pending',
     canonical_key VARCHAR(1024) NOT NULL,
-    image_url TEXT,
     description TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -639,16 +636,28 @@ ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS description_curated_at TIMESTA
 -- Index for filtering by image status (for admin moderation queue)
 CREATE INDEX IF NOT EXISTS idx_gear_catalog_image_status ON gear_catalog(image_status);
 
--- Set existing items with images to 'approved', items without to 'missing'
--- Only update if image_status is NULL (i.e., never been explicitly set)
-UPDATE gear_catalog SET image_status = 'approved' WHERE image_status IS NULL AND ((image_url IS NOT NULL AND image_url != '') OR image_data IS NOT NULL);
-UPDATE gear_catalog SET image_status = 'missing' WHERE image_status IS NULL AND (image_url IS NULL OR image_url = '') AND image_data IS NULL;
+-- Initialize legacy rows based on stored image_data when available.
+-- NOTE: image_data is added in a later migration (migrationGearCatalogImageData), so guard this update.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'gear_catalog'
+          AND column_name = 'image_data'
+    ) THEN
+        EXECUTE '
+            UPDATE gear_catalog
+            SET image_status = ''approved'',
+                image_curated_at = COALESCE(image_curated_at, NOW())
+            WHERE COALESCE(image_status, ''missing'') = ''missing''
+              AND image_data IS NOT NULL
+        ';
+    END IF;
+END $$;
 UPDATE gear_catalog SET description_status = 'approved' WHERE description_status IS NULL AND description IS NOT NULL AND description != '';
 UPDATE gear_catalog SET description_status = 'missing' WHERE description_status IS NULL AND (description IS NULL OR description = '');
-
--- Fix any rows that have image_data but were incorrectly marked as 'missing'
-UPDATE gear_catalog SET image_status = 'approved', image_curated_at = COALESCE(image_curated_at, NOW()) 
-WHERE image_status = 'missing' AND image_data IS NOT NULL;
 `
 
 // Migration to add is_admin flag to users
@@ -688,9 +697,7 @@ const migrationGearCatalogImageData = `
 -- Add image_data column for storing actual image binary (max 2MB enforced by app)
 ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS image_data BYTEA;
 ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS image_type VARCHAR(50);
-
--- When image_data is set, clear the old image_url field
--- (we're moving away from URL-based images to uploaded images)
+-- NOTE: Legacy image_url columns are removed in migrationDropLegacyImageURLs.
 `
 
 // Migration to add unique partial index on (user_id, catalog_id) for inventory items
@@ -858,7 +865,6 @@ WHERE status = 'published'
   AND (
     image_asset_id IS NOT NULL
     OR image_data IS NOT NULL
-    OR (image_url IS NOT NULL AND image_url != '')
   );
 `
 
@@ -969,4 +975,12 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
     RAISE NOTICE 'Could not create feed_items trigram indexes, using fallback search';
 END $$;
+`
+
+// Migration to drop legacy image_url columns in favor of moderated image assets / binary storage.
+const migrationDropLegacyImageURLs = `
+ALTER TABLE gear_catalog DROP COLUMN IF EXISTS external_image_url;
+ALTER TABLE gear_catalog DROP COLUMN IF EXISTS image_url;
+ALTER TABLE inventory_items DROP COLUMN IF EXISTS image_url;
+ALTER TABLE equipment_items DROP COLUMN IF EXISTS image_url;
 `

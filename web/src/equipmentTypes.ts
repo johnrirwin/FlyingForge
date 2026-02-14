@@ -129,7 +129,6 @@ export interface AddInventoryParams {
   purchasePrice?: number;
   purchaseSeller?: string;
   productUrl?: string;
-  imageUrl?: string;
   specs?: Record<string, unknown>;
   sourceEquipmentId?: string;
 }
@@ -145,7 +144,6 @@ export interface UpdateInventoryParams {
   purchasePrice?: number;
   purchaseSeller?: string;
   productUrl?: string;
-  imageUrl?: string;
   specs?: Record<string, unknown>;
 }
 
