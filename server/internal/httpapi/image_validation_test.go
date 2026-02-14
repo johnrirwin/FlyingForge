@@ -51,4 +51,3 @@ func TestDetectAllowedImageContentType(t *testing.T) {
 		})
 	}
 }
-
