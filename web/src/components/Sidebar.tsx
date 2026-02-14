@@ -92,7 +92,7 @@ export const Sidebar = memo(function Sidebar({
       {/* Sidebar */}
       <aside
         className={`
-          fixed md:static top-0 left-0 z-50 h-[var(--app-height,100vh)] md:h-auto
+          fixed md:static top-0 left-0 z-50 h-screen supports-[height:100dvh]:h-[100dvh] md:h-auto
           w-64 flex-shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col
           overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch] md:overflow-hidden
           transform transition-transform duration-300 ease-in-out
@@ -297,7 +297,7 @@ export const Sidebar = memo(function Sidebar({
       <div className="flex-1" />
 
       {/* User section at bottom */}
-      <div className="p-4 pb-6 md:pb-4 border-t border-slate-800">
+      <div className="p-4 border-t border-slate-800">
         {authLoading ? (
           <div className="flex items-center justify-center py-2">
             <div className="w-5 h-5 border-2 border-slate-600 border-t-primary-500 rounded-full animate-spin" />

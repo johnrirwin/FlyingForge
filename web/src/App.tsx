@@ -77,30 +77,6 @@ function App() {
   // Mobile menu state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // iOS Safari can report 100vh larger than the visible viewport when the browser chrome is shown,
-  // which causes bottom-anchored UI (like the sidebar Sign In button) to be clipped.
-  // Keep a CSS var in sync with the *visual* viewport height and use it in the app shell.
-  useEffect(() => {
-    const setAppHeight = () => {
-      const height = window.visualViewport?.height ?? window.innerHeight;
-      document.documentElement.style.setProperty('--app-height', `${height}px`);
-    };
-
-    setAppHeight();
-
-    window.addEventListener('resize', setAppHeight);
-    window.addEventListener('orientationchange', setAppHeight);
-    window.visualViewport?.addEventListener('resize', setAppHeight);
-    window.visualViewport?.addEventListener('scroll', setAppHeight);
-
-    return () => {
-      window.removeEventListener('resize', setAppHeight);
-      window.removeEventListener('orientationchange', setAppHeight);
-      window.visualViewport?.removeEventListener('resize', setAppHeight);
-      window.visualViewport?.removeEventListener('scroll', setAppHeight);
-    };
-  }, []);
-
   // Derive activeSection from URL path
   const activeSection: AppSection = (() => {
     // When authenticated, the root route renders the dashboard.
@@ -606,7 +582,7 @@ function App() {
   );
 
   return (
-    <div className="flex h-[var(--app-height,100vh)] bg-slate-900 text-white overflow-hidden">
+    <div className="flex h-screen supports-[height:100dvh]:h-[100dvh] bg-slate-900 text-white overflow-hidden">
       <div ref={appShellRef} className="flex flex-1 min-h-0 min-w-0">
       {/* Mobile Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-30 bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between">
