@@ -164,7 +164,7 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(() => new Set());
-  const selectAllCheckboxRef = useRef<HTMLInputElement | null>(null);
+  const [isBulkEditMode, setIsBulkEditMode] = useState(false);
 
   // Bulk delete state
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
@@ -211,13 +211,6 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
   const hasSelectedInUse = selectedItems.some((item) => item.usageCount > 0);
   const selectedInUseCount = selectedItems.filter((item) => item.usageCount > 0).length;
   const isAllSelected = items.length > 0 && items.every((item) => selectedItemIds.has(item.id));
-  const isSomeSelected = items.some((item) => selectedItemIds.has(item.id)) && !isAllSelected;
-
-  useEffect(() => {
-    if (selectAllCheckboxRef.current) {
-      selectAllCheckboxRef.current.indeterminate = isSomeSelected;
-    }
-  }, [isSomeSelected]);
 
   const clearSelection = useCallback(() => {
     setSelectedItemIds(new Set());
@@ -238,6 +231,19 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
   const selectAllLoaded = useCallback(() => {
     setSelectedItemIds(new Set(items.map((item) => item.id)));
   }, [items]);
+
+  const handleEnterBulkEditMode = useCallback(() => {
+    setIsBulkEditMode(true);
+    setSelectedItemIds(new Set());
+  }, []);
+
+  const handleExitBulkEditMode = useCallback(() => {
+    if (isBulkDeleting) return;
+    setIsBulkEditMode(false);
+    setSelectedItemIds(new Set());
+    setShowBulkDeleteConfirm(false);
+    setBulkDeleteConfirmText('');
+  }, [isBulkDeleting]);
 
   const loadItems = useCallback(async (reset = false, forceRefresh = false) => {
     if (!hasContentAdminAccess) return;
@@ -318,6 +324,15 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
       setIsLoadingBuilds(false);
     }
   }, [hasContentAdminAccess, appliedBuildQuery, buildStatus]);
+
+  useEffect(() => {
+    if (activeTab !== 'gear') {
+      setIsBulkEditMode(false);
+      setSelectedItemIds(new Set());
+      setShowBulkDeleteConfirm(false);
+      setBulkDeleteConfirmText('');
+    }
+  }, [activeTab]);
 
   const handleOpenBulkDeleteConfirm = useCallback(() => {
     if (selectedCount === 0 || isBulkDeleting || isLoading || isLoadingMore) return;
@@ -592,39 +607,68 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <p className="text-slate-400 text-sm">
             {totalCount} item{totalCount !== 1 ? 's' : ''} found
+            {isBulkEditMode && (
+              <span className="ml-2 text-slate-500">• {selectedCount} selected</span>
+            )}
           </p>
           <div className="flex flex-col sm:flex-row gap-2">
-            {selectedCount > 0 && (
+            {!isBulkEditMode ? (
               <>
                 <button
                   type="button"
+                  onClick={handleEnterBulkEditMode}
+                  disabled={isLoading || items.length === 0}
+                  className="w-full sm:w-auto px-3 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-sm text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Bulk Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddGearClick}
+                  className="w-full sm:w-auto px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Gear
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={selectAllLoaded}
+                  disabled={isBulkDeleting || items.length === 0 || isAllSelected}
+                  className="w-full sm:w-auto px-3 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-sm text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Select All
+                </button>
+                <button
+                  type="button"
+                  onClick={clearSelection}
+                  disabled={isBulkDeleting || selectedCount === 0}
+                  className="w-full sm:w-auto px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Clear Selection
+                </button>
+                <button
+                  type="button"
                   onClick={handleOpenBulkDeleteConfirm}
-                  disabled={isBulkDeleting}
+                  disabled={isBulkDeleting || selectedCount === 0}
                   className="w-full sm:w-auto px-3 py-2 bg-red-600/80 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
                 >
                   Delete Selected ({selectedCount})
                 </button>
                 <button
                   type="button"
-                  onClick={clearSelection}
+                  onClick={handleExitBulkEditMode}
                   disabled={isBulkDeleting}
-                  className="w-full sm:w-auto px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full sm:w-auto px-3 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-sm text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Clear Selection
+                  Done
                 </button>
               </>
             )}
-
-            <button
-              type="button"
-              onClick={handleAddGearClick}
-              className="w-full sm:w-auto px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Add Gear
-            </button>
           </div>
         </div>
       </div>
@@ -786,24 +830,6 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 z-10 bg-slate-900 text-slate-400">
                     <tr className="border-b border-slate-800">
-                      <th className="px-4 py-3 text-left font-medium w-10">
-                        <input
-                          ref={selectAllCheckboxRef}
-                          type="checkbox"
-                          aria-label="Select all loaded items"
-                          checked={isAllSelected}
-                          disabled={items.length === 0 || isBulkDeleting}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              selectAllLoaded();
-                            } else {
-                              clearSelection();
-                            }
-                          }}
-                          className="h-4 w-4 rounded bg-slate-900 border-slate-700 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </th>
                       <th className="px-4 py-3 text-left font-medium">Upload Date</th>
                       <th className="px-4 py-3 text-left font-medium">Last Edit</th>
                       <th className="px-4 py-3 text-left font-medium">Type</th>
@@ -818,43 +844,43 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
                     {items.map((item) => {
                       const displayName = `${item.brand} ${item.model}${item.variant ? ` ${item.variant}` : ''}`.trim();
                       const isEditing = editingItemId === item.id;
-                      const isChecked = selectedItemIds.has(item.id);
+                      const isSelectedForBulkDelete = isBulkEditMode && selectedItemIds.has(item.id);
+                      const ariaLabel = isBulkEditMode ? `Select ${displayName}` : `Open editor for ${displayName}`;
                       return (
                         <tr
                           key={item.id}
-                          onClick={() => handleEditClick(item)}
+                          onClick={() => {
+                            if (isBulkEditMode) {
+                              toggleSelection(item.id);
+                            } else {
+                              handleEditClick(item);
+                            }
+                          }}
                           onKeyDown={(event) => {
                             if (event.target instanceof HTMLElement && event.target.tagName === 'INPUT') {
                               return;
                             }
                             if (event.key === 'Enter' || event.key === ' ') {
                               event.preventDefault();
-                              handleEditClick(item);
+                              if (isBulkEditMode) {
+                                toggleSelection(item.id);
+                              } else {
+                                handleEditClick(item);
+                              }
                             }
                           }}
                           role="button"
                           tabIndex={0}
-                          aria-label={`Open editor for ${displayName}`}
+                          aria-label={ariaLabel}
+                          aria-pressed={isBulkEditMode ? isSelectedForBulkDelete : undefined}
                           className={`border-t border-slate-800 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-inset focus-visible:bg-primary-600/20 ${
                             isEditing
                               ? 'bg-primary-600/10'
-                              : isChecked
-                                ? 'bg-slate-800/60 hover:bg-slate-800/70'
+                              : isSelectedForBulkDelete
+                                ? 'bg-red-500/10 hover:bg-red-500/20'
                                 : 'bg-slate-900/40 hover:bg-slate-800/50'
                           }`}
                         >
-                          <td className="px-4 py-3 text-sm text-slate-400">
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              disabled={isBulkDeleting}
-                              aria-label={`Select ${displayName}`}
-                              onChange={() => toggleSelection(item.id)}
-                              onClick={(e) => e.stopPropagation()}
-                              onKeyDown={(e) => e.stopPropagation()}
-                              className="h-4 w-4 rounded bg-slate-900 border-slate-700 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
-                            />
-                          </td>
                           <td className="px-4 py-3 text-sm text-slate-400">{formatDate(item.createdAt)}</td>
                           <td className="px-4 py-3 text-sm text-slate-400">{formatDate(item.updatedAt)}</td>
                           <td className="px-4 py-3 text-sm text-slate-300">
@@ -900,22 +926,30 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
                     key={item.id}
                     role="button"
                     tabIndex={0}
-                    onClick={() => handleEditClick(item)}
-                    onKeyDown={(event) => {
-                      if (event.target instanceof HTMLElement && event.target.tagName === 'INPUT') {
-                        return;
-                      }
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
+                    onClick={() => {
+                      if (isBulkEditMode) {
+                        toggleSelection(item.id);
+                      } else {
                         handleEditClick(item);
                       }
                     }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        if (isBulkEditMode) {
+                          toggleSelection(item.id);
+                        } else {
+                          handleEditClick(item);
+                        }
+                      }
+                    }}
+                    aria-pressed={isBulkEditMode ? selectedItemIds.has(item.id) : undefined}
                     className={`w-full text-left rounded-xl p-4 transition-colors border ${
                       editingItemId === item.id
                         ? 'border-primary-500/50 bg-primary-600/10'
-                        : selectedItemIds.has(item.id)
-                          ? 'border-slate-600 bg-slate-800/50'
-                        : 'border-slate-800 bg-slate-900/40 hover:bg-slate-800/50'
+                        : isBulkEditMode && selectedItemIds.has(item.id)
+                          ? 'border-red-500/50 bg-red-500/10'
+                          : 'border-slate-800 bg-slate-900/40 hover:bg-slate-800/50'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -947,19 +981,6 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
                             <p className="text-slate-300 mt-0.5">{formatDate(item.updatedAt)}</p>
                           </div>
                         </div>
-                      </div>
-                      <div className="flex flex-col items-end gap-2 shrink-0">
-                        <input
-                          type="checkbox"
-                          checked={selectedItemIds.has(item.id)}
-                          disabled={isBulkDeleting}
-                          aria-label={`Select ${item.brand} ${item.model}${item.variant ? ` ${item.variant}` : ''}`.trim()}
-                          onChange={() => toggleSelection(item.id)}
-                          onClick={(e) => e.stopPropagation()}
-                          onKeyDown={(e) => e.stopPropagation()}
-                          className="h-4 w-4 rounded bg-slate-900 border-slate-700 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
-                        />
-                        <span className="text-xs text-slate-400 shrink-0">Edit</span>
                       </div>
                     </div>
                   </div>

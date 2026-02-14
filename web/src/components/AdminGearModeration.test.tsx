@@ -301,11 +301,14 @@ describe('AdminGearModeration', () => {
 
     render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
 
-    const table = await screen.findByRole('table');
-    const selectCheckbox = await within(table).findByRole('checkbox', { name: 'Select EMAX ECO II 2207' });
-    fireEvent.click(selectCheckbox);
+    expect(await screen.findByText('EMAX')).toBeInTheDocument();
 
-    const deleteSelectedButton = await screen.findByRole('button', { name: 'Delete Selected (1)' });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Bulk Edit' })[0]);
+
+    const table = screen.getByRole('table');
+    fireEvent.click(within(table).getByRole('button', { name: 'Select EMAX ECO II 2207' }));
+
+    const deleteSelectedButton = screen.getAllByRole('button', { name: 'Delete Selected (1)' })[0];
     fireEvent.click(deleteSelectedButton);
 
     const dialog = await screen.findByRole('dialog', { name: 'Delete Selected Gear Items?' });
