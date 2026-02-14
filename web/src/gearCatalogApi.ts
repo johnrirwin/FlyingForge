@@ -166,9 +166,9 @@ export async function uploadGearCatalogImage(catalogId: string, imageFile: File)
   if (imageFile.size > 2 * 1024 * 1024) {
     throw new Error('Image file is too large. Maximum size is 2MB.');
   }
-  const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+  const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
   if (!validTypes.includes(imageFile.type)) {
-    throw new Error('Invalid image type. Please use JPEG, PNG, or WebP.');
+    throw new Error('Invalid image type. Please use JPEG or PNG.');
   }
 
   const moderation = await moderateGearCatalogImageUpload(imageFile);

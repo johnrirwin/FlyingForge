@@ -479,7 +479,7 @@ func (api *BuildAPI) uploadBuildImage(w http.ResponseWriter, r *http.Request, bu
 	}
 	detectedContentType, ok := detectAllowedImageContentType(imageData)
 	if !ok {
-		api.writeError(w, http.StatusBadRequest, "invalid_upload", "image must be JPEG, PNG, or WebP")
+		api.writeError(w, http.StatusBadRequest, "invalid_upload", "image must be JPEG or PNG")
 		return
 	}
 

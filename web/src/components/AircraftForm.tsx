@@ -149,9 +149,9 @@ export function AircraftForm({ isOpen, aircraft, onClose, onSubmit }: AircraftFo
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
     if (!allowedTypes.includes(file.type)) {
-      setError('Only JPEG, PNG, and WebP images are allowed');
+      setError('Only JPEG and PNG images are allowed');
       return;
     }
 
@@ -406,7 +406,7 @@ export function AircraftForm({ isOpen, aircraft, onClose, onSubmit }: AircraftFo
               )}
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              JPEG, PNG, or WebP. Max 2MB. {selectedImage?.uploadId ? 'Approved image ready to save.' : 'Use image modal to run safety checks.'}
+              JPEG or PNG. Max 2MB. {selectedImage?.uploadId ? 'Approved image ready to save.' : 'Use image modal to run safety checks.'}
             </p>
           </div>
 
@@ -478,7 +478,7 @@ export function AircraftForm({ isOpen, aircraft, onClose, onSubmit }: AircraftFo
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/jpeg,image/jpg,image/png,image/webp"
+                accept="image/jpeg,image/jpg,image/png"
                 onChange={handleImageFileChange}
                 className="hidden"
               />
@@ -490,7 +490,7 @@ export function AircraftForm({ isOpen, aircraft, onClose, onSubmit }: AircraftFo
               >
                 {modalImage?.previewUrl ? 'Choose Different' : 'Select Image'}
               </button>
-              <p className="text-xs text-slate-500">JPEG, PNG, or WebP. Max 2MB.</p>
+              <p className="text-xs text-slate-500">JPEG or PNG. Max 2MB.</p>
             </div>
 
             {imageStatusText && (

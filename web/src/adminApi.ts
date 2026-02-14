@@ -135,7 +135,7 @@ export async function adminUpdateGear(
 }
 
 // Upload an image for a gear item (admin only)
-// Max file size: 2MB, accepts JPEG/PNG/WebP
+// Max file size: 2MB, accepts JPEG/PNG
 export async function adminUploadGearImage(
   id: string,
   imageFile: File
@@ -151,9 +151,9 @@ export async function adminUploadGearImage(
   }
 
   // Validate file type
-  const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+  const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
   if (!validTypes.includes(imageFile.type)) {
-    throw new Error('Invalid image type. Please use JPEG, PNG, or WebP.');
+    throw new Error('Invalid image type. Please use JPEG or PNG.');
   }
 
   const formData = new FormData();
@@ -441,9 +441,9 @@ export async function adminUploadBuildImage(id: string, imageFile: File): Promis
     throw new Error('Image file is too large. Maximum size is 2MB.');
   }
 
-  const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+  const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
   if (!validTypes.includes(imageFile.type)) {
-    throw new Error('Invalid image type. Please use JPEG, PNG, or WebP.');
+    throw new Error('Invalid image type. Please use JPEG or PNG.');
   }
 
   const formData = new FormData();

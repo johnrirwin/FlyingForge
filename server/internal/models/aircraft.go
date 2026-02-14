@@ -159,7 +159,7 @@ type UpdateAircraftParams struct {
 // SetAircraftImageParams defines parameters for uploading an aircraft image
 type SetAircraftImageParams struct {
 	AircraftID string
-	ImageType  string // "image/jpeg", "image/png", or "image/webp"
+	ImageType  string // "image/jpeg" or "image/png"
 	ImageData  []byte
 	UploadID   string // approved token from /api/images/upload
 }

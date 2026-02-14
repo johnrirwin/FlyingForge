@@ -611,8 +611,8 @@ func (s *Service) SetImage(ctx context.Context, userID string, params models.Set
 		if len(params.ImageData) == 0 {
 			return nil, &ServiceError{Message: "image data is required"}
 		}
-		if params.ImageType != "image/jpeg" && params.ImageType != "image/png" && params.ImageType != "image/webp" {
-			return nil, &ServiceError{Message: "image must be JPEG, PNG, or WebP"}
+		if params.ImageType != "image/jpeg" && params.ImageType != "image/png" {
+			return nil, &ServiceError{Message: "image must be JPEG or PNG"}
 		}
 
 		const maxImageSize = 2 * 1024 * 1024
@@ -670,8 +670,8 @@ func (s *Service) SetImageForModeration(ctx context.Context, moderatorUserID str
 	if len(params.ImageData) == 0 {
 		return nil, &ServiceError{Message: "image data is required"}
 	}
-	if params.ImageType != "image/jpeg" && params.ImageType != "image/png" && params.ImageType != "image/webp" {
-		return nil, &ServiceError{Message: "image must be JPEG, PNG, or WebP"}
+	if params.ImageType != "image/jpeg" && params.ImageType != "image/png" {
+		return nil, &ServiceError{Message: "image must be JPEG or PNG"}
 	}
 
 	const maxImageSize = 2 * 1024 * 1024

@@ -179,7 +179,7 @@ type UpdateBuildParams struct {
 // SetBuildImageParams defines parameters for uploading a build image.
 type SetBuildImageParams struct {
 	BuildID   string
-	ImageType string // "image/jpeg", "image/png", or "image/webp"
+	ImageType string // "image/jpeg" or "image/png"
 	ImageData []byte
 	UploadID  string // approved token from /api/images/upload
 }

@@ -447,7 +447,7 @@ func (api *GearCatalogAPI) uploadGearImage(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		_ = api.imageSvc.Delete(ctx, asset.ID)
 		api.writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "only JPEG, PNG, and WebP images are allowed",
+			"error": "only JPEG and PNG images are allowed",
 		})
 		return
 	}

@@ -259,9 +259,9 @@ export function MyBuildsPage() {
   };
 
   const handleImageFileSelect = async (file: File) => {
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
     if (!allowedTypes.includes(file.type)) {
-      setImageError('Only JPEG, PNG, and WebP images are allowed');
+      setImageError('Only JPEG and PNG images are allowed');
       return;
     }
     if (file.size > 2 * 1024 * 1024) {
@@ -587,7 +587,7 @@ export function MyBuildsPage() {
                   imagePreviewUrl={buildImagePreviewUrl}
                   onImageAction={handleOpenImageModal}
                   imageActionLabel={buildImagePreviewUrl ? 'Change Image' : 'Upload Image'}
-                  imageHelperText="JPEG, PNG, or WebP. Max 2MB."
+                  imageHelperText="JPEG or PNG. Max 2MB."
                   onTitleChange={(value) => setEditorBuild((prev) => (prev ? { ...prev, title: value } : prev))}
                   onDescriptionChange={(value) => setEditorBuild((prev) => (prev ? { ...prev, description: value } : prev))}
                   onPartsChange={(parts) => setEditorBuild((prev) => (prev ? { ...prev, parts } : prev))}
@@ -657,8 +657,8 @@ export function MyBuildsPage() {
         previewUrl={modalImage?.previewUrl ?? buildImagePreviewUrl}
         previewAlt={editorBuild?.title || 'Build image preview'}
         placeholder="🚁"
-        accept="image/jpeg,image/jpg,image/png,image/webp"
-        helperText="JPEG, PNG, or WebP. Max 2MB."
+        accept="image/jpeg,image/jpg,image/png"
+        helperText="JPEG or PNG. Max 2MB."
         selectButtonLabel={modalImage?.previewUrl ? 'Choose Different' : 'Select Image'}
         onSelectFile={handleImageFileSelect}
         onClose={closeImageModal}

@@ -1054,9 +1054,9 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
       setImageModalError('Image file is too large. Maximum size is 2MB.');
       return;
     }
-    const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
     if (!validTypes.includes(file.type)) {
-      setImageModalError('Invalid image type. Please use JPEG, PNG, or WebP.');
+      setImageModalError('Invalid image type. Please use JPEG or PNG.');
       return;
     }
 
@@ -1308,8 +1308,8 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
         previewUrl={modalImagePreview || currentPreview}
         previewAlt={title || 'Build image preview'}
         placeholder="🚁"
-        accept="image/jpeg,image/jpg,image/png,image/webp"
-        helperText="JPEG, PNG, or WebP. Max 2MB."
+        accept="image/jpeg,image/jpg,image/png"
+        helperText="JPEG or PNG. Max 2MB."
         selectButtonLabel={modalImagePreview ? 'Choose Different' : 'Select Image'}
         onSelectFile={(file) => handleSelectImage(file)}
         onClose={handleCloseImageModal}
@@ -1442,9 +1442,9 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
     }
     
     // Validate file type
-    const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
     if (!validTypes.includes(file.type)) {
-      setImageModalError('Invalid image type. Please use JPEG, PNG, or WebP.');
+      setImageModalError('Invalid image type. Please use JPEG or PNG.');
       return;
     }
     
@@ -2003,7 +2003,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">
               Product Image
-              <span className="ml-2 text-xs text-primary-400">(Max 2MB, JPEG/PNG/WebP)</span>
+              <span className="ml-2 text-xs text-primary-400">(Max 2MB, JPEG/PNG)</span>
             </label>
             
             {/* Show existing image or new preview */}
@@ -2061,7 +2061,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
             )}
 
             <p className="mt-2 text-xs text-slate-500">
-              Use the image modal to choose a file. JPEG, PNG, or WebP. Max 2MB.
+              Use the image modal to choose a file. JPEG or PNG. Max 2MB.
             </p>
 
           </div>
@@ -2107,8 +2107,8 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
         previewUrl={modalImagePreview || (!deleteImage ? (imagePreview || existingImageUrl || null) : null)}
         previewAlt={modalImagePreview ? 'Gear preview' : 'Current gear image'}
         placeholder="📦"
-        accept="image/jpeg,image/png,image/webp"
-        helperText="JPEG, PNG, or WebP. Max 2MB."
+        accept="image/jpeg,image/jpg,image/png"
+        helperText="JPEG or PNG. Max 2MB."
         selectButtonLabel={modalImagePreview ? 'Choose Different' : 'Select Image'}
         onSelectFile={handleFileChange}
         onClose={handleCloseImageModal}

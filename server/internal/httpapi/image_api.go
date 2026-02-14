@@ -109,7 +109,7 @@ func (api *ImageAPI) handleUpload(w http.ResponseWriter, r *http.Request) {
 	if _, ok := detectAllowedImageContentType(imageData); !ok {
 		api.writeJSON(w, http.StatusBadRequest, map[string]string{
 			"status": "PENDING_REVIEW",
-			"reason": "Only JPEG, PNG, and WebP images are allowed",
+			"reason": "Only JPEG and PNG images are allowed",
 		})
 		return
 	}

@@ -8,7 +8,6 @@ import (
 var allowedImageContentTypes = map[string]struct{}{
 	"image/jpeg": {},
 	"image/png":  {},
-	"image/webp": {},
 }
 
 func detectAllowedImageContentType(imageData []byte) (string, bool) {

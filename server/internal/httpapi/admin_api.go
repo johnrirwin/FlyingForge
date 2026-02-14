@@ -522,7 +522,7 @@ func (api *AdminAPI) uploadAdminBuildImage(w http.ResponseWriter, r *http.Reques
 	}
 	contentType, ok := detectAllowedImageContentType(imageData)
 	if !ok {
-		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "image must be JPEG, PNG, or WebP"})
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "image must be JPEG or PNG"})
 		return
 	}
 
@@ -984,7 +984,7 @@ func (api *AdminAPI) uploadGearImage(w http.ResponseWriter, r *http.Request, id 
 	contentType, ok := detectAllowedImageContentType(imageData)
 	if !ok {
 		api.writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "Image must be JPEG, PNG, or WebP",
+			"error": "Image must be JPEG or PNG",
 		})
 		return
 	}
@@ -1083,7 +1083,7 @@ func (api *AdminAPI) persistApprovedGearUpload(w http.ResponseWriter, r *http.Re
 	if !ok {
 		_ = api.imageSvc.Delete(ctx, asset.ID)
 		api.writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "Image must be JPEG, PNG, or WebP",
+			"error": "Image must be JPEG or PNG",
 		})
 		return
 	}

@@ -573,7 +573,7 @@ func (api *AircraftAPI) uploadImage(w http.ResponseWriter, r *http.Request, airc
 	}
 	detectedContentType, ok := detectAllowedImageContentType(imageData)
 	if !ok {
-		http.Error(w, "Image must be JPEG, PNG, or WebP", http.StatusBadRequest)
+		http.Error(w, "Image must be JPEG or PNG", http.StatusBadRequest)
 		return
 	}
 

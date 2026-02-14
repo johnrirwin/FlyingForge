@@ -449,9 +449,9 @@ function CreateCatalogItemForm({
       return;
     }
 
-    const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
     if (!validTypes.includes(file.type)) {
-      setImageModalError('Invalid image type. Please use JPEG, PNG, or WebP.');
+      setImageModalError('Invalid image type. Please use JPEG or PNG.');
       return;
     }
 
@@ -812,7 +812,7 @@ function CreateCatalogItemForm({
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">
               Catalog Image (optional)
-              <span className="ml-2 text-xs text-primary-400">(Max 2MB, JPEG/PNG/WebP)</span>
+              <span className="ml-2 text-xs text-primary-400">(Max 2MB, JPEG/PNG)</span>
             </label>
 
             <div className="flex items-start gap-3">
@@ -891,8 +891,8 @@ function CreateCatalogItemForm({
         previewUrl={modalImage?.previewUrl || selectedImage?.previewUrl || null}
         previewAlt={modalImage?.previewUrl ? 'Gear preview' : 'Current gear image'}
         placeholder="📦"
-        accept="image/jpeg,image/png,image/webp"
-        helperText="JPEG, PNG, or WebP. Max 2MB."
+        accept="image/jpeg,image/jpg,image/png"
+        helperText="JPEG or PNG. Max 2MB."
         selectButtonLabel={modalImage?.previewUrl ? 'Choose Different' : 'Select Image'}
         onSelectFile={handleImageFileChange}
         onClose={handleCloseImageModal}

@@ -282,7 +282,7 @@ func (api *ProfileAPI) handleAvatar(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if _, ok := detectAllowedImageContentType(imageData); !ok {
-			api.writeError(w, http.StatusBadRequest, "invalid_request", "only JPEG, PNG, and WebP images are allowed")
+			api.writeError(w, http.StatusBadRequest, "invalid_request", "only JPEG and PNG images are allowed")
 			return
 		}
 

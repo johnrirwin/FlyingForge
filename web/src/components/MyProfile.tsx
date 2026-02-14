@@ -176,9 +176,9 @@ export function MyProfile() {
     if (!file) return;
 
     // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
     if (!allowedTypes.includes(file.type)) {
-      setError('Only JPEG, PNG, and WebP images are allowed');
+      setError('Only JPEG and PNG images are allowed');
       return;
     }
 
@@ -374,7 +374,7 @@ export function MyProfile() {
                 Change Avatar
               </button>
               <p className="text-xs text-slate-500">
-                JPEG, PNG, or WebP. Max 2MB. You must pass image safety checks before Save is enabled.
+                JPEG or PNG. Max 2MB. You must pass image safety checks before Save is enabled.
               </p>
             </div>
           </div>
@@ -516,7 +516,7 @@ export function MyProfile() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/jpeg,image/jpg,image/png,image/webp"
+                accept="image/jpeg,image/jpg,image/png"
                 onChange={handleAvatarSelect}
                 className="hidden"
               />
@@ -528,7 +528,7 @@ export function MyProfile() {
               >
                 {pendingAvatar ? 'Choose Different' : 'Select Image'}
               </button>
-              <p className="text-xs text-slate-500">JPEG, PNG, or WebP. Max 2MB.</p>
+              <p className="text-xs text-slate-500">JPEG or PNG. Max 2MB.</p>
             </div>
 
             {avatarStatusText && (
