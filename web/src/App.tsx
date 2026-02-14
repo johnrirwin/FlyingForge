@@ -8,6 +8,7 @@ import { listAircraft, createAircraft, updateAircraft, deleteAircraft, getAircra
 import { useFilters } from './hooks';
 import { useAuth } from './hooks/useAuth';
 import { useGoogleAnalytics, trackEvent } from './hooks/useGoogleAnalytics';
+import { upsertInventoryItem } from './inventoryUtils';
 import { buildLoginPath, getCurrentPathWithSearchAndHash } from './authRouting';
 import type { FeedItem, SourceInfo, FilterParams } from './types';
 import type { EquipmentItem, InventoryItem, EquipmentCategory, AddInventoryParams, InventorySummary, AppSection } from './equipmentTypes';
@@ -351,7 +352,7 @@ function App() {
         params.quantity,
         params.notes
       );
-      setInventoryItems(prev => [...prev, newItem]);
+      setInventoryItems(prev => upsertInventoryItem(prev, newItem));
       // Track gear addition for GA4 conversions
       trackEvent('gear_added', { category: selectedEquipmentForInventory.category, method: 'from_shop' });
     } else {
@@ -359,7 +360,7 @@ function App() {
       console.log('[App] Adding new manual/catalog item');
       const newItem = await addInventoryItem(params);
       console.log('[App] New item created:', newItem);
-      setInventoryItems(prev => [...prev, newItem]);
+      setInventoryItems(prev => upsertInventoryItem(prev, newItem));
       // Track gear addition for GA4 conversions
       trackEvent('gear_added', { category: params.category, method: 'manual' });
     }
