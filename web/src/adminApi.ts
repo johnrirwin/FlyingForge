@@ -5,6 +5,8 @@ import type {
   GearCatalogSearchResponse,
   AdminGearSearchParams,
   AdminUpdateGearCatalogParams,
+  NearMatchParams,
+  NearMatchResponse,
 } from './gearCatalogTypes';
 import type { Build, BuildListResponse, BuildPublishResponse, BuildStatus, UpdateBuildParams } from './buildTypes';
 import type {
@@ -71,6 +73,100 @@ export async function adminSearchGear(
   }
 
   return response.json();
+}
+
+export async function adminFindNearMatches(params: NearMatchParams): Promise<NearMatchResponse> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const response = await fetch(`${API_BASE}/gear/near-matches`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(params),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Request failed' }));
+    if (response.status === 403) {
+      throw new Error('Admin or content-admin access required');
+    }
+    throw new Error(data.error || 'Failed to check for duplicates');
+  }
+
+  return response.json();
+}
+
+type AdminBulkDeleteGearResponse = {
+  deletedIds: string[];
+  deletedCount: number;
+  notFoundIds: string[];
+  notFoundCount: number;
+};
+
+const MAX_BULK_DELETE_IDS = 500;
+
+export async function adminBulkDeleteGear(ids: string[]): Promise<AdminBulkDeleteGearResponse> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+  if (!Array.isArray(ids) || ids.length === 0) {
+    throw new Error('ids is required');
+  }
+
+  const uniqueIds = Array.from(new Set(ids));
+
+  const deleteChunk = async (chunkIds: string[]): Promise<AdminBulkDeleteGearResponse> => {
+    const response = await fetch(`${API_BASE}/gear/bulk-delete`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ ids: chunkIds }),
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({ error: 'Request failed' }));
+      if (response.status === 403) {
+        throw new Error('Admin or content-admin access required');
+      }
+      throw new Error(data.error || 'Failed to delete gear items');
+    }
+
+    return response.json();
+  };
+
+  if (uniqueIds.length <= MAX_BULK_DELETE_IDS) {
+    return deleteChunk(uniqueIds);
+  }
+
+  // Server enforces a max IDs per request; chunk large deletes into batches.
+  const deletedIdSet = new Set<string>();
+  const notFoundIdSet = new Set<string>();
+
+  for (let offset = 0; offset < uniqueIds.length; offset += MAX_BULK_DELETE_IDS) {
+    const chunk = uniqueIds.slice(offset, offset + MAX_BULK_DELETE_IDS);
+    // eslint-disable-next-line no-await-in-loop
+    const result = await deleteChunk(chunk);
+    (result.deletedIds ?? []).forEach((id) => deletedIdSet.add(id));
+    (result.notFoundIds ?? []).forEach((id) => notFoundIdSet.add(id));
+  }
+
+  const deletedIds = Array.from(deletedIdSet);
+  const notFoundIds = Array.from(notFoundIdSet);
+
+  return {
+    deletedIds,
+    deletedCount: deletedIds.length,
+    notFoundIds,
+    notFoundCount: notFoundIds.length,
+  };
 }
 
 // Get a single gear item by ID

@@ -11,6 +11,7 @@ import {
   adminUploadBuildImage,
   adminDeleteBuildImage,
   adminDeleteGear,
+  adminBulkDeleteGear,
   adminDeleteGearImage,
   adminGetGear,
   adminSaveGearImageUpload,
@@ -33,6 +34,7 @@ vi.mock('../adminApi', () => ({
   adminSaveGearImageUpload: vi.fn(),
   adminDeleteGearImage: vi.fn(),
   adminDeleteGear: vi.fn(),
+  adminBulkDeleteGear: vi.fn(),
   adminGetGear: vi.fn(),
   getAdminBuildImageUrl: vi.fn(() => '/mock-build-image.png'),
   getAdminGearImageUrl: vi.fn(() => '/mock-image.png'),
@@ -73,6 +75,7 @@ const mockAdminUpdateGear = vi.mocked(adminUpdateGear);
 const mockAdminSaveGearImageUpload = vi.mocked(adminSaveGearImageUpload);
 const mockAdminDeleteGearImage = vi.mocked(adminDeleteGearImage);
 const mockAdminDeleteGear = vi.mocked(adminDeleteGear);
+const mockAdminBulkDeleteGear = vi.mocked(adminBulkDeleteGear);
 const mockAdminGetGear = vi.mocked(adminGetGear);
 const mockGetAdminBuildImageUrl = vi.mocked(getAdminBuildImageUrl);
 const mockGetAdminGearImageUrl = vi.mocked(getAdminGearImageUrl);
@@ -136,6 +139,12 @@ describe('AdminGearModeration', () => {
     mockAdminSaveGearImageUpload.mockResolvedValue();
     mockAdminDeleteGearImage.mockResolvedValue();
     mockAdminDeleteGear.mockResolvedValue();
+    mockAdminBulkDeleteGear.mockResolvedValue({
+      deletedIds: ['gear-1'],
+      deletedCount: 1,
+      notFoundIds: [],
+      notFoundCount: 0,
+    });
     mockAdminSearchBuilds.mockResolvedValue({ builds: [], totalCount: 0, sort: 'newest' });
     mockAdminGetBuild.mockRejectedValue(new Error('Build not mocked'));
     mockAdminUpdateBuild.mockRejectedValue(new Error('Build not mocked'));
@@ -282,6 +291,38 @@ describe('AdminGearModeration', () => {
     });
     await waitFor(() => {
       expect(mockAdminUpdateGear).toHaveBeenCalledWith('gear-1', expect.objectContaining({ imageStatus: 'scanned' }));
+    });
+  });
+
+  it('bulk deletes selected gear items from the list view', async () => {
+    mockAdminSearchGear
+      .mockResolvedValueOnce({ items: [mockItem], totalCount: 1 })
+      .mockResolvedValueOnce({ items: [], totalCount: 0 });
+
+    render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
+
+    expect(await screen.findByText('EMAX')).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Bulk Edit' })[0]);
+
+    const table = screen.getByRole('table');
+    fireEvent.click(within(table).getByRole('button', { name: 'Select EMAX ECO II 2207' }));
+
+    const deleteSelectedButton = screen.getAllByRole('button', { name: 'Delete Selected (1)' })[0];
+    fireEvent.click(deleteSelectedButton);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Delete Selected Gear Items?' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+
+    fireEvent.change(within(dialog).getByPlaceholderText('DELETE'), { target: { value: 'DELETE' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete 1' }));
+
+    await waitFor(() => {
+      expect(mockAdminBulkDeleteGear).toHaveBeenCalledWith(['gear-1']);
+    });
+
+    await waitFor(() => {
+      expect(mockAdminSearchGear).toHaveBeenCalledTimes(2);
     });
   });
 });

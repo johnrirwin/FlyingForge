@@ -8,6 +8,7 @@ import {
   adminSaveGearImageUpload,
   adminDeleteGearImage,
   adminDeleteGear,
+  adminBulkDeleteGear,
   adminGetGear,
   adminSearchBuilds,
   adminGetBuild,
@@ -162,6 +163,15 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(() => new Set());
+  const [isBulkEditMode, setIsBulkEditMode] = useState(false);
+
+  // Bulk delete state
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [bulkDeleteConfirmText, setBulkDeleteConfirmText] = useState('');
+  const [bulkDeleteError, setBulkDeleteError] = useState<string | null>(null);
+  const [bulkDeleteStatus, setBulkDeleteStatus] = useState<string | null>(null);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   // Filters
   const [query, setQuery] = useState('');
@@ -196,6 +206,45 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
   const [editingBuildId, setEditingBuildId] = useState<string | null>(null);
   const [buildModalKey, setBuildModalKey] = useState(0);
 
+  const selectedCount = selectedItemIds.size;
+  const selectedItems = items.filter((item) => selectedItemIds.has(item.id));
+  const hasSelectedInUse = selectedItems.some((item) => item.usageCount > 0);
+  const selectedInUseCount = selectedItems.filter((item) => item.usageCount > 0).length;
+  const isAllSelected = items.length > 0 && items.every((item) => selectedItemIds.has(item.id));
+
+  const clearSelection = useCallback(() => {
+    setSelectedItemIds(new Set());
+  }, []);
+
+  const toggleSelection = useCallback((id: string) => {
+    setSelectedItemIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const selectAllLoaded = useCallback(() => {
+    setSelectedItemIds(new Set(items.map((item) => item.id)));
+  }, [items]);
+
+  const handleEnterBulkEditMode = useCallback(() => {
+    setIsBulkEditMode(true);
+    setSelectedItemIds(new Set());
+  }, []);
+
+  const handleExitBulkEditMode = useCallback(() => {
+    if (isBulkDeleting) return;
+    setIsBulkEditMode(false);
+    setSelectedItemIds(new Set());
+    setShowBulkDeleteConfirm(false);
+    setBulkDeleteConfirmText('');
+  }, [isBulkDeleting]);
+
   const loadItems = useCallback(async (reset = false, forceRefresh = false) => {
     if (!hasContentAdminAccess) return;
     
@@ -207,6 +256,11 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
     if (reset) {
       setIsLoading(true);
       currentOffsetRef.current = 0;
+      setSelectedItemIds(new Set());
+      setShowBulkDeleteConfirm(false);
+      setBulkDeleteConfirmText('');
+      setBulkDeleteError(null);
+      setBulkDeleteStatus(null);
     } else {
       setIsLoadingMore(true);
     }
@@ -271,6 +325,63 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
     }
   }, [hasContentAdminAccess, appliedBuildQuery, buildStatus]);
 
+  useEffect(() => {
+    if (activeTab !== 'gear') {
+      setIsBulkEditMode(false);
+      setSelectedItemIds(new Set());
+      setShowBulkDeleteConfirm(false);
+      setBulkDeleteConfirmText('');
+    }
+  }, [activeTab]);
+
+  const handleOpenBulkDeleteConfirm = useCallback(() => {
+    if (selectedCount === 0 || isBulkDeleting || isLoading || isLoadingMore) return;
+    setBulkDeleteError(null);
+    setBulkDeleteStatus(null);
+    setBulkDeleteConfirmText('');
+    setShowBulkDeleteConfirm(true);
+  }, [selectedCount, isBulkDeleting, isLoading, isLoadingMore]);
+
+  const handleCancelBulkDelete = useCallback(() => {
+    if (isBulkDeleting) return;
+    setShowBulkDeleteConfirm(false);
+    setBulkDeleteConfirmText('');
+  }, [isBulkDeleting]);
+
+  const handleConfirmBulkDelete = useCallback(async () => {
+    if (isBulkDeleting) return;
+
+    const trimmed = bulkDeleteConfirmText.trim().toUpperCase();
+    if (trimmed !== 'DELETE') return;
+
+    const idsToDelete = Array.from(selectedItemIds);
+    if (idsToDelete.length === 0) {
+      setShowBulkDeleteConfirm(false);
+      return;
+    }
+
+    setIsBulkDeleting(true);
+    setBulkDeleteError(null);
+    setBulkDeleteStatus(null);
+
+    try {
+      const response = await adminBulkDeleteGear(idsToDelete);
+      setShowBulkDeleteConfirm(false);
+      setBulkDeleteConfirmText('');
+      setSelectedItemIds(new Set());
+
+      await loadItems(true, true);
+
+      setBulkDeleteStatus(
+        `Deleted ${response.deletedCount} item${response.deletedCount === 1 ? '' : 's'}${response.notFoundCount ? ` (${response.notFoundCount} not found)` : ''}.`
+      );
+    } catch (err) {
+      setBulkDeleteError(err instanceof Error ? err.message : 'Failed to bulk delete items');
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  }, [isBulkDeleting, bulkDeleteConfirmText, selectedItemIds, loadItems]);
+
   // Initial load and auto-search when gear filters change.
   useEffect(() => {
     if (!hasContentAdminAccess) return;
@@ -324,7 +435,7 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
     if (activeTab !== 'gear') return;
 
     const element = loadMoreRef.current;
-    if (!element || !hasMore) return;
+    if (!element || !hasMore || isLoading) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -337,7 +448,7 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
 
     observer.observe(element);
     return () => observer.disconnect();
-  }, [activeTab, hasMore, loadItems]);
+  }, [activeTab, hasMore, isLoading, loadItems]);
 
   const handleEditClick = (item: GearCatalogItem) => {
     setModalKey(k => k + 1); // Force modal remount to fetch fresh data
@@ -496,18 +607,83 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <p className="text-slate-400 text-sm">
             {totalCount} item{totalCount !== 1 ? 's' : ''} found
+            {isBulkEditMode && (
+              <span className="ml-2 text-slate-500">• {selectedCount} selected</span>
+            )}
           </p>
-          <button
-            onClick={handleAddGearClick}
-            className="w-full sm:w-auto px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Gear
-          </button>
+          <div className="flex flex-col sm:flex-row gap-2">
+            {!isBulkEditMode ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleEnterBulkEditMode}
+                  disabled={isLoading || items.length === 0}
+                  className="w-full sm:w-auto px-3 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-sm text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Bulk Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddGearClick}
+                  className="w-full sm:w-auto px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Gear
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={selectAllLoaded}
+                  disabled={isBulkDeleting || items.length === 0 || isAllSelected}
+                  className="w-full sm:w-auto px-3 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-sm text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Select All
+                </button>
+                <button
+                  type="button"
+                  onClick={clearSelection}
+                  disabled={isBulkDeleting || selectedCount === 0}
+                  className="w-full sm:w-auto px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Clear Selection
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenBulkDeleteConfirm}
+                  disabled={isBulkDeleting || selectedCount === 0}
+                  className="w-full sm:w-auto px-3 py-2 bg-red-600/80 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  Delete Selected ({selectedCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExitBulkEditMode}
+                  disabled={isBulkDeleting}
+                  className="w-full sm:w-auto px-3 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-sm text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Done
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
+
+      {bulkDeleteStatus && (
+        <div className="mt-3 p-3 bg-green-500/10 border border-green-500/20 rounded-lg text-green-300 text-sm">
+          {bulkDeleteStatus}
+        </div>
+      )}
+
+      {bulkDeleteError && (
+        <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+          {bulkDeleteError}
+        </div>
+      )}
 
       {error && (
         <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
@@ -667,22 +843,42 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
                   <tbody>
                     {items.map((item) => {
                       const displayName = `${item.brand} ${item.model}${item.variant ? ` ${item.variant}` : ''}`.trim();
-                      const isSelected = editingItemId === item.id;
+                      const isEditing = editingItemId === item.id;
+                      const isSelectedForBulkDelete = isBulkEditMode && selectedItemIds.has(item.id);
+                      const ariaLabel = isBulkEditMode ? `Select ${displayName}` : `Open editor for ${displayName}`;
                       return (
                         <tr
                           key={item.id}
-                          onClick={() => handleEditClick(item)}
+                          onClick={() => {
+                            if (isBulkEditMode) {
+                              toggleSelection(item.id);
+                            } else {
+                              handleEditClick(item);
+                            }
+                          }}
                           onKeyDown={(event) => {
+                            if (event.target instanceof HTMLElement && event.target.tagName === 'INPUT') {
+                              return;
+                            }
                             if (event.key === 'Enter' || event.key === ' ') {
                               event.preventDefault();
-                              handleEditClick(item);
+                              if (isBulkEditMode) {
+                                toggleSelection(item.id);
+                              } else {
+                                handleEditClick(item);
+                              }
                             }
                           }}
                           role="button"
                           tabIndex={0}
-                          aria-label={`Open editor for ${displayName}`}
+                          aria-label={ariaLabel}
+                          aria-pressed={isBulkEditMode ? isSelectedForBulkDelete : undefined}
                           className={`border-t border-slate-800 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-inset focus-visible:bg-primary-600/20 ${
-                            isSelected ? 'bg-primary-600/10' : 'bg-slate-900/40 hover:bg-slate-800/50'
+                            isEditing
+                              ? 'bg-primary-600/10'
+                              : isSelectedForBulkDelete
+                                ? 'bg-red-500/10 hover:bg-red-500/20'
+                                : 'bg-slate-900/40 hover:bg-slate-800/50'
                           }`}
                         >
                           <td className="px-4 py-3 text-sm text-slate-400">{formatDate(item.createdAt)}</td>
@@ -726,14 +922,34 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
                 </div>
               ) : (
                 items.map((item) => (
-                  <button
-                    type="button"
+                  <div
                     key={item.id}
-                    onClick={() => handleEditClick(item)}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      if (isBulkEditMode) {
+                        toggleSelection(item.id);
+                      } else {
+                        handleEditClick(item);
+                      }
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        if (isBulkEditMode) {
+                          toggleSelection(item.id);
+                        } else {
+                          handleEditClick(item);
+                        }
+                      }
+                    }}
+                    aria-pressed={isBulkEditMode ? selectedItemIds.has(item.id) : undefined}
                     className={`w-full text-left rounded-xl p-4 transition-colors border ${
                       editingItemId === item.id
                         ? 'border-primary-500/50 bg-primary-600/10'
-                        : 'border-slate-800 bg-slate-900/40 hover:bg-slate-800/50'
+                        : isBulkEditMode && selectedItemIds.has(item.id)
+                          ? 'border-red-500/50 bg-red-500/10'
+                          : 'border-slate-800 bg-slate-900/40 hover:bg-slate-800/50'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -766,9 +982,8 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
                           </div>
                         </div>
                       </div>
-                      <span className="text-xs text-slate-400 shrink-0">Edit</span>
                     </div>
-                  </button>
+                  </div>
                 ))
               )}
             </div>
@@ -933,6 +1148,7 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
         onClose={handleAddGearClose}
         onSelectItem={handleAddGearSelect}
         startInCreateMode
+        enableJsonImport
         onModerateCatalogImage={moderateGearCatalogImageUpload}
         onSaveCatalogImageUpload={adminSaveGearImageUpload}
       />
@@ -945,6 +1161,90 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
           onSave={handleBuildEditSaved}
           onPublished={handleBuildPublished}
         />
+      )}
+
+      {showBulkDeleteConfirm && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70" onClick={handleCancelBulkDelete} />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="gear-bulk-delete-title"
+            aria-describedby="gear-bulk-delete-description"
+            className="relative bg-slate-800 rounded-xl p-6 max-w-md w-full shadow-2xl border border-red-500/50"
+          >
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
+                  <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </div>
+                <h3 id="gear-bulk-delete-title" className="text-lg font-semibold text-white">
+                  Delete Selected Gear Items?
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={handleCancelBulkDelete}
+                disabled={isBulkDeleting}
+                aria-label="Close bulk delete modal"
+                className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div id="gear-bulk-delete-description" className="mb-4 text-sm text-slate-300 space-y-2">
+              <p>
+                <strong className="text-red-400">This action cannot be undone.</strong> This will permanently delete{' '}
+                <span className="text-white font-medium">{selectedCount}</span> gear catalog item{selectedCount === 1 ? '' : 's'}.
+              </p>
+              <p className="text-slate-400">
+                Any linked inventory items and build parts will be kept, but their catalog link will be removed.
+              </p>
+              {hasSelectedInUse && (
+                <p className="text-amber-300">
+                  Warning: {selectedInUseCount} selected item{selectedInUseCount === 1 ? '' : 's'} are linked to inventory records.
+                </p>
+              )}
+            </div>
+
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Type <span className="text-white font-semibold">DELETE</span> to confirm
+            </label>
+            <input
+              type="text"
+              value={bulkDeleteConfirmText}
+              onChange={(e) => setBulkDeleteConfirmText(e.target.value)}
+              disabled={isBulkDeleting}
+              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-red-400 disabled:opacity-50"
+              placeholder="DELETE"
+              autoFocus
+            />
+
+            <div className="mt-5 flex flex-col sm:flex-row gap-2">
+              <button
+                type="button"
+                onClick={handleCancelBulkDelete}
+                disabled={isBulkDeleting}
+                className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmBulkDelete()}
+                disabled={isBulkDeleting || bulkDeleteConfirmText.trim().toUpperCase() !== 'DELETE'}
+                className="w-full px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+              >
+                {isBulkDeleting ? 'Deleting…' : `Delete ${selectedCount}`}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

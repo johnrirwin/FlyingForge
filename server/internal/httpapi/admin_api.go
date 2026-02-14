@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/johnrirwin/flyingforge/internal/auth"
 	"github.com/johnrirwin/flyingforge/internal/builds"
 	"github.com/johnrirwin/flyingforge/internal/database"
@@ -50,6 +52,8 @@ func (api *AdminAPI) RegisterRoutes(mux *http.ServeMux, corsMiddleware func(http
 
 	// Content moderation routes: admin OR content-admin role.
 	mux.HandleFunc("/api/admin/gear", corsMiddleware(api.authMiddleware.RequireAuth(api.requireContentModerator(api.handleAdminGear))))
+	mux.HandleFunc("/api/admin/gear/bulk-delete", corsMiddleware(api.authMiddleware.RequireAuth(api.requireContentModerator(api.handleAdminGearBulkDelete))))
+	mux.HandleFunc("/api/admin/gear/near-matches", corsMiddleware(api.authMiddleware.RequireAuth(api.requireContentModerator(api.handleAdminGearNearMatches))))
 	mux.HandleFunc("/api/admin/gear/", corsMiddleware(api.authMiddleware.RequireAuth(api.requireContentModerator(api.handleAdminGearByID))))
 	if api.buildSvc != nil {
 		mux.HandleFunc("/api/admin/builds", corsMiddleware(api.authMiddleware.RequireAuth(api.requireContentModerator(api.handleAdminBuilds))))
@@ -154,6 +158,127 @@ func (api *AdminAPI) handleAdminGear(w http.ResponseWriter, r *http.Request) {
 	}
 
 	api.writeJSON(w, http.StatusOK, response)
+}
+
+// handleAdminGearNearMatches handles POST /api/admin/gear/near-matches.
+// Used by content admins to warn about potential duplicates during bulk imports.
+func (api *AdminAPI) handleAdminGearNearMatches(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		api.writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	var body struct {
+		GearType  models.GearType `json:"gearType"`
+		Brand     string          `json:"brand"`
+		Model     string          `json:"model"`
+		Threshold float64         `json:"threshold,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	body.Brand = strings.TrimSpace(body.Brand)
+	body.Model = strings.TrimSpace(body.Model)
+	if body.GearType == "" || body.Brand == "" || body.Model == "" {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "gearType, brand, and model are required"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	matches, err := api.catalogStore.FindNearMatchesAdmin(ctx, body.GearType, body.Brand, body.Model, body.Threshold)
+	if err != nil {
+		api.logger.Error("Failed to find near matches (admin)", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	api.writeJSON(w, http.StatusOK, models.NearMatchResponse{
+		Matches: matches,
+	})
+}
+
+// handleAdminGearBulkDelete handles POST /api/admin/gear/bulk-delete.
+func (api *AdminAPI) handleAdminGearBulkDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		api.writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	var req struct {
+		IDs []string `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	if len(req.IDs) == 0 {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "ids is required"})
+		return
+	}
+	if len(req.IDs) > 500 {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "too many ids (max 500)"})
+		return
+	}
+
+	seen := make(map[string]struct{}, len(req.IDs))
+	ids := make([]string, 0, len(req.IDs))
+	for _, raw := range req.IDs {
+		id := strings.TrimSpace(raw)
+		if id == "" {
+			continue
+		}
+		if _, err := uuid.Parse(id); err != nil {
+			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id: " + id})
+			return
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+
+	if len(ids) == 0 {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "ids is required"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+
+	deletedIDs, err := api.catalogStore.AdminBulkDelete(ctx, ids)
+	if err != nil {
+		api.logger.Error("Failed to bulk delete gear items", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "failed to delete gear items",
+		})
+		return
+	}
+
+	deletedSet := make(map[string]struct{}, len(deletedIDs))
+	for _, id := range deletedIDs {
+		deletedSet[id] = struct{}{}
+	}
+	notFound := make([]string, 0)
+	for _, id := range ids {
+		if _, ok := deletedSet[id]; !ok {
+			notFound = append(notFound, id)
+		}
+	}
+
+	api.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"deletedIds":    deletedIDs,
+		"deletedCount":  len(deletedIDs),
+		"notFoundIds":   notFound,
+		"notFoundCount": len(notFound),
+	})
 }
 
 // handleAdminGearByID handles GET/PUT/DELETE /api/admin/gear/{id} and /api/admin/gear/{id}/image
