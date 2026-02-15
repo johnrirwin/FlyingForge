@@ -2,8 +2,7 @@ locals {
   interface_endpoint_subnet_ids = length(var.vpc_endpoint_subnet_ids) > 0 ? var.vpc_endpoint_subnet_ids : aws_subnet.private[*].id
 
   ecr_repository_arns = concat([
-    aws_ecr_repository.server.arn,
-    aws_ecr_repository.web.arn
+    aws_ecr_repository.server.arn
   ], var.additional_ecr_repository_arns)
 
   secretsmanager_secret_arns = concat([
@@ -15,7 +14,6 @@ locals {
 
   managed_log_group_arns = compact([
     aws_cloudwatch_log_group.server.arn,
-    aws_cloudwatch_log_group.web.arn,
     # The scheduled refresh task uses its own log group; include it when enabled so
     # the CloudWatch Logs VPC endpoint policy allows CreateLogStream/PutLogEvents.
     try(aws_cloudwatch_log_group.news_refresh[0].arn, ""),
@@ -245,7 +243,7 @@ resource "aws_security_group" "vpc_endpoints" {
     from_port       = 443
     to_port         = 443
     protocol        = "tcp"
-    security_groups = [aws_security_group.ecs_tasks.id]
+    security_groups = [aws_security_group.ecs_tasks.id, aws_security_group.scheduled_tasks.id]
   }
 
   egress {

@@ -194,9 +194,9 @@ resource "aws_scheduler_schedule" "news_refresh" {
       platform_version    = "LATEST"
 
       network_configuration {
-        subnets          = aws_subnet.private[*].id
-        security_groups  = [aws_security_group.ecs_tasks.id]
-        assign_public_ip = false
+        subnets          = aws_subnet.public[*].id
+        security_groups  = [aws_security_group.scheduled_tasks.id]
+        assign_public_ip = true
       }
     }
 

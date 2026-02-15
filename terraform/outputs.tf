@@ -18,11 +18,6 @@ output "ecr_server_repository_url" {
   value       = aws_ecr_repository.server.repository_url
 }
 
-output "ecr_web_repository_url" {
-  description = "ECR repository URL for web"
-  value       = aws_ecr_repository.web.repository_url
-}
-
 output "ecs_cluster_name" {
   description = "ECS cluster name"
   value       = aws_ecs_cluster.main.name
@@ -31,11 +26,6 @@ output "ecs_cluster_name" {
 output "ecs_server_service_name" {
   description = "ECS server service name"
   value       = aws_ecs_service.server.name
-}
-
-output "ecs_web_service_name" {
-  description = "ECS web service name"
-  value       = aws_ecs_service.web.name
 }
 
 output "rds_endpoint" {
@@ -52,7 +42,27 @@ output "redis_endpoint" {
 
 output "app_url" {
   description = "Application URL"
-  value       = var.domain_name != "" ? "https://${var.domain_name}" : "http://${aws_lb.main.dns_name}"
+  value       = var.domain_name != "" ? "https://${var.domain_name}" : "https://${aws_cloudfront_distribution.web.domain_name}"
+}
+
+output "cloudfront_domain_name" {
+  description = "CloudFront distribution domain name for the web frontend"
+  value       = aws_cloudfront_distribution.web.domain_name
+}
+
+output "cloudfront_distribution_id" {
+  description = "CloudFront distribution ID for cache invalidations"
+  value       = aws_cloudfront_distribution.web.id
+}
+
+output "web_bucket_name" {
+  description = "S3 bucket name that hosts the web frontend assets"
+  value       = aws_s3_bucket.web.bucket
+}
+
+output "web_url" {
+  description = "Web frontend URL"
+  value       = var.domain_name != "" ? "https://${var.domain_name}" : "https://${aws_cloudfront_distribution.web.domain_name}"
 }
 
 output "vpc_endpoint_ids" {

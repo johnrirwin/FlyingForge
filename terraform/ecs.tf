@@ -127,15 +127,6 @@ resource "aws_cloudwatch_log_group" "server" {
   }
 }
 
-resource "aws_cloudwatch_log_group" "web" {
-  name              = "/ecs/${var.app_name}-web"
-  retention_in_days = 30
-
-  tags = {
-    Name = "${var.app_name}-web-logs"
-  }
-}
-
 # ECS Task Definition for Server
 resource "aws_ecs_task_definition" "server" {
   family                   = "${var.app_name}-server"
@@ -282,54 +273,6 @@ resource "aws_ecs_task_definition" "server" {
   }
 }
 
-# ECS Task Definition for Web
-resource "aws_ecs_task_definition" "web" {
-  family                   = "${var.app_name}-web"
-  network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE"]
-  cpu                      = var.web_cpu
-  memory                   = var.web_memory
-  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
-  task_role_arn            = aws_iam_role.ecs_task.arn
-
-  container_definitions = jsonencode([
-    {
-      name      = "web"
-      image     = "${aws_ecr_repository.web.repository_url}:latest"
-      essential = true
-
-      portMappings = [
-        {
-          containerPort = 80
-          hostPort      = 80
-          protocol      = "tcp"
-        }
-      ]
-
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.web.name
-          "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = "ecs"
-        }
-      }
-
-      healthCheck = {
-        command     = ["CMD-SHELL", "wget -q --spider http://localhost:80/ || exit 1"]
-        interval    = 30
-        timeout     = 5
-        retries     = 3
-        startPeriod = 30
-      }
-    }
-  ])
-
-  tags = {
-    Name = "${var.app_name}-web-task"
-  }
-}
-
 # ECS Service for Server
 resource "aws_ecs_service" "server" {
   name            = "${var.app_name}-server"
@@ -339,9 +282,9 @@ resource "aws_ecs_service" "server" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets          = aws_subnet.private[*].id
+    subnets          = aws_subnet.public[*].id
     security_groups  = [aws_security_group.ecs_tasks.id]
-    assign_public_ip = false
+    assign_public_ip = true
   }
 
   load_balancer {
@@ -359,37 +302,5 @@ resource "aws_ecs_service" "server" {
 
   tags = {
     Name = "${var.app_name}-server-service"
-  }
-}
-
-# ECS Service for Web
-resource "aws_ecs_service" "web" {
-  name            = "${var.app_name}-web"
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.web.arn
-  desired_count   = var.web_desired_count
-  launch_type     = "FARGATE"
-
-  network_configuration {
-    subnets          = aws_subnet.private[*].id
-    security_groups  = [aws_security_group.ecs_tasks.id]
-    assign_public_ip = false
-  }
-
-  load_balancer {
-    target_group_arn = aws_lb_target_group.web.arn
-    container_name   = "web"
-    container_port   = 80
-  }
-
-  deployment_circuit_breaker {
-    enable   = true
-    rollback = true
-  }
-
-  depends_on = [aws_lb_listener.http]
-
-  tags = {
-    Name = "${var.app_name}-web-service"
   }
 }

@@ -77,13 +77,13 @@ variable "web_memory" {
 variable "server_desired_count" {
   description = "Desired number of server tasks"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "web_desired_count" {
   description = "Desired number of web tasks"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "news_refresh_cpu" {
@@ -114,6 +114,13 @@ variable "news_refresh_schedule_timezone" {
   description = "Timezone used by the EventBridge Scheduler news refresh task"
   type        = string
   default     = "America/New_York"
+}
+
+# Networking cost controls
+variable "enable_nat_gateway" {
+  description = "Whether to provision NAT gateways for private subnet internet egress"
+  type        = bool
+  default     = false
 }
 
 # NAT cost optimization (AWS service access without traversing NAT)
