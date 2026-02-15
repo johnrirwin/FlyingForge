@@ -121,6 +121,7 @@ export interface AdminUpdateGearCatalogParams {
   variant?: string;
   specs?: Record<string, unknown>;
   description?: string;
+  imageUrl?: string; // Optional external override; falls back to stored image asset when empty
   msrp?: number;
   clearMsrp?: boolean; // Explicitly clear MSRP when true
   imageStatus?: ImageCurationStatus;

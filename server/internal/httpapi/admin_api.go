@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -406,6 +407,23 @@ func (api *AdminAPI) handleUpdateGear(w http.ResponseWriter, r *http.Request, id
 			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "specs must be an object"})
 			return
 		}
+	}
+
+	if params.ImageURL != nil {
+		trimmed := strings.TrimSpace(*params.ImageURL)
+		// Empty string clears the override.
+		if trimmed != "" {
+			if len(trimmed) > 1024 {
+				api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "imageUrl too long"})
+				return
+			}
+			parsed, err := url.Parse(trimmed)
+			if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+				api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "imageUrl must be a valid http(s) URL"})
+				return
+			}
+		}
+		*params.ImageURL = trimmed
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)

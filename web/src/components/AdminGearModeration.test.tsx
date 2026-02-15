@@ -477,6 +477,55 @@ describe('AdminGearModeration', () => {
     });
   });
 
+  it('saves external imageUrl overrides without changing imageStatus', async () => {
+    render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
+
+    const row = await screen.findByRole('button', { name: 'Open editor for EMAX ECO II 2207' });
+    fireEvent.click(row);
+    expect(await screen.findByText('Edit Gear Item')).toBeInTheDocument();
+
+    const input = screen.getByPlaceholderText('https://example.com/image.jpg');
+    fireEvent.change(input, { target: { value: 'https://example.com/new.jpg' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => {
+      expect(mockAdminUpdateGear).toHaveBeenCalled();
+    });
+
+    const [, params] = mockAdminUpdateGear.mock.calls[0];
+    expect(params).toMatchObject({ imageUrl: 'https://example.com/new.jpg' });
+    expect(params).not.toHaveProperty('imageStatus');
+  });
+
+  it('clears external imageUrl overrides when the field is emptied', async () => {
+    const itemWithExternal: GearCatalogItem = {
+      ...mockItem,
+      imageUrl: 'https://example.com/old.jpg',
+      imageStatus: 'missing',
+    };
+    mockAdminGetGear.mockResolvedValueOnce(itemWithExternal);
+
+    render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
+
+    const row = await screen.findByRole('button', { name: 'Open editor for EMAX ECO II 2207' });
+    fireEvent.click(row);
+    expect(await screen.findByText('Edit Gear Item')).toBeInTheDocument();
+
+    const input = screen.getByDisplayValue('https://example.com/old.jpg');
+    fireEvent.change(input, { target: { value: '' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => {
+      expect(mockAdminUpdateGear).toHaveBeenCalled();
+    });
+
+    const [, params] = mockAdminUpdateGear.mock.calls[0];
+    expect(params).toMatchObject({ imageUrl: '' });
+    expect(params).not.toHaveProperty('imageStatus');
+  });
+
   it('bulk deletes selected gear items from the list view', async () => {
     mockAdminSearchGear
       .mockResolvedValueOnce({ items: [mockItem], totalCount: 1 })

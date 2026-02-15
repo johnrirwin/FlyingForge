@@ -349,12 +349,16 @@ func (s *AircraftStore) GetComponents(ctx context.Context, aircraftID string) ([
 		SELECT ac.id, ac.aircraft_id, ac.category, ac.inventory_item_id, ac.notes, ac.created_at, ac.updated_at,
 			   ii.id, ii.name, ii.category, ii.manufacturer, ii.quantity, ii.notes,
 			   ii.purchase_price,
-			   CASE
-			        WHEN COALESCE(gc.image_status, 'missing') IN ('approved', 'scanned')
-			             AND (gc.image_asset_id IS NOT NULL OR gc.image_data IS NOT NULL)
-			             THEN '/api/gear-catalog/' || gc.id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(gc.image_curated_at, gc.updated_at))*1000)::bigint
-			        ELSE NULL
-			   END AS image_url,
+			   COALESCE(
+			        NULLIF(TRIM(ii.image_url), ''),
+			        NULLIF(TRIM(gc.image_url), ''),
+			        CASE
+			             WHEN COALESCE(gc.image_status, 'missing') IN ('approved', 'scanned')
+			                  AND (gc.image_asset_id IS NOT NULL OR gc.image_data IS NOT NULL)
+			                  THEN '/api/gear-catalog/' || gc.id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(gc.image_curated_at, gc.updated_at))*1000)::bigint
+			             ELSE NULL
+			        END
+			   ) AS image_url,
 			   ii.specs, ii.catalog_id
 		FROM aircraft_components ac
 		LEFT JOIN inventory_items ii ON ac.inventory_item_id = ii.id

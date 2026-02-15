@@ -46,6 +46,17 @@ function formatDateTime(value?: string): string {
   return date.toLocaleString();
 }
 
+function isInternalAPIUrl(value: string): boolean {
+  return value.startsWith('/api/');
+}
+
+function normalizeExternalImageUrl(value?: string | null): string {
+  if (!value) return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  return isInternalAPIUrl(trimmed) ? '' : trimmed;
+}
+
 function getImageStatusLabel(status: GearCatalogItem['imageStatus']): string {
   switch (status) {
     case 'approved':
@@ -1645,6 +1656,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
   const [specRows, setSpecRows] = useState<Array<{ id: string; key: string; value: string }>>([]);
   const [specsError, setSpecsError] = useState<string | null>(null);
   const [description, setDescription] = useState('');
+  const [externalImageUrl, setExternalImageUrl] = useState('');
   const [msrp, setMsrp] = useState('');
   const [bestFor, setBestFor] = useState<DroneType[]>([]);
   const [status, setStatus] = useState<CatalogItemStatus>('pending');
@@ -1705,6 +1717,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
         setModel(freshItem.model);
         setVariant(freshItem.variant || '');
         setDescription(freshItem.description || '');
+        setExternalImageUrl(normalizeExternalImageUrl(freshItem.imageUrl));
         setMsrp(freshItem.msrp?.toString() || '');
         setBestFor((freshItem.bestFor || []) as DroneType[]);
         setStatus(freshItem.status);
@@ -1737,22 +1750,31 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
   // Cache-buster timestamp to force browser to fetch fresh images
   const [imageCacheBuster] = useState(() => Date.now());
   
-  // Determine if item has an existing image (either URL or stored image)
-  const hasExistingImage = item ? (item.imageUrl || item.imageStatus === 'approved' || item.imageStatus === 'scanned') : false;
-  const existingImageUrl = item ? (item.imageUrl || ((item.imageStatus === 'approved' || item.imageStatus === 'scanned') ? getAdminGearImageUrl(item.id, imageCacheBuster) : null)) : null;
-  const willHaveImage = imageFile !== null || (!deleteImage && Boolean(hasExistingImage));
+  // Stored (DB) image preview is separate from the optional external URL override.
+  // - If the API returns a DB image URL (internal), use it.
+  // - If the API returns an external override, fall back to the admin image endpoint when an image is curated.
+  const existingStoredImageUrl = item
+    ? item.imageUrl && isInternalAPIUrl(item.imageUrl)
+      ? item.imageUrl
+      : (item.imageStatus === 'approved' || item.imageStatus === 'scanned')
+        ? getAdminGearImageUrl(item.id, imageCacheBuster)
+        : null
+    : null;
+
+  const hasExistingStoredImage = Boolean(existingStoredImageUrl);
+  const willHaveStoredImage = imageFile !== null || (!deleteImage && hasExistingStoredImage);
 
   useEffect(() => {
     setSelectedImageStatus((prevStatus) => {
-      if (!willHaveImage && prevStatus !== 'missing') {
+      if (!willHaveStoredImage && prevStatus !== 'missing') {
         return 'missing';
       }
-      if (willHaveImage && prevStatus === 'missing') {
+      if (willHaveStoredImage && prevStatus === 'missing') {
         return 'scanned';
       }
       return prevStatus;
     });
-  }, [willHaveImage]);
+  }, [willHaveStoredImage]);
 
   const moderationRequestRef = useRef(0);
 
@@ -1895,7 +1917,6 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
     }
     setModalImagePreview(null);
     setImageModalError(null);
-    setSelectedImageStatus('missing');
   };
 
   const closeDeleteConfirm = useCallback(() => {
@@ -2059,6 +2080,12 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
     if (variant !== (item.variant || '')) params.variant = variant;
     if (description !== (item.description || '')) params.description = description;
 
+    const existingExternal = normalizeExternalImageUrl(item.imageUrl);
+    const nextExternal = normalizeExternalImageUrl(externalImageUrl);
+    if (nextExternal !== existingExternal) {
+      params.imageUrl = nextExternal;
+    }
+
     // Check if bestFor has changed
     const itemBestFor = (item.bestFor || []) as DroneType[];
     const bestForChanged = bestFor.length !== itemBestFor.length ||
@@ -2119,7 +2146,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
     // Handle image: upload new, delete existing, or no change
     if (imageUploadId) {
       await adminSaveGearImageUpload(item.id, imageUploadId);
-    } else if (deleteImage && hasExistingImage) {
+    } else if (deleteImage && hasExistingStoredImage) {
       // Delete existing image
       await adminDeleteGearImage(item.id);
     }
@@ -2284,7 +2311,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
               onChange={(e) => setSelectedImageStatus(e.target.value as GearCatalogItem['imageStatus'])}
               className="w-full h-11 px-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
             >
-              {willHaveImage ? (
+              {willHaveStoredImage ? (
                 <>
                   <option value="scanned">Scanned (Needs Review)</option>
                   <option value="approved">Approved</option>
@@ -2479,26 +2506,67 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
             </div>
           </div>
 
+          {/* External Image URL (Admin override) */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">
+              Image URL (optional)
+            </label>
+            <input
+              type="url"
+              value={externalImageUrl}
+              onChange={(e) => setExternalImageUrl(e.target.value)}
+              placeholder="https://example.com/image.jpg"
+              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              If set, the catalog will use this URL first. If empty, we’ll fall back to the stored (uploaded) image.
+            </p>
+
+            {externalImageUrl.trim() !== '' && (
+              <div className="mt-3 flex items-start gap-3">
+                <img
+                  key={externalImageUrl}
+                  src={externalImageUrl}
+                  alt="External image preview"
+                  className="w-32 h-32 object-cover rounded-lg bg-slate-700"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                  onLoad={(e) => {
+                    (e.target as HTMLImageElement).style.display = '';
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setExternalImageUrl('')}
+                  className="px-3 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-sm text-white transition-colors"
+                >
+                  Clear URL
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Image Upload (Admin only) */}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">
-              Product Image
+              Stored Image (upload)
               <span className="ml-2 text-xs text-primary-400">(Max 2MB, JPEG/PNG)</span>
             </label>
             
             {/* Show existing image or new preview */}
-            {!deleteImage && (imagePreview || existingImageUrl) && (
+            {!deleteImage && (imagePreview || existingStoredImageUrl) && (
               <div className="mb-3">
                 <div className="relative inline-block">
                 <img
-                  src={imagePreview || existingImageUrl || ''}
+                  src={imagePreview || existingStoredImageUrl || ''}
                   alt="Preview"
                   className="w-32 h-32 object-cover rounded-lg bg-slate-700"
                   onError={(e) => {
                     (e.target as HTMLImageElement).style.display = 'none';
                   }}
                 />
-                {(existingImageUrl || imagePreview) && (
+                {(existingStoredImageUrl || imagePreview) && (
                   <button
                     type="button"
                     onClick={handleDeleteImage}
@@ -2511,9 +2579,9 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
                   </button>
                 )}
                 </div>
-                {existingImageUrl && !imagePreview && (
+                {existingStoredImageUrl && !imagePreview && (
                   <a
-                    href={existingImageUrl}
+                    href={existingStoredImageUrl}
                     download={`${(item.brand || 'gear').replace(/\s+/g, '-').toLowerCase()}-${(item.model || 'image').replace(/\s+/g, '-').toLowerCase()}`}
                     className="mt-2 inline-flex items-center gap-2 text-sm text-primary-300 hover:text-primary-200 transition-colors"
                   >
@@ -2531,10 +2599,10 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
               onClick={handleOpenImageModal}
               className="px-3 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-sm text-white transition-colors"
             >
-              {(imagePreview || (!deleteImage && existingImageUrl)) ? 'Change Image' : 'Add Image'}
+              {(imagePreview || (!deleteImage && existingStoredImageUrl)) ? 'Change Image' : 'Add Image'}
             </button>
             
-            {deleteImage && hasExistingImage && (
+            {deleteImage && hasExistingStoredImage && (
               <p className="mt-2 text-sm text-amber-400">
                 Image will be removed when you save.
               </p>
@@ -2584,7 +2652,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
       <ImageUploadModal
         isOpen={showImageModal}
         title="Edit Gear Image"
-        previewUrl={modalImagePreview || (!deleteImage ? (imagePreview || existingImageUrl || null) : null)}
+        previewUrl={modalImagePreview || (!deleteImage ? (imagePreview || existingStoredImageUrl || null) : null)}
         previewAlt={modalImagePreview ? 'Gear preview' : 'Current gear image'}
         placeholder="📦"
         accept="image/jpeg,image/jpg,image/png"

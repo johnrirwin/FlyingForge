@@ -122,7 +122,7 @@ func (s *GearCatalogStore) Get(ctx context.Context, id string) (*models.GearCata
 	query := `
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key,
-			   CASE WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   COALESCE(NULLIF(TRIM(gear_catalog.image_url), ''), CASE WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END) as image_url,
 			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
@@ -182,7 +182,7 @@ func (s *GearCatalogStore) GetByCanonicalKey(ctx context.Context, canonicalKey s
 	query := `
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key,
-			   CASE WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   COALESCE(NULLIF(TRIM(gear_catalog.image_url), ''), CASE WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END) as image_url,
 			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
@@ -318,7 +318,7 @@ func (s *GearCatalogStore) Search(ctx context.Context, params models.GearCatalog
 	query := fmt.Sprintf(`
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key,
-			   CASE WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   COALESCE(NULLIF(TRIM(gear_catalog.image_url), ''), CASE WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END) as image_url,
 			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
@@ -397,7 +397,7 @@ func (s *GearCatalogStore) FindNearMatches(ctx context.Context, gearType models.
 	query := `
 		SELECT id, gear_type, brand, model, variant, specs, source,
 			   created_by_user_id, status, canonical_key,
-			   CASE WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM updated_at)*1000)::bigint ELSE NULL END as image_url,
+			   COALESCE(NULLIF(TRIM(gear_catalog.image_url), ''), CASE WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM updated_at)*1000)::bigint ELSE NULL END) as image_url,
 			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
@@ -458,7 +458,7 @@ func (s *GearCatalogStore) findNearMatchesFallback(ctx context.Context, gearType
 	query := `
 		SELECT id, gear_type, brand, model, variant, specs, source,
 			   created_by_user_id, status, canonical_key,
-			   CASE WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   COALESCE(NULLIF(TRIM(gear_catalog.image_url), ''), CASE WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END) as image_url,
 			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count
@@ -531,7 +531,7 @@ func (s *GearCatalogStore) FindNearMatchesAdmin(ctx context.Context, gearType mo
 	query := `
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key,
-			   CASE WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   COALESCE(NULLIF(TRIM(gear_catalog.image_url), ''), CASE WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END) as image_url,
 			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
@@ -613,7 +613,7 @@ func (s *GearCatalogStore) findNearMatchesAdminFallback(ctx context.Context, gea
 	query := `
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key,
-			   CASE WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   COALESCE(NULLIF(TRIM(gear_catalog.image_url), ''), CASE WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END) as image_url,
 			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
@@ -721,7 +721,7 @@ func (s *GearCatalogStore) GetPopular(ctx context.Context, gearType models.GearT
 	query := `
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key,
-			   CASE WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   COALESCE(NULLIF(TRIM(gear_catalog.image_url), ''), CASE WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END) as image_url,
 			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
@@ -938,7 +938,7 @@ func (s *GearCatalogStore) AdminSearch(ctx context.Context, params models.AdminG
 	query := fmt.Sprintf(`
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key,
-			   CASE WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END as image_url,
+			   COALESCE(NULLIF(TRIM(gear_catalog.image_url), ''), CASE WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END) as image_url,
 			   description,
 			   created_at, updated_at,
 			   (SELECT COUNT(*) FROM inventory_items WHERE catalog_id = gear_catalog.id) as usage_count,
@@ -1109,6 +1109,19 @@ func (s *GearCatalogStore) AdminUpdate(ctx context.Context, id string, adminUser
 			argIdx++
 			sets = append(sets, "description_curated_by_user_id = NULL")
 			sets = append(sets, "description_curated_at = NULL")
+		}
+	}
+
+	// Optional external image URL override (admin curated).
+	// When set, clients should prefer this over the stored image asset.
+	if params.ImageURL != nil {
+		trimmed := strings.TrimSpace(*params.ImageURL)
+		if trimmed == "" {
+			sets = append(sets, "image_url = NULL")
+		} else {
+			sets = append(sets, fmt.Sprintf("image_url = $%d", argIdx))
+			args = append(args, trimmed)
+			argIdx++
 		}
 	}
 	if params.ClearMSRP {

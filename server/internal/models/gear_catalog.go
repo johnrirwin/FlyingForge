@@ -234,6 +234,7 @@ type AdminUpdateGearCatalogParams struct {
 	Variant     *string            `json:"variant,omitempty"`
 	Specs       json.RawMessage    `json:"specs,omitempty"`
 	Description *string            `json:"description,omitempty"`
+	ImageURL    *string            `json:"imageUrl,omitempty"` // Optional external override; falls back to stored image asset when empty
 	MSRP        *float64           `json:"msrp,omitempty"`
 	ClearMSRP   bool               `json:"clearMsrp,omitempty"` // Explicitly clear MSRP when true
 	ImageStatus *ImageStatus       `json:"imageStatus,omitempty"`
