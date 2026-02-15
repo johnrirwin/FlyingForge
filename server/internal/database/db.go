@@ -990,4 +990,12 @@ ALTER TABLE equipment_items DROP COLUMN IF EXISTS image_url;
 const migrationGearItemImageURLOverrides = `
 ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS image_url VARCHAR(1024);
 ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS image_url VARCHAR(1024);
+
+-- Backfill curation status for catalog items that already have an external image override.
+-- External URLs are curated by admins and should not appear as "missing image" in moderation.
+UPDATE gear_catalog
+SET image_status = 'approved',
+    image_curated_at = COALESCE(image_curated_at, NOW())
+WHERE COALESCE(image_status, 'missing') = 'missing'
+  AND NULLIF(TRIM(image_url), '') IS NOT NULL;
 `

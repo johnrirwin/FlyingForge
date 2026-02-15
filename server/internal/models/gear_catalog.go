@@ -188,6 +188,7 @@ type GearCatalogItem struct {
 	Status          CatalogItemStatus `json:"status"`
 	CanonicalKey    string            `json:"canonicalKey"`
 	ImageURL        string            `json:"imageUrl,omitempty"`
+	HasStoredImage  bool              `json:"hasStoredImage"`
 	Description     string            `json:"description,omitempty"`
 	UsageCount      int               `json:"usageCount"` // How many users have this in inventory
 	CreatedAt       time.Time         `json:"createdAt"`

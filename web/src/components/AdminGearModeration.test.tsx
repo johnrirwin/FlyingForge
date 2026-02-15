@@ -477,7 +477,7 @@ describe('AdminGearModeration', () => {
     });
   });
 
-  it('saves external imageUrl overrides without changing imageStatus', async () => {
+  it('saves external imageUrl overrides and marks imageStatus approved', async () => {
     render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
 
     const row = await screen.findByRole('button', { name: 'Open editor for EMAX ECO II 2207' });
@@ -494,15 +494,14 @@ describe('AdminGearModeration', () => {
     });
 
     const [, params] = mockAdminUpdateGear.mock.calls[0];
-    expect(params).toMatchObject({ imageUrl: 'https://example.com/new.jpg' });
-    expect(params).not.toHaveProperty('imageStatus');
+    expect(params).toMatchObject({ imageUrl: 'https://example.com/new.jpg', imageStatus: 'approved' });
   });
 
   it('clears external imageUrl overrides when the field is emptied', async () => {
     const itemWithExternal: GearCatalogItem = {
       ...mockItem,
       imageUrl: 'https://example.com/old.jpg',
-      imageStatus: 'missing',
+      imageStatus: 'approved',
     };
     mockAdminGetGear.mockResolvedValueOnce(itemWithExternal);
 
@@ -522,8 +521,7 @@ describe('AdminGearModeration', () => {
     });
 
     const [, params] = mockAdminUpdateGear.mock.calls[0];
-    expect(params).toMatchObject({ imageUrl: '' });
-    expect(params).not.toHaveProperty('imageStatus');
+    expect(params).toMatchObject({ imageUrl: '', imageStatus: 'missing' });
   });
 
   it('bulk deletes selected gear items from the list view', async () => {
