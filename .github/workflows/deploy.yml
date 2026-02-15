@@ -154,6 +154,23 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
+      # One-time migration safety: ensure the ALB listener detaches from the legacy
+      # web target group before Terraform tries to destroy it. Without this, AWS
+      # can return ResourceInUse if the destroy runs before the listener update.
+      - name: Pre-apply ALB listener updates
+        run: |
+          terraform apply -auto-approve \
+            -var="google_client_id=${{ secrets.GOOGLE_CLIENT_ID }}" \
+            -var="google_client_secret=${{ secrets.GOOGLE_CLIENT_SECRET }}" \
+            -var="encryption_key=${{ secrets.ENCRYPTION_KEY }}" \
+            -var="domain_name=flyingforge.com" \
+            -var="create_dns_record=true" \
+            -var="enable_vpc_endpoints=false" \
+            -var="enable_nat_gateway=false" \
+            -target="aws_lb_listener.http" \
+            -target="aws_lb_listener.https[0]" \
+            -target="aws_lb_listener_rule.api_https[0]"
+
       - name: Terraform Plan
         run: |
           # Cost optimization: disable NAT gateways and VPC endpoints; tasks egress via the internet gateway.
