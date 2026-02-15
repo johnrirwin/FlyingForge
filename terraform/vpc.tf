@@ -32,7 +32,7 @@ resource "aws_subnet" "public" {
   }
 }
 
-# Private Subnets (for ECS, RDS, Redis)
+# Private Subnets (for RDS, Redis)
 resource "aws_subnet" "private" {
   count             = 2
   vpc_id            = aws_vpc.main.id
@@ -47,7 +47,7 @@ resource "aws_subnet" "private" {
 
 # Elastic IPs for NAT Gateways
 resource "aws_eip" "nat" {
-  count  = 2
+  count  = var.enable_nat_gateway ? 2 : 0
   domain = "vpc"
 
   tags = {
@@ -61,7 +61,7 @@ resource "aws_eip" "nat" {
 
 # NAT Gateways
 resource "aws_nat_gateway" "main" {
-  count         = 2
+  count         = var.enable_nat_gateway ? 2 : 0
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
 
@@ -93,16 +93,18 @@ resource "aws_route_table" "private" {
   count  = 2
   vpc_id = aws_vpc.main.id
 
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main[count.index].id
-  }
-
   tags = {
-    Name        = "${var.app_name}-private-rt-${count.index + 1}"
-    Component   = "private-routing"
-    CostProfile = "nat-egress"
+    Name      = "${var.app_name}-private-rt-${count.index + 1}"
+    Component = "private-routing"
   }
+}
+
+resource "aws_route" "private_nat_gateway" {
+  count = var.enable_nat_gateway ? 2 : 0
+
+  route_table_id         = aws_route_table.private[count.index].id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.main[count.index].id
 }
 
 # Route Table Associations
@@ -164,9 +166,17 @@ resource "aws_security_group" "ecs_tasks" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description     = "From ALB"
-    from_port       = 0
-    to_port         = 65535
+    description     = "HTTP from ALB to web tasks"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  ingress {
+    description     = "HTTP from ALB to API tasks"
+    from_port       = 8080
+    to_port         = 8080
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }

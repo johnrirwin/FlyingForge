@@ -116,6 +116,13 @@ variable "news_refresh_schedule_timezone" {
   default     = "America/New_York"
 }
 
+# Networking cost controls
+variable "enable_nat_gateway" {
+  description = "Whether to provision NAT gateways for private subnet internet egress"
+  type        = bool
+  default     = false
+}
+
 # NAT cost optimization (AWS service access without traversing NAT)
 variable "enable_vpc_endpoints" {
   description = "Whether to create VPC endpoints for private subnet AWS service traffic"
