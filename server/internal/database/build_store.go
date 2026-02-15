@@ -972,11 +972,14 @@ func (s *BuildStore) attachParts(ctx context.Context, builds []*models.Build) er
 			gc.model,
 			gc.variant,
 			gc.status,
-			CASE
-				WHEN (gc.image_asset_id IS NOT NULL OR gc.image_data IS NOT NULL) AND COALESCE(gc.image_status, 'missing') IN ('approved', 'scanned')
-					THEN '/api/gear-catalog/' || gc.id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(gc.image_curated_at, gc.updated_at))*1000)::bigint
-				ELSE NULL
-			END AS image_url
+			COALESCE(
+				NULLIF(TRIM(gc.image_url), ''),
+				CASE
+					WHEN (gc.image_asset_id IS NOT NULL OR gc.image_data IS NOT NULL) AND COALESCE(gc.image_status, 'missing') IN ('approved', 'scanned')
+						THEN '/api/gear-catalog/' || gc.id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(gc.image_curated_at, gc.updated_at))*1000)::bigint
+					ELSE NULL
+				END
+			) AS image_url
 		FROM build_parts bp
 		LEFT JOIN gear_catalog gc ON gc.id = bp.catalog_item_id
 		WHERE bp.build_id = ANY($1::uuid[])

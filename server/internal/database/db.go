@@ -124,6 +124,7 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationBuilds,                                    // Adds user/public/temp builds with part mappings
 		migrationFeedItems,                                 // Adds persistent storage for aggregated feed/news items
 		migrationDropLegacyImageURLs,                       // Drops legacy image_url columns in favor of image_assets
+		migrationGearItemImageURLOverrides,                 // Adds back optional external image_url overrides for gear items
 	}
 
 	for i, migration := range migrations {
@@ -697,7 +698,7 @@ const migrationGearCatalogImageData = `
 -- Add image_data column for storing actual image binary (max 2MB enforced by app)
 ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS image_data BYTEA;
 ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS image_type VARCHAR(50);
--- NOTE: Legacy image_url columns are removed in migrationDropLegacyImageURLs.
+-- NOTE: Legacy external_image_url columns are removed in migrationDropLegacyImageURLs.
 `
 
 // Migration to add unique partial index on (user_id, catalog_id) for inventory items
@@ -979,8 +980,14 @@ END $$;
 
 // Migration to drop legacy image_url columns in favor of moderated image assets / binary storage.
 const migrationDropLegacyImageURLs = `
+-- NOTE: We keep gear_catalog.image_url and inventory_items.image_url for optional external overrides.
 ALTER TABLE gear_catalog DROP COLUMN IF EXISTS external_image_url;
-ALTER TABLE gear_catalog DROP COLUMN IF EXISTS image_url;
-ALTER TABLE inventory_items DROP COLUMN IF EXISTS image_url;
 ALTER TABLE equipment_items DROP COLUMN IF EXISTS image_url;
+`
+
+// Migration to reintroduce optional external image URLs for gear items.
+// These are admin-curated overrides used before falling back to stored image assets.
+const migrationGearItemImageURLOverrides = `
+ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS image_url VARCHAR(1024);
+ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS image_url VARCHAR(1024);
 `
