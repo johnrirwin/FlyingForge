@@ -1762,22 +1762,19 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
     : null;
 
   const hasExistingStoredImage = Boolean(existingStoredImageUrl);
-  const willHaveImage =
-    imageFile !== null ||
-    externalImageUrl.trim() !== '' ||
-    (!deleteImage && hasExistingStoredImage);
+  const willHaveStoredImage = imageFile !== null || (!deleteImage && hasExistingStoredImage);
 
   useEffect(() => {
     setSelectedImageStatus((prevStatus) => {
-      if (!willHaveImage && prevStatus !== 'missing') {
+      if (!willHaveStoredImage && prevStatus !== 'missing') {
         return 'missing';
       }
-      if (willHaveImage && prevStatus === 'missing') {
+      if (willHaveStoredImage && prevStatus === 'missing') {
         return 'scanned';
       }
       return prevStatus;
     });
-  }, [willHaveImage]);
+  }, [willHaveStoredImage]);
 
   const moderationRequestRef = useRef(0);
 
@@ -2084,7 +2081,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
     if (description !== (item.description || '')) params.description = description;
 
     const existingExternal = normalizeExternalImageUrl(item.imageUrl);
-    const nextExternal = externalImageUrl.trim();
+    const nextExternal = normalizeExternalImageUrl(externalImageUrl);
     if (nextExternal !== existingExternal) {
       params.imageUrl = nextExternal;
     }
@@ -2314,7 +2311,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
               onChange={(e) => setSelectedImageStatus(e.target.value as GearCatalogItem['imageStatus'])}
               className="w-full h-11 px-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
             >
-              {willHaveImage ? (
+              {willHaveStoredImage ? (
                 <>
                   <option value="scanned">Scanned (Needs Review)</option>
                   <option value="approved">Approved</option>
@@ -2528,11 +2525,15 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
             {externalImageUrl.trim() !== '' && (
               <div className="mt-3 flex items-start gap-3">
                 <img
+                  key={externalImageUrl}
                   src={externalImageUrl}
                   alt="External image preview"
                   className="w-32 h-32 object-cover rounded-lg bg-slate-700"
                   onError={(e) => {
                     (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                  onLoad={(e) => {
+                    (e.target as HTMLImageElement).style.display = '';
                   }}
                 />
                 <button
