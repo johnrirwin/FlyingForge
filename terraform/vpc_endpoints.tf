@@ -15,7 +15,6 @@ locals {
 
   managed_log_group_arns = compact([
     aws_cloudwatch_log_group.server.arn,
-    aws_cloudwatch_log_group.web.arn,
     # The scheduled refresh task uses its own log group; include it when enabled so
     # the CloudWatch Logs VPC endpoint policy allows CreateLogStream/PutLogEvents.
     try(aws_cloudwatch_log_group.news_refresh[0].arn, ""),

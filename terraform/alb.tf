@@ -38,31 +38,6 @@ resource "aws_lb_target_group" "server" {
   }
 }
 
-# Target Group for Web (Frontend)
-resource "aws_lb_target_group" "web" {
-  name        = "${var.app_name}-web-tg"
-  port        = 80
-  protocol    = "HTTP"
-  vpc_id      = aws_vpc.main.id
-  target_type = "ip"
-
-  health_check {
-    enabled             = true
-    healthy_threshold   = 2
-    interval            = 30
-    matcher             = "200"
-    path                = "/"
-    port                = "traffic-port"
-    protocol            = "HTTP"
-    timeout             = 5
-    unhealthy_threshold = 3
-  }
-
-  tags = {
-    Name = "${var.app_name}-web-tg"
-  }
-}
-
 # HTTP Listener - redirects to HTTPS when certificate exists, otherwise serves directly
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
@@ -84,8 +59,12 @@ resource "aws_lb_listener" "http" {
   dynamic "default_action" {
     for_each = var.domain_name == "" ? [1] : []
     content {
-      type             = "forward"
-      target_group_arn = aws_lb_target_group.web.arn
+      type = "fixed-response"
+      fixed_response {
+        content_type = "text/plain"
+        message_body = "Not Found"
+        status_code  = "404"
+      }
     }
   }
 }
@@ -103,7 +82,7 @@ resource "aws_lb_listener_rule" "api_http" {
 
   condition {
     path_pattern {
-      values = ["/api/*", "/health"]
+      values = ["/api", "/api/*", "/health"]
     }
   }
 }
@@ -115,11 +94,16 @@ resource "aws_lb_listener" "https" {
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = aws_acm_certificate_validation.main[0].certificate_arn
+  certificate_arn   = aws_acm_certificate_validation.api[0].certificate_arn
 
   default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.web.arn
+    type = "fixed-response"
+
+    fixed_response {
+      content_type = "text/plain"
+      message_body = "Not Found"
+      status_code  = "404"
+    }
   }
 }
 
@@ -136,7 +120,7 @@ resource "aws_lb_listener_rule" "api_https" {
 
   condition {
     path_pattern {
-      values = ["/api/*", "/health"]
+      values = ["/api", "/api/*", "/health"]
     }
   }
 }

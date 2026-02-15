@@ -33,11 +33,6 @@ output "ecs_server_service_name" {
   value       = aws_ecs_service.server.name
 }
 
-output "ecs_web_service_name" {
-  description = "ECS web service name"
-  value       = aws_ecs_service.web.name
-}
-
 output "rds_endpoint" {
   description = "RDS instance endpoint"
   value       = aws_db_instance.main.endpoint
@@ -52,7 +47,17 @@ output "redis_endpoint" {
 
 output "app_url" {
   description = "Application URL"
-  value       = var.domain_name != "" ? "https://${var.domain_name}" : "http://${aws_lb.main.dns_name}"
+  value       = var.domain_name != "" ? "https://${var.domain_name}" : "https://${aws_cloudfront_distribution.web.domain_name}"
+}
+
+output "cloudfront_domain_name" {
+  description = "CloudFront distribution domain name for the web frontend"
+  value       = aws_cloudfront_distribution.web.domain_name
+}
+
+output "web_url" {
+  description = "Web frontend URL"
+  value       = var.domain_name != "" ? "https://${var.domain_name}" : "https://${aws_cloudfront_distribution.web.domain_name}"
 }
 
 output "vpc_endpoint_ids" {
