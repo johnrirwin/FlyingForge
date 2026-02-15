@@ -86,6 +86,7 @@ export interface GearCatalogItem {
   status: CatalogItemStatus;
   canonicalKey: string;
   imageUrl?: string;
+  hasStoredImage?: boolean; // True when a stored image asset exists (independent of any external override)
   description?: string;
   usageCount: number;
   createdAt: string;

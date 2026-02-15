@@ -57,6 +57,36 @@ function normalizeExternalImageUrl(value?: string | null): string {
   return isInternalAPIUrl(trimmed) ? '' : trimmed;
 }
 
+function getEffectiveImageStatus(
+  imageStatus: GearCatalogItem['imageStatus'],
+  imageUrl?: GearCatalogItem['imageUrl']
+): GearCatalogItem['imageStatus'] {
+  const normalizedUrl = normalizeExternalImageUrl(imageUrl);
+  return imageStatus === 'missing' && normalizedUrl ? 'approved' : imageStatus;
+}
+
+function deriveEffectiveNextImageStatus(
+  imageStatus: GearCatalogItem['imageStatus'],
+  willHaveExternal: boolean,
+  willHaveStored: boolean
+): GearCatalogItem['imageStatus'] {
+  if (willHaveExternal) {
+    if (imageStatus === 'missing') return 'approved';
+    if (!willHaveStored && imageStatus === 'scanned') return 'approved';
+    return imageStatus;
+  }
+
+  if (willHaveStored && imageStatus === 'missing') {
+    return 'scanned';
+  }
+
+  if (!willHaveStored && imageStatus !== 'missing') {
+    return 'missing';
+  }
+
+  return imageStatus;
+}
+
 function getImageStatusLabel(status: GearCatalogItem['imageStatus']): string {
   switch (status) {
     case 'approved':
@@ -858,6 +888,7 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
                   <tbody>
                     {items.map((item) => {
                       const displayName = `${item.brand} ${item.model}${item.variant ? ` ${item.variant}` : ''}`.trim();
+                      const effectiveImageStatus = getEffectiveImageStatus(item.imageStatus, item.imageUrl);
                       const isEditing = editingItemId === item.id;
                       const isSelectedForBulkDelete = isBulkEditMode && selectedItemIds.has(item.id);
                       const ariaLabel = isBulkEditMode ? `Select ${displayName}` : `Open editor for ${displayName}`;
@@ -907,8 +938,8 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
                           <td className="px-4 py-3 text-sm text-slate-300">{item.model}</td>
                           <td className="px-4 py-3 text-sm text-slate-400">{item.variant || '—'}</td>
                           <td className="px-4 py-3 text-sm">
-                            <span className={`px-2 py-0.5 rounded text-xs ${getImageStatusClass(item.imageStatus)}`}>
-                              {getImageStatusLabel(item.imageStatus)}
+                            <span className={`px-2 py-0.5 rounded text-xs ${getImageStatusClass(effectiveImageStatus)}`}>
+                              {getImageStatusLabel(effectiveImageStatus)}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-sm">
@@ -936,70 +967,74 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
                   <p className="text-slate-400">No items found</p>
                 </div>
               ) : (
-                items.map((item) => (
-                  <div
-                    key={item.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => {
-                      if (isBulkEditMode) {
-                        toggleSelection(item.id);
-                      } else {
-                        handleEditClick(item);
-                      }
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
+                items.map((item) => {
+                  const effectiveImageStatus = getEffectiveImageStatus(item.imageStatus, item.imageUrl);
+
+                  return (
+                    <div
+                      key={item.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => {
                         if (isBulkEditMode) {
                           toggleSelection(item.id);
                         } else {
                           handleEditClick(item);
                         }
-                      }
-                    }}
-                    aria-pressed={isBulkEditMode ? selectedItemIds.has(item.id) : undefined}
-                    className={`w-full text-left rounded-xl p-4 transition-colors border ${
-                      editingItemId === item.id
-                        ? 'border-primary-500/50 bg-primary-600/10'
-                        : isBulkEditMode && selectedItemIds.has(item.id)
-                          ? 'border-red-500/50 bg-red-500/10'
-                          : 'border-slate-800 bg-slate-900/40 hover:bg-slate-800/50'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="px-2 py-0.5 bg-slate-700 rounded text-xs text-slate-300">
-                            {getGearTypeLabel(item.gearType)}
-                          </span>
-                          <span className={`px-2 py-0.5 rounded text-xs ${getCatalogStatusClass(item.status)}`}>
-                            {getCatalogStatusLabel(item.status)}
-                          </span>
-                          <span className={`px-2 py-0.5 rounded text-xs ${getImageStatusClass(item.imageStatus)}`}>
-                            {getImageStatusLabel(item.imageStatus)}
-                          </span>
-                        </div>
-                        <h3 className="text-white font-medium truncate">
-                          {item.brand} {item.model}
-                        </h3>
-                        {item.variant && (
-                          <p className="text-sm text-slate-400 truncate">{item.variant}</p>
-                        )}
-                        <div className="grid grid-cols-2 gap-3 mt-3 text-xs">
-                          <div>
-                            <p className="text-slate-500 uppercase tracking-wide">Upload</p>
-                            <p className="text-slate-300 mt-0.5">{formatDate(item.createdAt)}</p>
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          if (isBulkEditMode) {
+                            toggleSelection(item.id);
+                          } else {
+                            handleEditClick(item);
+                          }
+                        }
+                      }}
+                      aria-pressed={isBulkEditMode ? selectedItemIds.has(item.id) : undefined}
+                      className={`w-full text-left rounded-xl p-4 transition-colors border ${
+                        editingItemId === item.id
+                          ? 'border-primary-500/50 bg-primary-600/10'
+                          : isBulkEditMode && selectedItemIds.has(item.id)
+                            ? 'border-red-500/50 bg-red-500/10'
+                            : 'border-slate-800 bg-slate-900/40 hover:bg-slate-800/50'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="px-2 py-0.5 bg-slate-700 rounded text-xs text-slate-300">
+                              {getGearTypeLabel(item.gearType)}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded text-xs ${getCatalogStatusClass(item.status)}`}>
+                              {getCatalogStatusLabel(item.status)}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded text-xs ${getImageStatusClass(effectiveImageStatus)}`}>
+                              {getImageStatusLabel(effectiveImageStatus)}
+                            </span>
                           </div>
-                          <div className="text-right">
-                            <p className="text-slate-500 uppercase tracking-wide">Last Edit</p>
-                            <p className="text-slate-300 mt-0.5">{formatDate(item.updatedAt)}</p>
+                          <h3 className="text-white font-medium truncate">
+                            {item.brand} {item.model}
+                          </h3>
+                          {item.variant && (
+                            <p className="text-sm text-slate-400 truncate">{item.variant}</p>
+                          )}
+                          <div className="grid grid-cols-2 gap-3 mt-3 text-xs">
+                            <div>
+                              <p className="text-slate-500 uppercase tracking-wide">Upload</p>
+                              <p className="text-slate-300 mt-0.5">{formatDate(item.createdAt)}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-slate-500 uppercase tracking-wide">Last Edit</p>
+                              <p className="text-slate-300 mt-0.5">{formatDate(item.updatedAt)}</p>
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 
@@ -1717,11 +1752,12 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
         setModel(freshItem.model);
         setVariant(freshItem.variant || '');
         setDescription(freshItem.description || '');
-        setExternalImageUrl(normalizeExternalImageUrl(freshItem.imageUrl));
+        const externalOverride = normalizeExternalImageUrl(freshItem.imageUrl);
+        setExternalImageUrl(externalOverride);
         setMsrp(freshItem.msrp?.toString() || '');
         setBestFor((freshItem.bestFor || []) as DroneType[]);
         setStatus(freshItem.status);
-        setSelectedImageStatus(freshItem.imageStatus);
+        setSelectedImageStatus(getEffectiveImageStatus(freshItem.imageStatus, freshItem.imageUrl));
         specRowIdRef.current = 0;
         const specsObject =
           freshItem.specs && typeof freshItem.specs === 'object' && !Array.isArray(freshItem.specs)
@@ -1752,29 +1788,24 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
   
   // Stored (DB) image preview is separate from the optional external URL override.
   // - If the API returns a DB image URL (internal), use it.
-  // - If the API returns an external override, fall back to the admin image endpoint when an image is curated.
+  // - If an external override is present, use the admin image endpoint (when a stored image exists) for preview/editing.
   const existingStoredImageUrl = item
-    ? item.imageUrl && isInternalAPIUrl(item.imageUrl)
-      ? item.imageUrl
-      : (item.imageStatus === 'approved' || item.imageStatus === 'scanned')
-        ? getAdminGearImageUrl(item.id, imageCacheBuster)
-        : null
+    ? item.hasStoredImage
+      ? item.imageUrl && isInternalAPIUrl(item.imageUrl)
+        ? item.imageUrl
+        : getAdminGearImageUrl(item.id, imageCacheBuster)
+      : null
     : null;
 
   const hasExistingStoredImage = Boolean(existingStoredImageUrl);
   const willHaveStoredImage = imageFile !== null || (!deleteImage && hasExistingStoredImage);
+  const willHaveExternalImage = normalizeExternalImageUrl(externalImageUrl) !== '';
 
   useEffect(() => {
-    setSelectedImageStatus((prevStatus) => {
-      if (!willHaveStoredImage && prevStatus !== 'missing') {
-        return 'missing';
-      }
-      if (willHaveStoredImage && prevStatus === 'missing') {
-        return 'scanned';
-      }
-      return prevStatus;
-    });
-  }, [willHaveStoredImage]);
+    setSelectedImageStatus((prevStatus) =>
+      deriveEffectiveNextImageStatus(prevStatus, willHaveExternalImage, willHaveStoredImage)
+    );
+  }, [willHaveExternalImage, willHaveStoredImage]);
 
   const moderationRequestRef = useRef(0);
 
@@ -2139,8 +2170,14 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
     }
 
     // Allow admins to explicitly set/unset image curation status, including "unapprove" to scanned.
-    if (selectedImageStatus !== item.imageStatus || imageFile !== null || deleteImage) {
-      params.imageStatus = selectedImageStatus;
+    const effectiveNextImageStatus: GearCatalogItem['imageStatus'] = deriveEffectiveNextImageStatus(
+      selectedImageStatus,
+      willHaveExternalImage,
+      willHaveStoredImage
+    );
+
+    if (effectiveNextImageStatus !== item.imageStatus || imageFile !== null || deleteImage) {
+      params.imageStatus = effectiveNextImageStatus;
     }
 
     // Handle image: upload new, delete existing, or no change
@@ -2276,8 +2313,8 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
             </p>
             <p className="text-sm text-slate-400 mt-1">
               <strong>Image Status:</strong>{' '}
-              <span className={getImageStatusTextClass(item.imageStatus)}>
-                {item.imageStatus}
+              <span className={getImageStatusTextClass(selectedImageStatus)}>
+                {selectedImageStatus}
               </span>
             </p>
           </div>
@@ -2311,18 +2348,20 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
               onChange={(e) => setSelectedImageStatus(e.target.value as GearCatalogItem['imageStatus'])}
               className="w-full h-11 px-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-primary-500"
             >
-              {willHaveStoredImage ? (
+              {willHaveStoredImage || willHaveExternalImage ? (
                 <>
-                  <option value="scanned">Scanned (Needs Review)</option>
+                  {willHaveStoredImage && <option value="scanned">Scanned (Needs Review)</option>}
                   <option value="approved">Approved</option>
                 </>
               ) : (
                 <option value="missing">Missing</option>
               )}
             </select>
-            <p className="text-xs text-slate-500 mt-1">
-              Set to <span className="text-blue-400">Scanned</span> to unapprove while keeping the image.
-            </p>
+            {willHaveStoredImage && (
+              <p className="text-xs text-slate-500 mt-1">
+                Set to <span className="text-blue-400">Scanned</span> to unapprove while keeping the stored image.
+              </p>
+            )}
           </div>
 
           {/* Gear Type */}
