@@ -94,8 +94,9 @@ resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name      = "${var.app_name}-private-rt-${count.index + 1}"
-    Component = "private-routing"
+    Name        = "${var.app_name}-private-rt-${count.index + 1}"
+    Component   = "private-routing"
+    CostProfile = var.enable_nat_gateway ? "nat-egress" : "no-nat"
   }
 }
 
@@ -185,6 +186,25 @@ resource "aws_security_group" "ecs_tasks" {
   }
 }
 
+# Security Group for one-shot/scheduled ECS tasks (no inbound required)
+resource "aws_security_group" "scheduled_tasks" {
+  name        = "${var.app_name}-scheduled-tasks-sg"
+  description = "Security group for scheduled one-shot ECS tasks"
+  vpc_id      = aws_vpc.main.id
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name      = "${var.app_name}-scheduled-tasks-sg"
+    Component = "scheduled-tasks"
+  }
+}
+
 # Security Group for RDS
 resource "aws_security_group" "rds" {
   name        = "${var.app_name}-rds-sg"
@@ -196,7 +216,7 @@ resource "aws_security_group" "rds" {
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
-    security_groups = [aws_security_group.ecs_tasks.id]
+    security_groups = [aws_security_group.ecs_tasks.id, aws_security_group.scheduled_tasks.id]
   }
 
   egress {
@@ -222,7 +242,7 @@ resource "aws_security_group" "redis" {
     from_port       = 6379
     to_port         = 6379
     protocol        = "tcp"
-    security_groups = [aws_security_group.ecs_tasks.id]
+    security_groups = [aws_security_group.ecs_tasks.id, aws_security_group.scheduled_tasks.id]
   }
 
   egress {

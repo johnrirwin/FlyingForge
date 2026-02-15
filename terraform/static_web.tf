@@ -153,14 +153,6 @@ resource "aws_cloudfront_distribution" "web" {
     cached_methods           = ["GET", "HEAD", "OPTIONS"]
     cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
     origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
-
-    dynamic "function_association" {
-      for_each = var.domain_name != "" ? [1] : []
-      content {
-        event_type   = "viewer-request"
-        function_arn = aws_cloudfront_function.redirect_www_to_apex[0].arn
-      }
-    }
   }
 
   ordered_cache_behavior {
@@ -171,14 +163,6 @@ resource "aws_cloudfront_distribution" "web" {
     cached_methods           = ["GET", "HEAD", "OPTIONS"]
     cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
     origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
-
-    dynamic "function_association" {
-      for_each = var.domain_name != "" ? [1] : []
-      content {
-        event_type   = "viewer-request"
-        function_arn = aws_cloudfront_function.redirect_www_to_apex[0].arn
-      }
-    }
   }
 
   ordered_cache_behavior {
@@ -189,14 +173,6 @@ resource "aws_cloudfront_distribution" "web" {
     cached_methods           = ["GET", "HEAD", "OPTIONS"]
     cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
     origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
-
-    dynamic "function_association" {
-      for_each = var.domain_name != "" ? [1] : []
-      content {
-        event_type   = "viewer-request"
-        function_arn = aws_cloudfront_function.redirect_www_to_apex[0].arn
-      }
-    }
   }
 
   custom_error_response {

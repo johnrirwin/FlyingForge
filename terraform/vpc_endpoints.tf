@@ -2,8 +2,7 @@ locals {
   interface_endpoint_subnet_ids = length(var.vpc_endpoint_subnet_ids) > 0 ? var.vpc_endpoint_subnet_ids : aws_subnet.private[*].id
 
   ecr_repository_arns = concat([
-    aws_ecr_repository.server.arn,
-    aws_ecr_repository.web.arn
+    aws_ecr_repository.server.arn
   ], var.additional_ecr_repository_arns)
 
   secretsmanager_secret_arns = concat([
@@ -244,7 +243,7 @@ resource "aws_security_group" "vpc_endpoints" {
     from_port       = 443
     to_port         = 443
     protocol        = "tcp"
-    security_groups = [aws_security_group.ecs_tasks.id]
+    security_groups = [aws_security_group.ecs_tasks.id, aws_security_group.scheduled_tasks.id]
   }
 
   egress {

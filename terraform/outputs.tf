@@ -18,11 +18,6 @@ output "ecr_server_repository_url" {
   value       = aws_ecr_repository.server.repository_url
 }
 
-output "ecr_web_repository_url" {
-  description = "ECR repository URL for web"
-  value       = aws_ecr_repository.web.repository_url
-}
-
 output "ecs_cluster_name" {
   description = "ECS cluster name"
   value       = aws_ecs_cluster.main.name

@@ -156,6 +156,7 @@ jobs:
 
       - name: Terraform Plan
         run: |
+          # Cost optimization: disable NAT gateways and VPC endpoints; tasks egress via the internet gateway.
           terraform plan \
             -var="google_client_id=${{ secrets.GOOGLE_CLIENT_ID }}" \
             -var="google_client_secret=${{ secrets.GOOGLE_CLIENT_SECRET }}" \
@@ -281,7 +282,10 @@ jobs:
         env:
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           VITE_GA_MEASUREMENT_ID: ${{ secrets.GA_MEASUREMENT_ID }}
+          # NOTE: VITE_API_URL is the origin (no "/api" suffix). Frontend code appends "/api" internally.
           VITE_API_URL: ${{ github.event.inputs.environment == 'staging' && 'https://staging.flyingforge.com' || 'https://flyingforge.com' }}
+          # Keep relative API clients same-origin (CloudFront forwards "/api*" to the ALB).
+          VITE_API_BASE_URL: ''
         run: npm run build
 
       - name: Configure AWS credentials
