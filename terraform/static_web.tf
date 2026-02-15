@@ -48,6 +48,59 @@ data "aws_cloudfront_origin_request_policy" "all_viewer_except_host" {
   name = "Managed-AllViewerExceptHostHeader"
 }
 
+resource "aws_cloudfront_function" "redirect_www_to_apex" {
+  count   = var.domain_name != "" ? 1 : 0
+  name    = "${var.app_name}-${var.environment}-redirect-www-to-apex"
+  runtime = "cloudfront-js-2.0"
+  comment = "Redirect www.${var.domain_name} to ${var.domain_name}"
+  publish = true
+
+  code = <<-EOF
+  function handler(event) {
+    var request = event.request;
+    var headers = request.headers;
+    var host = headers.host && headers.host.value;
+
+    var apex = "${var.domain_name}";
+    var www = "www.${var.domain_name}";
+
+    if (host === www) {
+      var uri = request.uri;
+      var qs = request.querystring;
+      var query = "";
+
+      if (qs) {
+        if (typeof qs === "string") {
+          query = qs.length ? "?" + qs : "";
+        } else {
+          var parts = [];
+          for (var key in qs) {
+            if (!Object.prototype.hasOwnProperty.call(qs, key)) continue;
+            var value = qs[key].value;
+            if (value === undefined) {
+              parts.push(encodeURIComponent(key));
+            } else {
+              parts.push(encodeURIComponent(key) + "=" + encodeURIComponent(value));
+            }
+          }
+          if (parts.length) query = "?" + parts.join("&");
+        }
+      }
+
+      return {
+        statusCode: 301,
+        statusDescription: "Moved Permanently",
+        headers: {
+          location: { value: "https://" + apex + uri + query }
+        }
+      };
+    }
+
+    return request;
+  }
+  EOF
+}
+
 resource "aws_cloudfront_distribution" "web" {
   enabled         = true
   is_ipv6_enabled = true
@@ -82,6 +135,32 @@ resource "aws_cloudfront_distribution" "web" {
     cached_methods         = ["GET", "HEAD"]
     cache_policy_id        = data.aws_cloudfront_cache_policy.caching_optimized.id
     compress               = true
+
+    dynamic "function_association" {
+      for_each = var.domain_name != "" ? [1] : []
+      content {
+        event_type   = "viewer-request"
+        function_arn = aws_cloudfront_function.redirect_www_to_apex[0].arn
+      }
+    }
+  }
+
+  ordered_cache_behavior {
+    path_pattern             = "/api"
+    target_origin_id         = "alb-api"
+    viewer_protocol_policy   = "redirect-to-https"
+    allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods           = ["GET", "HEAD", "OPTIONS"]
+    cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
+    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+
+    dynamic "function_association" {
+      for_each = var.domain_name != "" ? [1] : []
+      content {
+        event_type   = "viewer-request"
+        function_arn = aws_cloudfront_function.redirect_www_to_apex[0].arn
+      }
+    }
   }
 
   ordered_cache_behavior {
@@ -92,6 +171,14 @@ resource "aws_cloudfront_distribution" "web" {
     cached_methods           = ["GET", "HEAD", "OPTIONS"]
     cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
     origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+
+    dynamic "function_association" {
+      for_each = var.domain_name != "" ? [1] : []
+      content {
+        event_type   = "viewer-request"
+        function_arn = aws_cloudfront_function.redirect_www_to_apex[0].arn
+      }
+    }
   }
 
   ordered_cache_behavior {
@@ -102,6 +189,14 @@ resource "aws_cloudfront_distribution" "web" {
     cached_methods           = ["GET", "HEAD", "OPTIONS"]
     cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
     origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+
+    dynamic "function_association" {
+      for_each = var.domain_name != "" ? [1] : []
+      content {
+        event_type   = "viewer-request"
+        function_arn = aws_cloudfront_function.redirect_www_to_apex[0].arn
+      }
+    }
   }
 
   custom_error_response {
@@ -162,4 +257,3 @@ resource "aws_s3_bucket_policy" "web" {
   bucket = aws_s3_bucket.web.id
   policy = data.aws_iam_policy_document.web_bucket_policy.json
 }
-
