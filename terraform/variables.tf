@@ -77,13 +77,13 @@ variable "web_memory" {
 variable "server_desired_count" {
   description = "Desired number of server tasks"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "web_desired_count" {
   description = "Desired number of web tasks"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "news_refresh_cpu" {
