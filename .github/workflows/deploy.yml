@@ -17,10 +17,8 @@ on:
 env:
   AWS_REGION: us-east-1
   ECR_SERVER_REPOSITORY: flyingforge-server
-  ECR_WEB_REPOSITORY: flyingforge-web
   ECS_CLUSTER: flyingforge-cluster
   ECS_SERVER_SERVICE: flyingforge-server
-  ECS_WEB_SERVICE: flyingforge-web
 
 jobs:
   # Run tests first
@@ -100,8 +98,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       server_image: ${{ steps.build-server.outputs.image }}
-      web_image: ${{ steps.build-web.outputs.image }}
-    
+
     steps:
       - uses: actions/checkout@v4
 
@@ -127,26 +124,6 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_SERVER_REPOSITORY:latest
           echo "image=$ECR_REGISTRY/$ECR_SERVER_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      - name: Build and push web image
-        id: build-web
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-          VITE_API_URL: ${{ github.event.inputs.environment == 'staging' && 'https://staging.flyingforge.com' || 'https://flyingforge.com' }}
-        run: |
-          docker build \
-            --platform linux/amd64 \
-            --build-arg NGINX_CONFIG=nginx.ecs.conf \
-            --build-arg VITE_GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }} \
-            --build-arg VITE_GA_MEASUREMENT_ID=${{ secrets.GA_MEASUREMENT_ID }} \
-            --build-arg VITE_API_URL=$VITE_API_URL \
-            -t $ECR_REGISTRY/$ECR_WEB_REPOSITORY:$IMAGE_TAG \
-            -t $ECR_REGISTRY/$ECR_WEB_REPOSITORY:latest \
-            -f Dockerfile.web .
-          docker push $ECR_REGISTRY/$ECR_WEB_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_WEB_REPOSITORY:latest
-          echo "image=$ECR_REGISTRY/$ECR_WEB_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-
   # Deploy infrastructure with Terraform
   terraform:
     needs: build-and-push
@@ -154,7 +131,11 @@ jobs:
     defaults:
       run:
         working-directory: terraform
-    
+    outputs:
+      web_bucket_name: ${{ steps.tf-outputs.outputs.web_bucket_name }}
+      cloudfront_distribution_id: ${{ steps.tf-outputs.outputs.cloudfront_distribution_id }}
+      web_url: ${{ steps.tf-outputs.outputs.web_url }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -181,16 +162,25 @@ jobs:
             -var="encryption_key=${{ secrets.ENCRYPTION_KEY }}" \
             -var="domain_name=flyingforge.com" \
             -var="create_dns_record=true" \
+            -var="enable_vpc_endpoints=false" \
+            -var="enable_nat_gateway=false" \
             -out=tfplan
 
       - name: Terraform Apply
         run: terraform apply -auto-approve tfplan
 
+      - name: Export Terraform outputs
+        id: tf-outputs
+        run: |
+          echo "web_bucket_name=$(terraform output -raw web_bucket_name)" >> "$GITHUB_OUTPUT"
+          echo "cloudfront_distribution_id=$(terraform output -raw cloudfront_distribution_id)" >> "$GITHUB_OUTPUT"
+          echo "web_url=$(terraform output -raw web_url)" >> "$GITHUB_OUTPUT"
+
   # Deploy to ECS
-  deploy:
+  deploy-server:
     needs: [build-and-push, terraform]
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -204,13 +194,6 @@ jobs:
           aws ecs update-service \
             --cluster $ECS_CLUSTER \
             --service $ECS_SERVER_SERVICE \
-            --force-new-deployment
-
-      - name: Force new deployment for web
-        run: |
-          aws ecs update-service \
-            --cluster $ECS_CLUSTER \
-            --service $ECS_WEB_SERVICE \
             --force-new-deployment
 
       - name: Wait for ECS services stability
@@ -267,10 +250,56 @@ jobs:
           }
 
           wait_for_service_stability "$ECS_SERVER_SERVICE"
-          wait_for_service_stability "$ECS_WEB_SERVICE"
 
-      - name: Get Application URL
+      - name: Print URLs
         run: |
-          ALB_DNS=$(aws elbv2 describe-load-balancers --names flyingforge-alb --query 'LoadBalancers[0].DNSName' --output text)
-          echo "🚀 Application deployed successfully!"
-          echo "📍 URL: http://$ALB_DNS"
+          echo "🚀 Server deployed successfully!"
+          echo "📍 Web: ${{ needs.terraform.outputs.web_url }}"
+          echo "📍 API: https://api.flyingforge.com"
+
+  deploy-web:
+    needs: terraform
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web
+        env:
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          VITE_GA_MEASUREMENT_ID: ${{ secrets.GA_MEASUREMENT_ID }}
+          VITE_API_URL: ${{ github.event.inputs.environment == 'staging' && 'https://staging.flyingforge.com' || 'https://flyingforge.com' }}
+        run: npm run build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Sync to S3
+        env:
+          WEB_BUCKET: ${{ needs.terraform.outputs.web_bucket_name }}
+        run: |
+          aws s3 sync dist "s3://${WEB_BUCKET}" --delete
+
+      - name: Invalidate CloudFront
+        env:
+          DIST_ID: ${{ needs.terraform.outputs.cloudfront_distribution_id }}
+        run: |
+          INVALIDATION_ID=$(aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*" --query 'Invalidation.Id' --output text)
+          aws cloudfront wait invalidation-completed --distribution-id "$DIST_ID" --id "$INVALIDATION_ID"
