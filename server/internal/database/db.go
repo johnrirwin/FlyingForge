@@ -125,6 +125,7 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationFeedItems,                                 // Adds persistent storage for aggregated feed/news items
 		migrationDropLegacyImageURLs,                       // Drops legacy image_url columns in favor of image_assets
 		migrationGearItemImageURLOverrides,                 // Adds back optional external image_url overrides for gear items
+		migrationGearCatalogAttributionAndShoppingLinks,    // Adds image source attribution + shopping links fields
 	}
 
 	for i, migration := range migrations {
@@ -998,4 +999,9 @@ SET image_status = 'approved',
     image_curated_at = COALESCE(image_curated_at, NOW())
 WHERE COALESCE(image_status, 'missing') = 'missing'
   AND NULLIF(TRIM(image_url), '') IS NOT NULL;
+`
+
+const migrationGearCatalogAttributionAndShoppingLinks = `
+ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS image_source_domain VARCHAR(255);
+ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS shopping_links TEXT[] DEFAULT '{}';
 `

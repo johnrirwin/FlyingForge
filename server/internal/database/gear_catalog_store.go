@@ -123,6 +123,8 @@ func (s *GearCatalogStore) Get(ctx context.Context, id string) (*models.GearCata
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key,
 			   COALESCE(NULLIF(TRIM(gear_catalog.image_url), ''), CASE WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END) as image_url,
+			   image_source_domain,
+			   shopping_links,
 			   (image_asset_id IS NOT NULL OR image_data IS NOT NULL) as has_stored_image,
 			   description,
 			   created_at, updated_at,
@@ -134,15 +136,16 @@ func (s *GearCatalogStore) Get(ctx context.Context, id string) (*models.GearCata
 	`
 
 	item := &models.GearCatalogItem{}
-	var variant, imageURL, description, createdByUserID sql.NullString
+	var variant, imageURL, imageSourceDomain, description, createdByUserID sql.NullString
 	var imageCuratedByUserID, descriptionCuratedByUserID sql.NullString
 	var imageCuratedAt, descriptionCuratedAt sql.NullTime
 	var msrp sql.NullFloat64
+	var shoppingLinks []string
 
 	err := s.db.QueryRowContext(ctx, query, id).Scan(
 		&item.ID, &item.GearType, &item.Brand, &item.Model, &variant,
 		&item.Specs, pq.Array(&item.BestFor), &msrp, &item.Source, &createdByUserID, &item.Status,
-		&item.CanonicalKey, &imageURL, &item.HasStoredImage, &description,
+		&item.CanonicalKey, &imageURL, &imageSourceDomain, pq.Array(&shoppingLinks), &item.HasStoredImage, &description,
 		&item.CreatedAt, &item.UpdatedAt, &item.UsageCount,
 		&item.ImageStatus, &imageCuratedByUserID, &imageCuratedAt,
 		&item.DescriptionStatus, &descriptionCuratedByUserID, &descriptionCuratedAt,
@@ -157,6 +160,8 @@ func (s *GearCatalogStore) Get(ctx context.Context, id string) (*models.GearCata
 
 	item.Variant = variant.String
 	item.ImageURL = imageURL.String
+	item.ImageSourceDomain = imageSourceDomain.String
+	item.ShoppingLinks = shoppingLinks
 	item.Description = description.String
 	item.CreatedByUserID = createdByUserID.String
 	if msrp.Valid {
@@ -184,6 +189,8 @@ func (s *GearCatalogStore) GetByCanonicalKey(ctx context.Context, canonicalKey s
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key,
 			   COALESCE(NULLIF(TRIM(gear_catalog.image_url), ''), CASE WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END) as image_url,
+			   image_source_domain,
+			   shopping_links,
 			   (image_asset_id IS NOT NULL OR image_data IS NOT NULL) as has_stored_image,
 			   description,
 			   created_at, updated_at,
@@ -195,15 +202,16 @@ func (s *GearCatalogStore) GetByCanonicalKey(ctx context.Context, canonicalKey s
 	`
 
 	item := &models.GearCatalogItem{}
-	var variant, imageURL, description, createdByUserID sql.NullString
+	var variant, imageURL, imageSourceDomain, description, createdByUserID sql.NullString
 	var imageCuratedByUserID, descriptionCuratedByUserID sql.NullString
 	var imageCuratedAt, descriptionCuratedAt sql.NullTime
 	var msrp sql.NullFloat64
+	var shoppingLinks []string
 
 	err := s.db.QueryRowContext(ctx, query, canonicalKey).Scan(
 		&item.ID, &item.GearType, &item.Brand, &item.Model, &variant,
 		&item.Specs, pq.Array(&item.BestFor), &msrp, &item.Source, &createdByUserID, &item.Status,
-		&item.CanonicalKey, &imageURL, &item.HasStoredImage, &description,
+		&item.CanonicalKey, &imageURL, &imageSourceDomain, pq.Array(&shoppingLinks), &item.HasStoredImage, &description,
 		&item.CreatedAt, &item.UpdatedAt, &item.UsageCount,
 		&item.ImageStatus, &imageCuratedByUserID, &imageCuratedAt,
 		&item.DescriptionStatus, &descriptionCuratedByUserID, &descriptionCuratedAt,
@@ -218,6 +226,8 @@ func (s *GearCatalogStore) GetByCanonicalKey(ctx context.Context, canonicalKey s
 
 	item.Variant = variant.String
 	item.ImageURL = imageURL.String
+	item.ImageSourceDomain = imageSourceDomain.String
+	item.ShoppingLinks = shoppingLinks
 	item.Description = description.String
 	item.CreatedByUserID = createdByUserID.String
 	if msrp.Valid {
@@ -321,6 +331,8 @@ func (s *GearCatalogStore) Search(ctx context.Context, params models.GearCatalog
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key,
 			   COALESCE(NULLIF(TRIM(gear_catalog.image_url), ''), CASE WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END) as image_url,
+			   image_source_domain,
+			   shopping_links,
 			   (image_asset_id IS NOT NULL OR image_data IS NOT NULL) as has_stored_image,
 			   description,
 			   created_at, updated_at,
@@ -344,15 +356,16 @@ func (s *GearCatalogStore) Search(ctx context.Context, params models.GearCatalog
 	items := make([]models.GearCatalogItem, 0)
 	for rows.Next() {
 		var item models.GearCatalogItem
-		var variant, imageURL, description, createdByUserID sql.NullString
+		var variant, imageURL, imageSourceDomain, description, createdByUserID sql.NullString
 		var imageCuratedByUserID, descriptionCuratedByUserID sql.NullString
 		var imageCuratedAt, descriptionCuratedAt sql.NullTime
 		var msrp sql.NullFloat64
+		var shoppingLinks []string
 
 		if err := rows.Scan(
 			&item.ID, &item.GearType, &item.Brand, &item.Model, &variant,
 			&item.Specs, pq.Array(&item.BestFor), &msrp, &item.Source, &createdByUserID, &item.Status,
-			&item.CanonicalKey, &imageURL, &item.HasStoredImage, &description,
+			&item.CanonicalKey, &imageURL, &imageSourceDomain, pq.Array(&shoppingLinks), &item.HasStoredImage, &description,
 			&item.CreatedAt, &item.UpdatedAt, &item.UsageCount,
 			&item.ImageStatus, &imageCuratedByUserID, &imageCuratedAt,
 			&item.DescriptionStatus, &descriptionCuratedByUserID, &descriptionCuratedAt,
@@ -362,6 +375,8 @@ func (s *GearCatalogStore) Search(ctx context.Context, params models.GearCatalog
 
 		item.Variant = variant.String
 		item.ImageURL = imageURL.String
+		item.ImageSourceDomain = imageSourceDomain.String
+		item.ShoppingLinks = shoppingLinks
 		item.Description = description.String
 		item.CreatedByUserID = createdByUserID.String
 		if msrp.Valid {
@@ -537,6 +552,8 @@ func (s *GearCatalogStore) FindNearMatchesAdmin(ctx context.Context, gearType mo
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key,
 			   COALESCE(NULLIF(TRIM(gear_catalog.image_url), ''), CASE WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END) as image_url,
+			   image_source_domain,
+			   shopping_links,
 			   (image_asset_id IS NOT NULL OR image_data IS NOT NULL) as has_stored_image,
 			   description,
 			   created_at, updated_at,
@@ -568,16 +585,17 @@ func (s *GearCatalogStore) FindNearMatchesAdmin(ctx context.Context, gearType mo
 	matches := make([]models.NearMatch, 0)
 	for rows.Next() {
 		var item models.GearCatalogItem
-		var variant, imageURL, description, createdByUserID sql.NullString
+		var variant, imageURL, imageSourceDomain, description, createdByUserID sql.NullString
 		var imageCuratedByUserID, descriptionCuratedByUserID sql.NullString
 		var imageCuratedAt, descriptionCuratedAt sql.NullTime
 		var msrp sql.NullFloat64
+		var shoppingLinks []string
 		var simScore float64
 
 		if err := rows.Scan(
 			&item.ID, &item.GearType, &item.Brand, &item.Model, &variant,
 			&item.Specs, pq.Array(&item.BestFor), &msrp, &item.Source, &createdByUserID, &item.Status,
-			&item.CanonicalKey, &imageURL, &item.HasStoredImage, &description,
+			&item.CanonicalKey, &imageURL, &imageSourceDomain, pq.Array(&shoppingLinks), &item.HasStoredImage, &description,
 			&item.CreatedAt, &item.UpdatedAt, &item.UsageCount,
 			&item.ImageStatus, &imageCuratedByUserID, &imageCuratedAt,
 			&item.DescriptionStatus, &descriptionCuratedByUserID, &descriptionCuratedAt,
@@ -588,6 +606,8 @@ func (s *GearCatalogStore) FindNearMatchesAdmin(ctx context.Context, gearType mo
 
 		item.Variant = variant.String
 		item.ImageURL = imageURL.String
+		item.ImageSourceDomain = imageSourceDomain.String
+		item.ShoppingLinks = shoppingLinks
 		item.Description = description.String
 		item.CreatedByUserID = createdByUserID.String
 		if msrp.Valid {
@@ -620,6 +640,8 @@ func (s *GearCatalogStore) findNearMatchesAdminFallback(ctx context.Context, gea
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key,
 			   COALESCE(NULLIF(TRIM(gear_catalog.image_url), ''), CASE WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END) as image_url,
+			   image_source_domain,
+			   shopping_links,
 			   (image_asset_id IS NOT NULL OR image_data IS NOT NULL) as has_stored_image,
 			   description,
 			   created_at, updated_at,
@@ -648,15 +670,16 @@ func (s *GearCatalogStore) findNearMatchesAdminFallback(ctx context.Context, gea
 	matches := make([]models.NearMatch, 0)
 	for rows.Next() {
 		var item models.GearCatalogItem
-		var variant, imageURL, description, createdByUserID sql.NullString
+		var variant, imageURL, imageSourceDomain, description, createdByUserID sql.NullString
 		var imageCuratedByUserID, descriptionCuratedByUserID sql.NullString
 		var imageCuratedAt, descriptionCuratedAt sql.NullTime
 		var msrp sql.NullFloat64
+		var shoppingLinks []string
 
 		if err := rows.Scan(
 			&item.ID, &item.GearType, &item.Brand, &item.Model, &variant,
 			&item.Specs, pq.Array(&item.BestFor), &msrp, &item.Source, &createdByUserID, &item.Status,
-			&item.CanonicalKey, &imageURL, &item.HasStoredImage, &description,
+			&item.CanonicalKey, &imageURL, &imageSourceDomain, pq.Array(&shoppingLinks), &item.HasStoredImage, &description,
 			&item.CreatedAt, &item.UpdatedAt, &item.UsageCount,
 			&item.ImageStatus, &imageCuratedByUserID, &imageCuratedAt,
 			&item.DescriptionStatus, &descriptionCuratedByUserID, &descriptionCuratedAt,
@@ -666,6 +689,8 @@ func (s *GearCatalogStore) findNearMatchesAdminFallback(ctx context.Context, gea
 
 		item.Variant = variant.String
 		item.ImageURL = imageURL.String
+		item.ImageSourceDomain = imageSourceDomain.String
+		item.ShoppingLinks = shoppingLinks
 		item.Description = description.String
 		item.CreatedByUserID = createdByUserID.String
 		if msrp.Valid {
@@ -947,6 +972,8 @@ func (s *GearCatalogStore) AdminSearch(ctx context.Context, params models.AdminG
 		SELECT id, gear_type, brand, model, variant, specs, best_for, msrp, source,
 			   created_by_user_id, status, canonical_key,
 			   COALESCE(NULLIF(TRIM(gear_catalog.image_url), ''), CASE WHEN image_asset_id IS NOT NULL OR image_data IS NOT NULL THEN '/api/gear-catalog/' || id || '/image?v=' || (EXTRACT(EPOCH FROM COALESCE(image_curated_at, updated_at))*1000)::bigint ELSE NULL END) as image_url,
+			   image_source_domain,
+			   shopping_links,
 			   (image_asset_id IS NOT NULL OR image_data IS NOT NULL) as has_stored_image,
 			   description,
 			   created_at, updated_at,
@@ -970,15 +997,16 @@ func (s *GearCatalogStore) AdminSearch(ctx context.Context, params models.AdminG
 	items := make([]models.GearCatalogItem, 0)
 	for rows.Next() {
 		var item models.GearCatalogItem
-		var variant, imageURL, description, createdByUserID sql.NullString
+		var variant, imageURL, imageSourceDomain, description, createdByUserID sql.NullString
 		var imageCuratedByUserID, descriptionCuratedByUserID sql.NullString
 		var imageCuratedAt, descriptionCuratedAt sql.NullTime
 		var msrp sql.NullFloat64
+		var shoppingLinks []string
 
 		if err := rows.Scan(
 			&item.ID, &item.GearType, &item.Brand, &item.Model, &variant,
 			&item.Specs, pq.Array(&item.BestFor), &msrp, &item.Source, &createdByUserID, &item.Status,
-			&item.CanonicalKey, &imageURL, &item.HasStoredImage, &description,
+			&item.CanonicalKey, &imageURL, &imageSourceDomain, pq.Array(&shoppingLinks), &item.HasStoredImage, &description,
 			&item.CreatedAt, &item.UpdatedAt, &item.UsageCount,
 			&item.ImageStatus, &imageCuratedByUserID, &imageCuratedAt,
 			&item.DescriptionStatus, &descriptionCuratedByUserID, &descriptionCuratedAt,
@@ -988,6 +1016,8 @@ func (s *GearCatalogStore) AdminSearch(ctx context.Context, params models.AdminG
 
 		item.Variant = variant.String
 		item.ImageURL = imageURL.String
+		item.ImageSourceDomain = imageSourceDomain.String
+		item.ShoppingLinks = shoppingLinks
 		item.Description = description.String
 		item.CreatedByUserID = createdByUserID.String
 		if msrp.Valid {
@@ -1018,6 +1048,23 @@ func (s *GearCatalogStore) AdminSearch(ctx context.Context, params models.AdminG
 
 // AdminUpdate updates a gear catalog item with admin-provided values
 func (s *GearCatalogStore) AdminUpdate(ctx context.Context, id string, adminUserID string, params models.AdminUpdateGearCatalogParams) (*models.GearCatalogItem, error) {
+	if params.ShoppingLinks != nil {
+		normalized := make([]string, 0, len(params.ShoppingLinks))
+		seen := make(map[string]struct{}, len(params.ShoppingLinks))
+		for _, link := range params.ShoppingLinks {
+			trimmed := strings.TrimSpace(link)
+			if trimmed == "" {
+				continue
+			}
+			if _, exists := seen[trimmed]; exists {
+				continue
+			}
+			seen[trimmed] = struct{}{}
+			normalized = append(normalized, trimmed)
+		}
+		params.ShoppingLinks = normalized
+	}
+
 	// If gearType/brand/model/variant is changing, we need to recompute canonical_key
 	needsCanonicalKeyUpdate := params.GearType != nil || params.Brand != nil || params.Model != nil || params.Variant != nil
 
@@ -1152,6 +1199,22 @@ func (s *GearCatalogStore) AdminUpdate(ctx context.Context, id string, adminUser
 			args = append(args, trimmed)
 			argIdx++
 		}
+
+		if params.ImageSourceDomain == nil {
+			derived := models.ExtractImageSourceDomain(trimmed)
+			params.ImageSourceDomain = &derived
+		}
+	}
+
+	if params.ImageSourceDomain != nil {
+		trimmedDomain := strings.TrimSpace(*params.ImageSourceDomain)
+		if trimmedDomain == "" {
+			sets = append(sets, "image_source_domain = NULL")
+		} else {
+			sets = append(sets, fmt.Sprintf("image_source_domain = $%d", argIdx))
+			args = append(args, strings.ToLower(trimmedDomain))
+			argIdx++
+		}
 	}
 	if params.ClearMSRP {
 		sets = append(sets, "msrp = NULL")
@@ -1163,6 +1226,11 @@ func (s *GearCatalogStore) AdminUpdate(ctx context.Context, id string, adminUser
 	if params.BestFor != nil {
 		sets = append(sets, fmt.Sprintf("best_for = $%d", argIdx))
 		args = append(args, pq.Array(params.BestFor))
+		argIdx++
+	}
+	if params.ShoppingLinks != nil {
+		sets = append(sets, fmt.Sprintf("shopping_links = $%d", argIdx))
+		args = append(args, pq.Array(params.ShoppingLinks))
 		argIdx++
 	}
 	if params.Status != nil {

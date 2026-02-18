@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, type FormEvent } from 'react';
 import type { GearCatalogItem, GearType, ImageStatusFilter, AdminUpdateGearCatalogParams, DroneType, CatalogItemStatus } from '../gearCatalogTypes';
-import { GEAR_TYPES, DRONE_TYPES } from '../gearCatalogTypes';
+import { GEAR_TYPES, DRONE_TYPES, extractImageSourceDomain } from '../gearCatalogTypes';
 import type { Build, BuildStatus, BuildValidationError } from '../buildTypes';
 import {
   adminSearchGear,
@@ -1692,6 +1692,9 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
   const [specsError, setSpecsError] = useState<string | null>(null);
   const [description, setDescription] = useState('');
   const [externalImageUrl, setExternalImageUrl] = useState('');
+  const [imageSourceDomain, setImageSourceDomain] = useState('');
+  const [imageSourceDomainManuallyEdited, setImageSourceDomainManuallyEdited] = useState(false);
+  const [shoppingLinks, setShoppingLinks] = useState<string[]>([]);
   const [msrp, setMsrp] = useState('');
   const [bestFor, setBestFor] = useState<DroneType[]>([]);
   const [status, setStatus] = useState<CatalogItemStatus>('pending');
@@ -1754,6 +1757,9 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
         setDescription(freshItem.description || '');
         const externalOverride = normalizeExternalImageUrl(freshItem.imageUrl);
         setExternalImageUrl(externalOverride);
+        setImageSourceDomain((freshItem.imageSourceDomain || extractImageSourceDomain(externalOverride)).trim());
+        setImageSourceDomainManuallyEdited(Boolean((freshItem.imageSourceDomain || '').trim()));
+        setShoppingLinks([...(freshItem.shoppingLinks || [])]);
         setMsrp(freshItem.msrp?.toString() || '');
         setBestFor((freshItem.bestFor || []) as DroneType[]);
         setStatus(freshItem.status);
@@ -2099,6 +2105,12 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
 
   const normalizeSpecValueForSave = (input: string): string => input.trim();
 
+  const normalizeShoppingLinksForCompare = (links: string[]): string[] => {
+    return links
+      .map((link) => link.trim())
+      .filter((link) => link.length > 0);
+  };
+
   const applyChanges = async (statusOverride?: CatalogItemStatus) => {
     if (!item) return;
 
@@ -2115,6 +2127,21 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
     const nextExternal = normalizeExternalImageUrl(externalImageUrl);
     if (nextExternal !== existingExternal) {
       params.imageUrl = nextExternal;
+    }
+
+    const existingDomain = (item.imageSourceDomain || extractImageSourceDomain(existingExternal)).trim();
+    const nextDomain = imageSourceDomain.trim();
+    if (nextDomain !== existingDomain) {
+      params.imageSourceDomain = nextDomain;
+    }
+
+    const existingShoppingLinks = normalizeShoppingLinksForCompare(item.shoppingLinks || []);
+    const nextShoppingLinks = normalizeShoppingLinksForCompare(shoppingLinks);
+    const shoppingLinksChanged =
+      existingShoppingLinks.length !== nextShoppingLinks.length ||
+      existingShoppingLinks.some((link, index) => link !== nextShoppingLinks[index]);
+    if (shoppingLinksChanged) {
+      params.shoppingLinks = nextShoppingLinks;
     }
 
     // Check if bestFor has changed
@@ -2553,7 +2580,13 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
             <input
               type="url"
               value={externalImageUrl}
-              onChange={(e) => setExternalImageUrl(e.target.value)}
+              onChange={(e) => {
+                const nextUrl = e.target.value;
+                setExternalImageUrl(nextUrl);
+                if (!imageSourceDomainManuallyEdited || imageSourceDomain.trim() === '') {
+                  setImageSourceDomain(extractImageSourceDomain(nextUrl));
+                }
+              }}
               placeholder="https://example.com/image.jpg"
               className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
             />
@@ -2577,13 +2610,82 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
                 />
                 <button
                   type="button"
-                  onClick={() => setExternalImageUrl('')}
+                  onClick={() => {
+                    setExternalImageUrl('');
+                    setImageSourceDomain('');
+                    setImageSourceDomainManuallyEdited(false);
+                  }}
                   className="px-3 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-sm text-white transition-colors"
                 >
                   Clear URL
                 </button>
               </div>
             )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">
+              Image Source Domain
+            </label>
+            <input
+              type="text"
+              value={imageSourceDomain}
+              onChange={(e) => {
+                const nextDomain = e.target.value;
+                setImageSourceDomain(nextDomain);
+                setImageSourceDomainManuallyEdited(nextDomain.trim() !== '');
+              }}
+              placeholder="example.com"
+              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              Used in public catalog attribution text: “Image via &#123;domain&#125;”.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">
+              Shopping Links
+            </label>
+            <div className="space-y-2">
+              {shoppingLinks.length === 0 ? (
+                <p className="text-xs text-slate-500">No links yet. Add one or more store links.</p>
+              ) : (
+                shoppingLinks.map((link, index) => (
+                  <div key={`shopping-link-${index}`} className="grid grid-cols-[1fr_auto] gap-2">
+                    <input
+                      type="url"
+                      value={link}
+                      onChange={(e) => {
+                        const next = [...shoppingLinks];
+                        next[index] = e.target.value;
+                        setShoppingLinks(next);
+                      }}
+                      placeholder="https://store.example.com/product"
+                      className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShoppingLinks((prev) => prev.filter((_, idx) => idx !== index))}
+                      className="w-10 h-10 flex items-center justify-center bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-slate-300 hover:text-white transition-colors"
+                      aria-label={`Remove shopping link ${index + 1}`}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShoppingLinks((prev) => [...prev, ''])}
+              className="mt-3 px-3 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-sm text-white transition-colors"
+            >
+              Add Link
+            </button>
           </div>
 
           {/* Image Upload (Admin only) */}

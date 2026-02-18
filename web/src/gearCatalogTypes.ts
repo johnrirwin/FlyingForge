@@ -86,6 +86,8 @@ export interface GearCatalogItem {
   status: CatalogItemStatus;
   canonicalKey: string;
   imageUrl?: string;
+  imageSourceDomain?: string;
+  shoppingLinks?: string[];
   hasStoredImage?: boolean; // True when a stored image asset exists (independent of any external override)
   description?: string;
   usageCount: number;
@@ -123,6 +125,8 @@ export interface AdminUpdateGearCatalogParams {
   specs?: Record<string, unknown>;
   description?: string;
   imageUrl?: string; // Optional external override; falls back to stored image asset when empty
+  imageSourceDomain?: string;
+  shoppingLinks?: string[];
   msrp?: number;
   clearMsrp?: boolean; // Explicitly clear MSRP when true
   imageStatus?: ImageCurationStatus;
@@ -230,4 +234,24 @@ export function getCatalogItemDisplayName(item: GearCatalogItem): string {
     name += ` ${item.variant}`;
   }
   return name.trim();
+}
+
+export function extractImageSourceDomain(imageUrl?: string): string {
+  if (!imageUrl) return '';
+  const trimmed = imageUrl.trim();
+  if (!trimmed) return '';
+
+  try {
+    const parsed = new URL(trimmed);
+    const hostname = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    if (!hostname) return '';
+
+    const parts = hostname.split('.');
+    if (parts.length >= 2) {
+      return `${parts[parts.length - 2]}.${parts[parts.length - 1]}`;
+    }
+    return hostname;
+  } catch {
+    return '';
+  }
 }

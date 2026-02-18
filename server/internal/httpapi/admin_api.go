@@ -426,6 +426,41 @@ func (api *AdminAPI) handleUpdateGear(w http.ResponseWriter, r *http.Request, id
 		*params.ImageURL = trimmed
 	}
 
+	if params.ImageSourceDomain != nil {
+		trimmed := strings.ToLower(strings.TrimSpace(*params.ImageSourceDomain))
+		if len(trimmed) > 255 {
+			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "imageSourceDomain too long"})
+			return
+		}
+		*params.ImageSourceDomain = trimmed
+	}
+
+	if params.ShoppingLinks != nil {
+		normalized := make([]string, 0, len(params.ShoppingLinks))
+		seen := make(map[string]struct{}, len(params.ShoppingLinks))
+		for _, raw := range params.ShoppingLinks {
+			trimmed := strings.TrimSpace(raw)
+			if trimmed == "" {
+				continue
+			}
+			if len(trimmed) > 1024 {
+				api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "shopping link too long"})
+				return
+			}
+			parsed, err := url.Parse(trimmed)
+			if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+				api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "shoppingLinks must contain valid http(s) URLs"})
+				return
+			}
+			if _, exists := seen[trimmed]; exists {
+				continue
+			}
+			seen[trimmed] = struct{}{}
+			normalized = append(normalized, trimmed)
+		}
+		params.ShoppingLinks = normalized
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
