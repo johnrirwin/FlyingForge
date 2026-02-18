@@ -420,7 +420,7 @@ func mapComponentToEquipmentCategory(category models.ComponentCategory) models.E
 		return models.CategoryCameras
 	case models.ComponentCategoryFrame:
 		return models.CategoryFrames
-	case models.ComponentCategoryProps, models.ComponentCategory("props"):
+	case models.ComponentCategoryProps:
 		return models.CategoryPropellers
 	case models.ComponentCategoryAntenna:
 		return models.CategoryAntennas

@@ -317,7 +317,7 @@ func (s *AircraftStore) SetComponent(ctx context.Context, aircraftID string, cat
 			aircraftID,
 			"props",
 		); err != nil {
-			return nil, fmt.Errorf("failed to normalize legacy component category: %w", err)
+			return nil, fmt.Errorf("failed to clean up legacy component category: %w", err)
 		}
 	}
 

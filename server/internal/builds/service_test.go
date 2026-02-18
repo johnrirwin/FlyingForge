@@ -133,12 +133,6 @@ func TestAircraftComponentCategoryAliasMapping(t *testing.T) {
 			gearType: models.GearTypeProp,
 			eqCat:    models.CategoryPropellers,
 		},
-		{
-			name:     "legacy props alias",
-			category: models.ComponentCategory("props"),
-			gearType: models.GearTypeProp,
-			eqCat:    models.CategoryPropellers,
-		},
 	}
 
 	for _, tt := range tests {
