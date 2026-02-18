@@ -114,6 +114,7 @@ func (s *Service) SetComponent(ctx context.Context, userID string, params models
 	if params.Category == "" {
 		return nil, &ServiceError{Message: "category is required"}
 	}
+	params.Category = models.NormalizeComponentCategory(params.Category)
 
 	// Verify the aircraft belongs to the user
 	aircraft, err := s.store.Get(ctx, params.AircraftID, userID)
@@ -404,7 +405,7 @@ func (s *Service) DeleteImage(ctx context.Context, aircraftID string, userID str
 
 // mapComponentToEquipmentCategory maps aircraft component category to equipment category
 func mapComponentToEquipmentCategory(category models.ComponentCategory) models.EquipmentCategory {
-	switch category {
+	switch models.NormalizeComponentCategory(category) {
 	case models.ComponentCategoryFC:
 		return models.CategoryFC
 	case models.ComponentCategoryESC:

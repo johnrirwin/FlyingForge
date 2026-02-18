@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 )
 
@@ -32,6 +33,17 @@ const (
 	ComponentCategoryProps    ComponentCategory = "propellers"
 	ComponentCategoryAntenna  ComponentCategory = "antenna"
 )
+
+// NormalizeComponentCategory trims and canonicalizes component category aliases.
+func NormalizeComponentCategory(category ComponentCategory) ComponentCategory {
+	normalized := ComponentCategory(strings.TrimSpace(strings.ToLower(string(category))))
+	switch normalized {
+	case "props":
+		return ComponentCategoryProps
+	default:
+		return normalized
+	}
+}
 
 // Aircraft represents a user's aircraft/drone
 type Aircraft struct {

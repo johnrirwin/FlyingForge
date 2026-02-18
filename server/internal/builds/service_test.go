@@ -120,6 +120,33 @@ func TestValidateForPublish_RequiresDescriptionAndImage(t *testing.T) {
 	assertHasValidationCode(t, result.Errors, "image", "missing_required")
 }
 
+func TestAircraftComponentCategoryAliasMapping(t *testing.T) {
+	tests := []struct {
+		name     string
+		category models.ComponentCategory
+		gearType models.GearType
+		eqCat    models.EquipmentCategory
+	}{
+		{
+			name:     "canonical propellers category",
+			category: models.ComponentCategoryProps,
+			gearType: models.GearTypeProp,
+			eqCat:    models.CategoryPropellers,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := aircraftComponentToGearType(tt.category); got != tt.gearType {
+				t.Fatalf("aircraftComponentToGearType(%q) = %q, want %q", tt.category, got, tt.gearType)
+			}
+			if got := componentCategoryToEquipmentCategory(tt.category); got != tt.eqCat {
+				t.Fatalf("componentCategoryToEquipmentCategory(%q) = %q, want %q", tt.category, got, tt.eqCat)
+			}
+		})
+	}
+}
+
 func TestTempBuildCreateAndRetrieve(t *testing.T) {
 	ctx := context.Background()
 	store := newFakeBuildStore()
