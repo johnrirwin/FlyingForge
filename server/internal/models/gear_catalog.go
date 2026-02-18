@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -175,24 +176,26 @@ const (
 
 // GearCatalogItem represents a canonical gear item in the shared catalog
 type GearCatalogItem struct {
-	ID              string            `json:"id"`
-	GearType        GearType          `json:"gearType"`
-	Brand           string            `json:"brand"`
-	Model           string            `json:"model"`
-	Variant         string            `json:"variant,omitempty"`
-	Specs           json.RawMessage   `json:"specs,omitempty"`
-	BestFor         []string          `json:"bestFor,omitempty"` // Drone types: freestyle, long-range, cinematic, etc.
-	MSRP            *float64          `json:"msrp,omitempty"`    // Manufacturer suggested retail price
-	Source          CatalogItemSource `json:"source"`
-	CreatedByUserID string            `json:"createdByUserId,omitempty"`
-	Status          CatalogItemStatus `json:"status"`
-	CanonicalKey    string            `json:"canonicalKey"`
-	ImageURL        string            `json:"imageUrl,omitempty"`
-	HasStoredImage  bool              `json:"hasStoredImage"`
-	Description     string            `json:"description,omitempty"`
-	UsageCount      int               `json:"usageCount"` // How many users have this in inventory
-	CreatedAt       time.Time         `json:"createdAt"`
-	UpdatedAt       time.Time         `json:"updatedAt"`
+	ID                string            `json:"id"`
+	GearType          GearType          `json:"gearType"`
+	Brand             string            `json:"brand"`
+	Model             string            `json:"model"`
+	Variant           string            `json:"variant,omitempty"`
+	Specs             json.RawMessage   `json:"specs,omitempty"`
+	BestFor           []string          `json:"bestFor,omitempty"` // Drone types: freestyle, long-range, cinematic, etc.
+	MSRP              *float64          `json:"msrp,omitempty"`    // Manufacturer suggested retail price
+	Source            CatalogItemSource `json:"source"`
+	CreatedByUserID   string            `json:"createdByUserId,omitempty"`
+	Status            CatalogItemStatus `json:"status"`
+	CanonicalKey      string            `json:"canonicalKey"`
+	ImageURL          string            `json:"imageUrl,omitempty"`
+	ImageSourceDomain string            `json:"imageSourceDomain,omitempty"`
+	ShoppingLinks     []string          `json:"shoppingLinks,omitempty"`
+	HasStoredImage    bool              `json:"hasStoredImage"`
+	Description       string            `json:"description,omitempty"`
+	UsageCount        int               `json:"usageCount"` // How many users have this in inventory
+	CreatedAt         time.Time         `json:"createdAt"`
+	UpdatedAt         time.Time         `json:"updatedAt"`
 
 	// Image curation fields
 	ImageStatus          ImageStatus `json:"imageStatus"`
@@ -229,18 +232,47 @@ type CreateGearCatalogParams struct {
 
 // AdminUpdateGearCatalogParams represents admin-only update parameters
 type AdminUpdateGearCatalogParams struct {
-	GearType    *GearType          `json:"gearType,omitempty"`
-	Brand       *string            `json:"brand,omitempty"`
-	Model       *string            `json:"model,omitempty"`
-	Variant     *string            `json:"variant,omitempty"`
-	Specs       json.RawMessage    `json:"specs,omitempty"`
-	Description *string            `json:"description,omitempty"`
-	ImageURL    *string            `json:"imageUrl,omitempty"` // Optional external override; falls back to stored image asset when empty
-	MSRP        *float64           `json:"msrp,omitempty"`
-	ClearMSRP   bool               `json:"clearMsrp,omitempty"` // Explicitly clear MSRP when true
-	ImageStatus *ImageStatus       `json:"imageStatus,omitempty"`
-	BestFor     []string           `json:"bestFor,omitempty"` // Drone types this gear is best suited for
-	Status      *CatalogItemStatus `json:"status,omitempty"`
+	GearType          *GearType          `json:"gearType,omitempty"`
+	Brand             *string            `json:"brand,omitempty"`
+	Model             *string            `json:"model,omitempty"`
+	Variant           *string            `json:"variant,omitempty"`
+	Specs             json.RawMessage    `json:"specs,omitempty"`
+	Description       *string            `json:"description,omitempty"`
+	ImageURL          *string            `json:"imageUrl,omitempty"` // Optional external override; falls back to stored image asset when empty
+	ImageSourceDomain *string            `json:"imageSourceDomain,omitempty"`
+	ShoppingLinks     []string           `json:"shoppingLinks,omitempty"`
+	MSRP              *float64           `json:"msrp,omitempty"`
+	ClearMSRP         bool               `json:"clearMsrp,omitempty"` // Explicitly clear MSRP when true
+	ImageStatus       *ImageStatus       `json:"imageStatus,omitempty"`
+	BestFor           []string           `json:"bestFor,omitempty"` // Drone types this gear is best suited for
+	Status            *CatalogItemStatus `json:"status,omitempty"`
+}
+
+// ExtractImageSourceDomain extracts a normalized host domain from an image URL.
+// Example: https://cdn-v2.getfpv.com/path.jpg -> getfpv.com
+func ExtractImageSourceDomain(rawURL string) string {
+	trimmed := strings.TrimSpace(rawURL)
+	if trimmed == "" {
+		return ""
+	}
+
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return ""
+	}
+
+	host := strings.ToLower(strings.TrimSpace(parsed.Hostname()))
+	host = strings.TrimPrefix(host, "www.")
+	if host == "" {
+		return ""
+	}
+
+	parts := strings.Split(host, ".")
+	if len(parts) >= 2 {
+		return parts[len(parts)-2] + "." + parts[len(parts)-1]
+	}
+
+	return host
 }
 
 // AdminGearSearchParams represents admin search parameters with curation filters

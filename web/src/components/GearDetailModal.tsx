@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { GearCatalogItem } from '../gearCatalogTypes';
-import { GEAR_TYPES, DRONE_TYPES, getCatalogItemDisplayName } from '../gearCatalogTypes';
+import { GEAR_TYPES, DRONE_TYPES, extractDomainFromUrl, getCatalogItemDisplayName } from '../gearCatalogTypes';
 
 interface GearDetailModalProps {
   item: GearCatalogItem;
@@ -51,6 +51,8 @@ export function GearDetailModal({
 
   const typeLabel = GEAR_TYPES.find(t => t.value === item.gearType)?.label || item.gearType;
   const displayName = getCatalogItemDisplayName(item);
+  const imageSourceDomain = (item.imageSourceDomain || extractDomainFromUrl(item.imageUrl)).trim();
+  const shoppingLinks = (item.shoppingLinks || []).map((link) => link.trim()).filter(Boolean);
   const titleId = `gear-detail-title-${item.id}`;
 
   const handleBackdropClick = (e: React.MouseEvent) => {
@@ -110,11 +112,16 @@ export function GearDetailModal({
             {/* Image */}
             <div className="flex-shrink-0">
               {item.imageUrl ? (
-                <img
-                  src={item.imageUrl}
-                  alt={displayName}
-                  className="w-full md:w-48 h-48 rounded-xl object-cover"
-                />
+                <div>
+                  <img
+                    src={item.imageUrl}
+                    alt={displayName}
+                    className="w-full md:w-48 h-48 rounded-xl object-cover"
+                  />
+                  {imageSourceDomain && (
+                    <p className="mt-2 text-xs text-slate-400">Image via {imageSourceDomain}</p>
+                  )}
+                </div>
               ) : (
                 <div className="w-full md:w-48 h-48 bg-slate-700 rounded-xl flex items-center justify-center">
                   <svg className="w-16 h-16 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -192,6 +199,31 @@ export function GearDetailModal({
                     </div>
                   ))}
                 </dl>
+              </div>
+            </div>
+          )}
+
+          {shoppingLinks.length > 0 && (
+            <div className="mt-6">
+              <h3 className="text-sm font-medium text-slate-400 mb-2">Shopping Links</h3>
+              <div className="space-y-2">
+                {shoppingLinks.map((link, index) => {
+                  const linkDomain = extractDomainFromUrl(link);
+                  const linkLabel = linkDomain || `Buy link ${index + 1}`;
+                  return (
+                  <div key={`${link}-${index}`}>
+                    <a
+                      href={link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex text-sm text-primary-300 hover:text-primary-200"
+                      aria-label={`Visit ${linkLabel} (opens in new tab)`}
+                    >
+                      {linkLabel}
+                    </a>
+                  </div>
+                  );
+                })}
               </div>
             </div>
           )}
