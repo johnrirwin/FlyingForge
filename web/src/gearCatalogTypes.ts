@@ -236,9 +236,9 @@ export function getCatalogItemDisplayName(item: GearCatalogItem): string {
   return name.trim();
 }
 
-export function extractImageSourceDomain(imageUrl?: string): string {
-  if (!imageUrl) return '';
-  const trimmed = imageUrl.trim();
+export function extractDomainFromUrl(rawUrl?: string): string {
+  if (!rawUrl) return '';
+  const trimmed = rawUrl.trim();
   if (!trimmed) return '';
 
   try {
@@ -255,3 +255,5 @@ export function extractImageSourceDomain(imageUrl?: string): string {
     return '';
   }
 }
+
+export const extractImageSourceDomain = extractDomainFromUrl;

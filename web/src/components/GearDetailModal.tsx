@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { GearCatalogItem } from '../gearCatalogTypes';
-import { GEAR_TYPES, DRONE_TYPES, extractImageSourceDomain, getCatalogItemDisplayName } from '../gearCatalogTypes';
+import { GEAR_TYPES, DRONE_TYPES, extractDomainFromUrl, getCatalogItemDisplayName } from '../gearCatalogTypes';
 
 interface GearDetailModalProps {
   item: GearCatalogItem;
@@ -51,7 +51,7 @@ export function GearDetailModal({
 
   const typeLabel = GEAR_TYPES.find(t => t.value === item.gearType)?.label || item.gearType;
   const displayName = getCatalogItemDisplayName(item);
-  const imageSourceDomain = (item.imageSourceDomain || extractImageSourceDomain(item.imageUrl)).trim();
+  const imageSourceDomain = (item.imageSourceDomain || extractDomainFromUrl(item.imageUrl)).trim();
   const shoppingLinks = (item.shoppingLinks || []).map((link) => link.trim()).filter(Boolean);
   const titleId = `gear-detail-title-${item.id}`;
 
@@ -208,15 +208,16 @@ export function GearDetailModal({
               <h3 className="text-sm font-medium text-slate-400 mb-2">Shopping Links</h3>
               <div className="space-y-2">
                 {shoppingLinks.map((link, index) => {
-                  const linkDomain = extractImageSourceDomain(link);
+                  const linkDomain = extractDomainFromUrl(link);
                   const linkLabel = linkDomain || `Buy link ${index + 1}`;
                   return (
                   <div key={`${link}-${index}`}>
                     <a
                       href={link}
                       target="_blank"
-                      rel="noreferrer"
+                      rel="noopener noreferrer"
                       className="inline-flex text-sm text-primary-300 hover:text-primary-200"
+                      aria-label={`Visit ${linkLabel} (opens in new tab)`}
                     >
                       {linkLabel}
                     </a>

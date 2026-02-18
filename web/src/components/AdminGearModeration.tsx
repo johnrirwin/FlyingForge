@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, type FormEvent } from 'react';
 import type { GearCatalogItem, GearType, ImageStatusFilter, AdminUpdateGearCatalogParams, DroneType, CatalogItemStatus } from '../gearCatalogTypes';
-import { GEAR_TYPES, DRONE_TYPES, extractImageSourceDomain } from '../gearCatalogTypes';
+import { GEAR_TYPES, DRONE_TYPES, extractDomainFromUrl } from '../gearCatalogTypes';
 import type { Build, BuildStatus, BuildValidationError } from '../buildTypes';
 import {
   adminSearchGear,
@@ -1757,7 +1757,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
         setDescription(freshItem.description || '');
         const externalOverride = normalizeExternalImageUrl(freshItem.imageUrl);
         setExternalImageUrl(externalOverride);
-        setImageSourceDomain((freshItem.imageSourceDomain || extractImageSourceDomain(externalOverride)).trim());
+        setImageSourceDomain((freshItem.imageSourceDomain || extractDomainFromUrl(externalOverride)).trim());
         setImageSourceDomainManuallyEdited(Boolean((freshItem.imageSourceDomain || '').trim()));
         setShoppingLinks([...(freshItem.shoppingLinks || [])]);
         setMsrp(freshItem.msrp?.toString() || '');
@@ -2129,7 +2129,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
       params.imageUrl = nextExternal;
     }
 
-    const existingDomain = (item.imageSourceDomain || extractImageSourceDomain(existingExternal)).trim();
+    const existingDomain = (item.imageSourceDomain || extractDomainFromUrl(existingExternal)).trim();
     const nextDomain = imageSourceDomain.trim();
     if (nextDomain !== existingDomain) {
       params.imageSourceDomain = nextDomain;
@@ -2584,7 +2584,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
                 const nextUrl = e.target.value;
                 setExternalImageUrl(nextUrl);
                 if (!imageSourceDomainManuallyEdited || imageSourceDomain.trim() === '') {
-                  setImageSourceDomain(extractImageSourceDomain(nextUrl));
+                  setImageSourceDomain(extractDomainFromUrl(nextUrl));
                 }
               }}
               placeholder="https://example.com/image.jpg"
@@ -2633,7 +2633,7 @@ function AdminGearEditModal({ itemId, onClose, onSave, onDelete }: AdminGearEdit
               onChange={(e) => {
                 const nextDomain = e.target.value;
                 setImageSourceDomain(nextDomain);
-                setImageSourceDomainManuallyEdited(nextDomain.trim() !== '');
+                setImageSourceDomainManuallyEdited(true);
               }}
               placeholder="example.com"
               className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
