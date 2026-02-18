@@ -1039,7 +1039,7 @@ func aircraftComponentToGearType(category models.ComponentCategory) models.GearT
 		return models.GearTypeVTX
 	case models.ComponentCategoryCamera:
 		return models.GearTypeCamera
-	case models.ComponentCategoryProps:
+	case models.ComponentCategoryProps, models.ComponentCategory("props"):
 		return models.GearTypeProp
 	case models.ComponentCategoryAntenna:
 		return models.GearTypeAntenna
@@ -1066,7 +1066,7 @@ func componentCategoryToEquipmentCategory(category models.ComponentCategory) mod
 		return models.CategoryVTX
 	case models.ComponentCategoryCamera:
 		return models.CategoryCameras
-	case models.ComponentCategoryProps:
+	case models.ComponentCategoryProps, models.ComponentCategory("props"):
 		return models.CategoryPropellers
 	case models.ComponentCategoryAntenna:
 		return models.CategoryAntennas

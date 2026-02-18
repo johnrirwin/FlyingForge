@@ -309,6 +309,18 @@ func (s *AircraftStore) ListByUserID(ctx context.Context, userID string) ([]*mod
 
 // SetComponent sets or updates a component on an aircraft
 func (s *AircraftStore) SetComponent(ctx context.Context, aircraftID string, category models.ComponentCategory, inventoryItemID string, notes string) (*models.AircraftComponent, error) {
+	category = models.NormalizeComponentCategory(category)
+	if category == models.ComponentCategoryProps {
+		if _, err := s.db.ExecContext(
+			ctx,
+			`DELETE FROM aircraft_components WHERE aircraft_id = $1 AND category = $2`,
+			aircraftID,
+			"props",
+		); err != nil {
+			return nil, fmt.Errorf("failed to normalize legacy component category: %w", err)
+		}
+	}
+
 	query := `
 		INSERT INTO aircraft_components (aircraft_id, category, inventory_item_id, notes)
 		VALUES ($1, $2, $3, $4)
@@ -389,6 +401,7 @@ func (s *AircraftStore) GetComponents(ctx context.Context, aircraftID string) ([
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan component: %w", err)
 		}
+		c.Category = models.NormalizeComponentCategory(c.Category)
 
 		c.InventoryItemID = scanInventoryItemID.String
 		c.Notes = scanNotes.String
@@ -419,8 +432,24 @@ func (s *AircraftStore) GetComponents(ctx context.Context, aircraftID string) ([
 
 // RemoveComponent removes a component from an aircraft
 func (s *AircraftStore) RemoveComponent(ctx context.Context, aircraftID string, category models.ComponentCategory) error {
-	query := `DELETE FROM aircraft_components WHERE aircraft_id = $1 AND category = $2`
-	_, err := s.db.ExecContext(ctx, query, aircraftID, string(category))
+	category = models.NormalizeComponentCategory(category)
+	var err error
+	if category == models.ComponentCategoryProps {
+		_, err = s.db.ExecContext(
+			ctx,
+			`DELETE FROM aircraft_components WHERE aircraft_id = $1 AND (category = $2 OR category = $3)`,
+			aircraftID,
+			string(models.ComponentCategoryProps),
+			"props",
+		)
+	} else {
+		_, err = s.db.ExecContext(
+			ctx,
+			`DELETE FROM aircraft_components WHERE aircraft_id = $1 AND category = $2`,
+			aircraftID,
+			string(category),
+		)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to remove component: %w", err)
 	}
