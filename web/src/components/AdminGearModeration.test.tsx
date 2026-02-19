@@ -204,6 +204,39 @@ describe('AdminGearModeration', () => {
     });
   });
 
+  it('runs server-side search even while a prior page load is still in flight', async () => {
+    let resolveInitialRequest!: (value: { items: GearCatalogItem[]; totalCount: number }) => void;
+    const initialRequest = new Promise<{ items: GearCatalogItem[]; totalCount: number }>((resolve) => {
+      resolveInitialRequest = resolve;
+    });
+
+    mockAdminSearchGear.mockImplementationOnce(() => initialRequest);
+
+    render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
+
+    const searchInput = screen.getByPlaceholderText('Search brand or model...');
+    fireEvent.change(searchInput, { target: { value: 'DJI' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+
+    await waitFor(() => {
+      expect(mockAdminSearchGear).toHaveBeenCalledTimes(2);
+    });
+
+    expect(mockAdminSearchGear).toHaveBeenNthCalledWith(2, {
+      query: 'DJI',
+      gearType: undefined,
+      status: 'pending',
+      imageStatus: 'all',
+      limit: 30,
+      offset: 0,
+    });
+
+    resolveInitialRequest({
+      items: [mockItem],
+      totalCount: 1,
+    });
+  });
+
   it('opens the edit modal with keyboard interaction on a table row', async () => {
     render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
 
