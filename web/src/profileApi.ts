@@ -1,5 +1,4 @@
-import BadWordsNext from 'bad-words-next';
-import en from 'bad-words-next/lib/en';
+import { Filter } from 'bad-words';
 import type { UserProfile, UpdateProfileParams } from './authTypes';
 import type { AvatarUploadResponse } from './socialTypes';
 import { getStoredTokens } from './authApi';
@@ -8,7 +7,7 @@ export type { ModerationStatus, ImageModerationResponse } from './imageTypes';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
-const callSignProfanityFilter = new BadWordsNext({ data: en });
+const callSignProfanityFilter = new Filter();
 
 // Get authorization header
 function getAuthHeader(): Record<string, string> {
@@ -127,7 +126,7 @@ export function validateCallSign(callSign: string): string | null {
 }
 
 function containsBlockedCallSignTerm(callSign: string): boolean {
-  return callSignProfanityFilter.check(callSign);
+  return callSignProfanityFilter.isProfane(callSign);
 }
 
 // Delete current user's account and all associated data

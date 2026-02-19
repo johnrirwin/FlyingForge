@@ -1,15 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('bad-words-next', () => ({
-  default: class {
-    check(value: string): boolean {
+vi.mock('bad-words', () => ({
+  Filter: class {
+    isProfane(value: string): boolean {
       return value.toLowerCase().includes('dronecurse');
     }
   },
-}));
-
-vi.mock('bad-words-next/lib/en', () => ({
-  default: { id: 'en', words: [], lookalike: {} },
 }));
 
 import { validateCallSign } from './profileApi';
