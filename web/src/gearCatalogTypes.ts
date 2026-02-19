@@ -256,4 +256,32 @@ export function extractDomainFromUrl(rawUrl?: string): string {
   }
 }
 
+function extractHostnameFromUrl(rawUrl?: string): string {
+  if (!rawUrl) return '';
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return '';
+
+  try {
+    return new URL(trimmed).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
+export function getShoppingLinkDisplayName(rawUrl?: string): string {
+  const hostname = extractHostnameFromUrl(rawUrl);
+  if (!hostname) return '';
+
+  if (
+    hostname === 'a.co' ||
+    hostname === 'amzn.to' ||
+    hostname.startsWith('amazon.') ||
+    hostname.includes('.amazon.')
+  ) {
+    return 'amazon';
+  }
+
+  return extractDomainFromUrl(rawUrl);
+}
+
 export const extractImageSourceDomain = extractDomainFromUrl;

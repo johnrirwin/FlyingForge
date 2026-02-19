@@ -1,6 +1,12 @@
 import { useEffect, useRef } from 'react';
 import type { GearCatalogItem } from '../gearCatalogTypes';
-import { GEAR_TYPES, DRONE_TYPES, extractDomainFromUrl, getCatalogItemDisplayName } from '../gearCatalogTypes';
+import {
+  GEAR_TYPES,
+  DRONE_TYPES,
+  extractDomainFromUrl,
+  getCatalogItemDisplayName,
+  getShoppingLinkDisplayName,
+} from '../gearCatalogTypes';
 
 interface GearDetailModalProps {
   item: GearCatalogItem;
@@ -208,7 +214,7 @@ export function GearDetailModal({
               <h3 className="text-sm font-medium text-slate-400 mb-2">Shopping Links</h3>
               <div className="space-y-2">
                 {shoppingLinks.map((link, index) => {
-                  const linkDomain = extractDomainFromUrl(link);
+                  const linkDomain = getShoppingLinkDisplayName(link);
                   const linkLabel = linkDomain || `Buy link ${index + 1}`;
                   return (
                   <div key={`${link}-${index}`}>

@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { searchGearCatalog, getPopularGear } from '../gearCatalogApi';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { searchGearCatalog, getPopularGear, getGearCatalogItem } from '../gearCatalogApi';
 import type { GearCatalogItem, GearType } from '../gearCatalogTypes';
 import { GEAR_TYPES, DRONE_TYPES, getCatalogItemDisplayName } from '../gearCatalogTypes';
 import { useAuth } from '../hooks/useAuth';
@@ -172,16 +172,35 @@ export function GearCatalogPage({ onAddToInventory }: GearCatalogPageProps) {
   const [selectedItem, setSelectedItem] = useState<GearCatalogItem | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isMobileControlsOpen, setIsMobileControlsOpen] = useState(false);
+  const detailRequestRef = useRef(0);
 
-  const handleOpenDetail = (item: GearCatalogItem) => {
+  const handleOpenDetail = useCallback((item: GearCatalogItem) => {
     setSelectedItem(item);
     setIsDetailModalOpen(true);
-  };
+    const requestId = ++detailRequestRef.current;
 
-  const handleCloseDetail = () => {
+    void getGearCatalogItem(item.id)
+      .then((fullItem) => {
+        if (requestId !== detailRequestRef.current) {
+          return;
+        }
+        setSelectedItem((current) => {
+          if (!current || current.id !== item.id) {
+            return current;
+          }
+          return fullItem;
+        });
+      })
+      .catch(() => {
+        // Keep using the list payload if detail hydration fails.
+      });
+  }, []);
+
+  const handleCloseDetail = useCallback(() => {
+    detailRequestRef.current += 1;
     setIsDetailModalOpen(false);
     setSelectedItem(null);
-  };
+  }, []);
 
   // Load popular items on mount
   useEffect(() => {
