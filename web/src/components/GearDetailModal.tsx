@@ -212,22 +212,21 @@ export function GearDetailModal({
           {shoppingLinks.length > 0 && (
             <div className="mt-6">
               <h3 className="text-sm font-medium text-slate-400 mb-2">Shopping Links</h3>
-              <div className="space-y-2">
+              <div className="flex flex-wrap gap-2">
                 {shoppingLinks.map((link, index) => {
                   const linkDomain = getShoppingLinkDisplayName(link);
                   const linkLabel = linkDomain || `Buy link ${index + 1}`;
                   return (
-                  <div key={`${link}-${index}`}>
                     <a
+                      key={`${link}-${index}`}
                       href={link}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex text-sm text-primary-300 hover:text-primary-200"
+                      className="inline-flex items-center rounded-full bg-primary-600/20 px-3 py-1 text-sm text-primary-300 transition-colors hover:bg-primary-600/30 hover:text-primary-200"
                       aria-label={`Visit ${linkLabel} (opens in new tab)`}
                     >
                       {linkLabel}
                     </a>
-                  </div>
                   );
                 })}
               </div>
