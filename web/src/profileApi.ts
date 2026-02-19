@@ -1,3 +1,4 @@
+import { Filter } from 'bad-words';
 import type { UserProfile, UpdateProfileParams } from './authTypes';
 import type { AvatarUploadResponse } from './socialTypes';
 import { getStoredTokens } from './authApi';
@@ -5,6 +6,8 @@ import type { ImageModerationResponse } from './imageTypes';
 export type { ModerationStatus, ImageModerationResponse } from './imageTypes';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+
+const callSignProfanityFilter = new Filter();
 
 // Get authorization header
 function getAuthHeader(): Record<string, string> {
@@ -116,7 +119,14 @@ export function validateCallSign(callSign: string): string | null {
   if (!/^[a-zA-Z0-9_-]+$/.test(trimmed)) {
     return 'Callsign can only contain letters, numbers, underscores, and hyphens';
   }
+  if (containsBlockedCallSignTerm(trimmed)) {
+    return 'Callsign contains inappropriate language';
+  }
   return null;
+}
+
+function containsBlockedCallSignTerm(callSign: string): boolean {
+  return callSignProfanityFilter.isProfane(callSign);
 }
 
 // Delete current user's account and all associated data

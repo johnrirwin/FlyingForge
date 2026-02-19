@@ -4,6 +4,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	goaway "github.com/TwiN/go-away"
 )
 
 // UserStatus represents the status of a user account
@@ -324,8 +326,18 @@ type ReceiverSanitizedSettings struct {
 // CallSign validation
 var callSignRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]{3,20}$`)
 
+type callSignProfanityChecker interface {
+	IsProfane(s string) bool
+}
+
+var defaultCallSignProfanityChecker callSignProfanityChecker = goaway.NewProfanityDetector()
+
 // ValidateCallSign validates a callsign
 func ValidateCallSign(callSign string) error {
+	return validateCallSignWithChecker(callSign, defaultCallSignProfanityChecker)
+}
+
+func validateCallSignWithChecker(callSign string, profanityChecker callSignProfanityChecker) error {
 	callSign = strings.TrimSpace(callSign)
 	if callSign == "" {
 		return &ValidationError{Field: "callSign", Message: "callsign is required"}
@@ -338,6 +350,9 @@ func ValidateCallSign(callSign string) error {
 	}
 	if !callSignRegex.MatchString(callSign) {
 		return &ValidationError{Field: "callSign", Message: "callsign can only contain letters, numbers, underscores, and hyphens"}
+	}
+	if profanityChecker != nil && profanityChecker.IsProfane(callSign) {
+		return &ValidationError{Field: "callSign", Message: "callsign contains inappropriate language"}
 	}
 	return nil
 }
