@@ -194,9 +194,18 @@ export function AircraftDetail({
       throw new Error('Invalid component category');
     }
 
+    const expectedCategory = componentCategory.equipmentCategory;
+    const incomingCategory = newGear.category;
+
+    if (incomingCategory !== expectedCategory) {
+      throw new Error(
+        `Selected item category (${incomingCategory}) does not match ${componentCategory.label}. Please choose matching gear.`,
+      );
+    }
+
     await handleAutoAddGear(addModalCategory, {
       ...newGear,
-      category: componentCategory.equipmentCategory,
+      category: expectedCategory,
     });
   };
 

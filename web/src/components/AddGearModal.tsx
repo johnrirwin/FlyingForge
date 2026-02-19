@@ -120,7 +120,7 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
     } else {
       // Reset form
       setName('');
-      setCategory(initialCategory || 'accessories');
+      setCategory('accessories');
       setManufacturer('');
       setQuantityInput('1');
       setPurchasePrice('');
@@ -130,7 +130,7 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
     }
     setError(null);
     setShowDeleteConfirmModal(false);
-  }, [equipmentItem, editItem, initialCategory, isOpen]);
+  }, [equipmentItem, editItem, isOpen]);
 
   useEffect(() => {
     if (!showDeleteConfirmModal && wasDeleteConfirmOpenRef.current) {

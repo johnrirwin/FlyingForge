@@ -1,6 +1,18 @@
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { render } from '../test/test-utils';
+
+const { catalogSearchModalMock } = vi.hoisted(() => ({
+  catalogSearchModalMock: vi.fn(),
+}));
+
+vi.mock('./CatalogSearchModal', () => ({
+  CatalogSearchModal: (props: { initialGearType?: string }) => {
+    catalogSearchModalMock(props);
+    return <div data-testid="catalog-search-modal" />;
+  },
+}));
+
 import { AddGearModal } from './AddGearModal';
 import type { InventoryItem } from '../equipmentTypes';
 
@@ -16,6 +28,26 @@ const editItem: InventoryItem = {
 };
 
 describe('AddGearModal quantity editing', () => {
+  beforeEach(() => {
+    catalogSearchModalMock.mockClear();
+  });
+
+  it('passes initial category to catalog search as initial gear type', () => {
+    render(
+      <AddGearModal
+        isOpen
+        onClose={vi.fn()}
+        onSubmit={vi.fn().mockResolvedValue(undefined)}
+        initialCategory="cameras"
+      />,
+    );
+
+    expect(screen.getByTestId('catalog-search-modal')).toBeInTheDocument();
+    expect(catalogSearchModalMock).toHaveBeenCalledWith(
+      expect.objectContaining({ initialGearType: 'camera' }),
+    );
+  });
+
   it('allows clearing and replacing an existing quantity', async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
 
