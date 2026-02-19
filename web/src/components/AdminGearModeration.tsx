@@ -430,7 +430,9 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
   // Initial load and auto-search when gear filters change.
   useEffect(() => {
     if (!hasContentAdminAccess) return;
-    void loadItems(true);
+    // Force-reset so searches/filters always hit server-side results, even if an
+    // infinite-scroll request is currently in-flight.
+    void loadItems(true, true);
   }, [hasContentAdminAccess, loadItems]);
 
   // Initial load and auto-search when build filters change.
