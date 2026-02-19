@@ -7,12 +7,13 @@ import type {
   SetComponentParams 
 } from '../aircraftTypes';
 import { AIRCRAFT_TYPES, COMPONENT_CATEGORIES } from '../aircraftTypes';
-import type { InventoryItem, AddInventoryParams, EquipmentCategory } from '../equipmentTypes';
+import type { InventoryItem, AddInventoryParams } from '../equipmentTypes';
 import { getInventory } from '../equipmentApi';
 import { getAircraftImageUrl } from '../aircraftApi';
 import { getAircraftTuning, createTuningSnapshot } from '../fcConfigApi';
 import type { AircraftTuningResponse, PIDProfile, RateProfile, FilterSettings } from '../fcConfigTypes';
 import { trackEvent } from '../hooks/useGoogleAnalytics';
+import { AddGearModal } from './AddGearModal';
 
 interface AircraftDetailProps {
   details: AircraftDetailsResponse;
@@ -35,6 +36,7 @@ export function AircraftDetail({
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [isLoadingInventory, setIsLoadingInventory] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<ComponentCategory | null>(null);
+  const [addModalCategory, setAddModalCategory] = useState<ComponentCategory | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Receiver settings state
@@ -171,10 +173,31 @@ export function AircraftDetail({
       setInventoryItems(response.items || []);
     } catch (err) {
       console.error('Failed to auto-add gear:', err);
+      throw err;
     } finally {
       setIsSubmitting(false);
       setSelectedCategory(null);
     }
+  };
+
+  const openAddGearModal = (category: ComponentCategory) => {
+    setAddModalCategory(category);
+  };
+
+  const handleModalAddSubmit = async (newGear: AddInventoryParams) => {
+    if (!addModalCategory) {
+      throw new Error('No component category selected');
+    }
+
+    const componentCategory = COMPONENT_CATEGORIES.find((c) => c.value === addModalCategory);
+    if (!componentCategory) {
+      throw new Error('Invalid component category');
+    }
+
+    await handleAutoAddGear(addModalCategory, {
+      ...newGear,
+      category: componentCategory.equipmentCategory,
+    });
   };
 
   // Handle component removal
@@ -353,11 +376,14 @@ export function AircraftDetail({
                             <p className="text-slate-400 text-sm">
                               No matching items in your inventory.
                             </p>
-                            <QuickAddForm
-                              category={cat}
-                              onSubmit={(newGear) => handleAutoAddGear(cat.value, newGear)}
-                              isSubmitting={isSubmitting}
-                            />
+                            <button
+                              type="button"
+                              onClick={() => openAddGearModal(cat.value)}
+                              disabled={isSubmitting}
+                              className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors"
+                            >
+                              + Add {cat.label} to Inventory
+                            </button>
                           </div>
                         ) : (
                           <div className="space-y-2">
@@ -378,13 +404,16 @@ export function AircraftDetail({
                               ))}
                             </select>
                             <div className="text-xs text-slate-500">
-                              Or add a new item:
+                              Need another option?
                             </div>
-                            <QuickAddForm
-                              category={cat}
-                              onSubmit={(newGear) => handleAutoAddGear(cat.value, newGear)}
-                              isSubmitting={isSubmitting}
-                            />
+                            <button
+                              type="button"
+                              onClick={() => openAddGearModal(cat.value)}
+                              disabled={isSubmitting}
+                              className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors"
+                            >
+                              + Add {cat.label} to Inventory
+                            </button>
                           </div>
                         )}
                       </div>
@@ -558,57 +587,14 @@ export function AircraftDetail({
           )}
         </div>
       </div>
+
+      <AddGearModal
+        isOpen={addModalCategory !== null}
+        onClose={() => setAddModalCategory(null)}
+        onSubmit={handleModalAddSubmit}
+        initialCategory={addModalCategory ? COMPONENT_CATEGORIES.find((cat) => cat.value === addModalCategory)?.equipmentCategory : undefined}
+      />
     </div>
-  );
-}
-
-// Quick add form for auto-add gear
-interface QuickAddFormProps {
-  category: { value: ComponentCategory; label: string; equipmentCategory: string };
-  onSubmit: (params: AddInventoryParams) => void;
-  isSubmitting: boolean;
-}
-
-function QuickAddForm({ category, onSubmit, isSubmitting }: QuickAddFormProps) {
-  const [name, setName] = useState('');
-  const [manufacturer, setManufacturer] = useState('');
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-
-    onSubmit({
-      name: name.trim(),
-      category: category.equipmentCategory as EquipmentCategory,
-      manufacturer: manufacturer.trim() || undefined,
-      quantity: 1,
-    });
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="flex gap-2">
-      <input
-        type="text"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder={`New ${category.label} name...`}
-        className="flex-1 px-3 py-1.5 bg-slate-600 border border-slate-500 rounded-lg text-white text-sm placeholder-slate-400 focus:outline-none focus:border-primary-500"
-      />
-      <input
-        type="text"
-        value={manufacturer}
-        onChange={(e) => setManufacturer(e.target.value)}
-        placeholder="Brand"
-        className="w-24 px-3 py-1.5 bg-slate-600 border border-slate-500 rounded-lg text-white text-sm placeholder-slate-400 focus:outline-none focus:border-primary-500"
-      />
-      <button
-        type="submit"
-        disabled={isSubmitting || !name.trim()}
-        className="px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-green-600/50 text-white text-sm rounded-lg transition-colors"
-      >
-        Add
-      </button>
-    </form>
   );
 }
 

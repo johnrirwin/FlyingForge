@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { EquipmentItem, InventoryItem, EquipmentCategory, AddInventoryParams } from '../equipmentTypes';
 import { EQUIPMENT_CATEGORIES } from '../equipmentTypes';
 import type { GearCatalogItem } from '../gearCatalogTypes';
-import { getCatalogItemDisplayName, gearTypeToEquipmentCategory } from '../gearCatalogTypes';
+import { getCatalogItemDisplayName, gearTypeToEquipmentCategory, equipmentCategoryToGearType } from '../gearCatalogTypes';
 import { moderateGearCatalogImageUpload, saveGearCatalogImageUpload } from '../gearCatalogApi';
 import { CatalogSearchModal } from './CatalogSearchModal';
 
@@ -14,13 +14,15 @@ interface AddGearModalProps {
   equipmentItem?: EquipmentItem | null;
   catalogItem?: GearCatalogItem | null; // Pre-selected from gear catalog page
   editItem?: InventoryItem | null;
+  initialCategory?: EquipmentCategory;
 }
 
-export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentItem, catalogItem, editItem }: AddGearModalProps) {
+export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentItem, catalogItem, editItem, initialCategory }: AddGearModalProps) {
   // Only show details form for editing existing items or when coming from shop
   const isEditing = !!editItem;
   const hasEquipmentItem = !!equipmentItem;
   const hasPreselectedCatalogItem = !!catalogItem;
+  const initialGearType = initialCategory ? equipmentCategoryToGearType(initialCategory) : undefined;
   
   // If we have a pre-selected catalog item, auto-add it
   const showDetailsForm = isEditing || hasEquipmentItem;
@@ -118,7 +120,7 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
     } else {
       // Reset form
       setName('');
-      setCategory('accessories');
+      setCategory(initialCategory || 'accessories');
       setManufacturer('');
       setQuantityInput('1');
       setPurchasePrice('');
@@ -128,7 +130,7 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
     }
     setError(null);
     setShowDeleteConfirmModal(false);
-  }, [equipmentItem, editItem, isOpen]);
+  }, [equipmentItem, editItem, initialCategory, isOpen]);
 
   useEffect(() => {
     if (!showDeleteConfirmModal && wasDeleteConfirmOpenRef.current) {
@@ -285,6 +287,7 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
         isOpen={true}
         onClose={onClose}
         onSelectItem={handleCatalogSelect}
+        initialGearType={initialGearType}
         onModerateCatalogImage={moderateGearCatalogImageUpload}
         onSaveCatalogImageUpload={saveGearCatalogImageUpload}
       />
