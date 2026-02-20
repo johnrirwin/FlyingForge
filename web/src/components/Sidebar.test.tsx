@@ -36,13 +36,13 @@ function createDefaultProps(overrides = {}) {
 
 describe('Sidebar', () => {
   describe('Layout', () => {
-    it('keeps sidebar vertically scrollable at tablet/desktop breakpoints', () => {
-      const { container } = render(<Sidebar {...createDefaultProps()} />)
+    it("keeps sidebar vertically scrollable and doesn't include md:overflow-hidden class", () => {
+      render(<Sidebar {...createDefaultProps()} />)
 
-      const sidebar = container.querySelector('aside')
+      const sidebar = screen.getByRole('complementary')
       expect(sidebar).toBeInTheDocument()
       expect(sidebar).toHaveClass('overflow-y-auto')
-      expect(sidebar?.className).not.toContain('md:overflow-hidden')
+      expect(sidebar.className).not.toContain('md:overflow-hidden')
     })
   })
 
