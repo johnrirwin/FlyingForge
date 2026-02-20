@@ -134,6 +134,32 @@ func TestValidateForPublish_FromAircraftRequiresPublishedStackWhenUsed(t *testin
 	assertHasValidationCode(t, result.Errors, "stack", "not_published")
 }
 
+func TestValidateForPublish_FromAircraftChecksAllPresentPowerOptions(t *testing.T) {
+	build := &models.Build{
+		ImageAssetID:     "asset-1",
+		Description:      "Test build",
+		SourceAircraftID: "aircraft-1",
+		Parts: []models.BuildPart{
+			{GearType: models.GearTypeFrame, CatalogItemID: "frame-1", CatalogItem: publishedCatalog("frame-1", models.GearTypeFrame)},
+			{GearType: models.GearTypeMotor, CatalogItemID: "motor-1", CatalogItem: publishedCatalog("motor-1", models.GearTypeMotor)},
+			{GearType: models.GearTypeAIO, CatalogItemID: "aio-1", CatalogItem: publishedCatalog("aio-1", models.GearTypeAIO)},
+			{GearType: models.GearTypeStack, CatalogItemID: "stack-1", CatalogItem: pendingCatalog("stack-1", models.GearTypeStack)},
+			{GearType: models.GearTypeFC, CatalogItemID: "fc-1", CatalogItem: publishedCatalog("fc-1", models.GearTypeFC)},
+			{GearType: models.GearTypeESC, CatalogItemID: "esc-1", CatalogItem: pendingCatalog("esc-1", models.GearTypeESC)},
+			{GearType: models.GearTypeReceiver, CatalogItemID: "rx-1", CatalogItem: publishedCatalog("rx-1", models.GearTypeReceiver)},
+			{GearType: models.GearTypeVTX, CatalogItemID: "vtx-1", CatalogItem: publishedCatalog("vtx-1", models.GearTypeVTX)},
+		},
+	}
+
+	result := ValidateForPublish(build)
+	if result.Valid {
+		t.Fatalf("expected validation to fail")
+	}
+
+	assertHasValidationCode(t, result.Errors, "stack", "not_published")
+	assertHasValidationCode(t, result.Errors, "esc", "not_published")
+}
+
 func TestValidateForPublish_RequiresDescriptionAndImage(t *testing.T) {
 	build := &models.Build{
 		Parts: []models.BuildPart{

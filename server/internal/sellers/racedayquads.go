@@ -130,10 +130,10 @@ func (r *RaceDayQuads) Search(ctx context.Context, query string, category models
 	}
 
 	if len(items) == 0 {
-		return r.getDemoProducts(category, limit), nil
+		return filterItemsByPowerCategoryIntent(r.getDemoProducts(category, limit), category), nil
 	}
 
-	return items, nil
+	return filterItemsByPowerCategoryIntent(items, category), nil
 }
 
 func (r *RaceDayQuads) GetByCategory(ctx context.Context, category models.EquipmentCategory, limit, offset int) ([]models.EquipmentItem, error) {
@@ -213,10 +213,10 @@ func (r *RaceDayQuads) GetByCategory(ctx context.Context, category models.Equipm
 	}
 
 	if len(items) == 0 {
-		return r.getDemoProducts(category, limit), nil
+		return filterItemsByPowerCategoryIntent(r.getDemoProducts(category, limit), category), nil
 	}
 
-	return items, nil
+	return filterItemsByPowerCategoryIntent(items, category), nil
 }
 
 func (r *RaceDayQuads) GetProduct(ctx context.Context, productID string) (*models.EquipmentItem, error) {
@@ -310,6 +310,10 @@ func (r *RaceDayQuads) getDemoProducts(category models.EquipmentCategory, limit 
 		models.CategoryFC: {
 			{ID: "rdq-demo-6", Name: "SpeedyBee F405 V4", Price: 39.99, Currency: "USD", Manufacturer: "SpeedyBee", InStock: true, Category: models.CategoryFC},
 			{ID: "rdq-demo-7", Name: "Diatone MAMBA F722", Price: 54.99, Currency: "USD", Manufacturer: "Diatone", InStock: true, Category: models.CategoryFC},
+		},
+		models.CategoryAIO: {
+			{ID: "rdq-demo-10", Name: "Happymodel X12 AIO", Price: 59.99, Currency: "USD", Manufacturer: "HappyModel", InStock: true, Category: models.CategoryAIO},
+			{ID: "rdq-demo-11", Name: "JHEMCU F745 AIO", Price: 64.99, Currency: "USD", Manufacturer: "JHEMCU", InStock: true, Category: models.CategoryAIO},
 		},
 		models.CategoryStacks: {
 			{ID: "rdq-demo-8", Name: "SpeedyBee F405 V4 55A Stack", Price: 84.99, Currency: "USD", Manufacturer: "SpeedyBee", InStock: true, Category: models.CategoryStacks},
