@@ -35,6 +35,17 @@ function createDefaultProps(overrides = {}) {
 }
 
 describe('Sidebar', () => {
+  describe('Layout', () => {
+    it('keeps sidebar vertically scrollable at tablet/desktop breakpoints', () => {
+      const { container } = render(<Sidebar {...createDefaultProps()} />)
+
+      const sidebar = container.querySelector('aside')
+      expect(sidebar).toBeInTheDocument()
+      expect(sidebar).toHaveClass('overflow-y-auto')
+      expect(sidebar?.className).not.toContain('md:overflow-hidden')
+    })
+  })
+
   describe('Navigation', () => {
     it('renders navigation items for unauthenticated users', () => {
       render(<Sidebar {...createDefaultProps()} />)
