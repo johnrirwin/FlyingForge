@@ -876,13 +876,14 @@ func ValidateForPublish(build *models.Build) models.BuildValidationResult {
 	}
 
 	hasAIO := hasPart(build.Parts, models.GearTypeAIO)
+	hasStack := hasPart(build.Parts, models.GearTypeStack)
 	hasFC := hasPart(build.Parts, models.GearTypeFC)
 	hasESC := hasPart(build.Parts, models.GearTypeESC)
-	if !hasAIO && (!hasFC || !hasESC) {
+	if !hasAIO && !hasStack && (!hasFC || !hasESC) {
 		errors = append(errors, models.BuildValidationError{
 			Category: "power-stack",
 			Code:     "missing_required",
-			Message:  "Power stack requires either an AIO or both FC and ESC",
+			Message:  "Power stack requires an AIO, an FC/ESC stack, or both FC and ESC",
 		})
 	}
 
@@ -903,6 +904,12 @@ func ValidateForPublish(build *models.Build) models.BuildValidationResult {
 				label    string
 				category string
 			}{models.GearTypeAIO, "AIO", "aio"})
+		} else if hasStack {
+			checkPublished = append(checkPublished, struct {
+				gearType models.GearType
+				label    string
+				category string
+			}{models.GearTypeStack, "FC/ESC Stack", "stack"})
 		} else {
 			checkPublished = append(checkPublished,
 				struct {

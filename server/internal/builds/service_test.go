@@ -51,6 +51,17 @@ func TestValidateForPublish_PowerStackLogic(t *testing.T) {
 			wantValid: true,
 		},
 		{
+			name: "valid with stack",
+			parts: []models.BuildPart{
+				{GearType: models.GearTypeFrame, CatalogItemID: "frame-1", CatalogItem: publishedCatalog("frame-1", models.GearTypeFrame)},
+				{GearType: models.GearTypeMotor, CatalogItemID: "motor-1", CatalogItem: publishedCatalog("motor-1", models.GearTypeMotor)},
+				{GearType: models.GearTypeStack, CatalogItemID: "stack-1", CatalogItem: publishedCatalog("stack-1", models.GearTypeStack)},
+				{GearType: models.GearTypeReceiver, CatalogItemID: "rx-1", CatalogItem: publishedCatalog("rx-1", models.GearTypeReceiver)},
+				{GearType: models.GearTypeVTX, CatalogItemID: "vtx-1", CatalogItem: publishedCatalog("vtx-1", models.GearTypeVTX)},
+			},
+			wantValid: true,
+		},
+		{
 			name: "invalid with only fc",
 			parts: []models.BuildPart{
 				{GearType: models.GearTypeFrame, CatalogItemID: "frame-1", CatalogItem: publishedCatalog("frame-1", models.GearTypeFrame)},
@@ -99,6 +110,28 @@ func TestValidateForPublish_FromAircraftRequiresPublishedCatalogParts(t *testing
 	assertHasValidationCode(t, result.Errors, "frame", "not_published")
 	assertHasValidationCode(t, result.Errors, "aio", "not_published")
 	assertHasValidationCode(t, result.Errors, "vtx", "not_published")
+}
+
+func TestValidateForPublish_FromAircraftRequiresPublishedStackWhenUsed(t *testing.T) {
+	build := &models.Build{
+		ImageAssetID:     "asset-1",
+		Description:      "Test build",
+		SourceAircraftID: "aircraft-1",
+		Parts: []models.BuildPart{
+			{GearType: models.GearTypeFrame, CatalogItemID: "frame-1", CatalogItem: publishedCatalog("frame-1", models.GearTypeFrame)},
+			{GearType: models.GearTypeMotor, CatalogItemID: "motor-1", CatalogItem: publishedCatalog("motor-1", models.GearTypeMotor)},
+			{GearType: models.GearTypeStack, CatalogItemID: "stack-1", CatalogItem: pendingCatalog("stack-1", models.GearTypeStack)},
+			{GearType: models.GearTypeReceiver, CatalogItemID: "rx-1", CatalogItem: publishedCatalog("rx-1", models.GearTypeReceiver)},
+			{GearType: models.GearTypeVTX, CatalogItemID: "vtx-1", CatalogItem: publishedCatalog("vtx-1", models.GearTypeVTX)},
+		},
+	}
+
+	result := ValidateForPublish(build)
+	if result.Valid {
+		t.Fatalf("expected validation to fail")
+	}
+
+	assertHasValidationCode(t, result.Errors, "stack", "not_published")
 }
 
 func TestValidateForPublish_RequiresDescriptionAndImage(t *testing.T) {

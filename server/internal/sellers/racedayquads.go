@@ -51,6 +51,7 @@ var rdqCategoryMapping = map[models.EquipmentCategory]string{
 	models.CategoryFC:          "flight-controllers",
 	models.CategoryESC:         "escs",
 	models.CategoryAIO:         "stacks",
+	models.CategoryStacks:      "stacks",
 	models.CategoryMotors:      "motors",
 	models.CategoryPropellers:  "propellers",
 	models.CategoryReceivers:   "receivers",
@@ -309,6 +310,10 @@ func (r *RaceDayQuads) getDemoProducts(category models.EquipmentCategory, limit 
 		models.CategoryFC: {
 			{ID: "rdq-demo-6", Name: "SpeedyBee F405 V4", Price: 39.99, Currency: "USD", Manufacturer: "SpeedyBee", InStock: true, Category: models.CategoryFC},
 			{ID: "rdq-demo-7", Name: "Diatone MAMBA F722", Price: 54.99, Currency: "USD", Manufacturer: "Diatone", InStock: true, Category: models.CategoryFC},
+		},
+		models.CategoryStacks: {
+			{ID: "rdq-demo-8", Name: "SpeedyBee F405 V4 55A Stack", Price: 84.99, Currency: "USD", Manufacturer: "SpeedyBee", InStock: true, Category: models.CategoryStacks},
+			{ID: "rdq-demo-9", Name: "Diatone Mamba F722 MK4 Stack", Price: 99.99, Currency: "USD", Manufacturer: "Diatone", InStock: true, Category: models.CategoryStacks},
 		},
 	}
 

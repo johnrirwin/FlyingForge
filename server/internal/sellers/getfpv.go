@@ -50,6 +50,7 @@ var getfpvCategoryMapping = map[models.EquipmentCategory]string{
 	models.CategoryFC:          "flight-controllers",
 	models.CategoryESC:         "escs",
 	models.CategoryAIO:         "stacks",
+	models.CategoryStacks:      "stacks",
 	models.CategoryMotors:      "motors",
 	models.CategoryPropellers:  "propellers",
 	models.CategoryReceivers:   "receivers",
@@ -121,6 +122,10 @@ func (g *GetFPV) getDemoProducts(category models.EquipmentCategory, limit int) [
 		models.CategoryFC: {
 			{ID: "gfpv-demo-5", Name: "BetaFPV Toothpick F4 2-4S", Price: 29.99, Currency: "USD", Manufacturer: "BetaFPV", InStock: true, Category: models.CategoryFC},
 			{ID: "gfpv-demo-6", Name: "Holybro Kakute H7 Mini", Price: 49.99, Currency: "USD", Manufacturer: "Holybro", InStock: true, Category: models.CategoryFC},
+		},
+		models.CategoryStacks: {
+			{ID: "gfpv-demo-11", Name: "SpeedyBee F405 V4 Stack", Price: 84.99, Currency: "USD", Manufacturer: "SpeedyBee", InStock: true, Category: models.CategoryStacks},
+			{ID: "gfpv-demo-12", Name: "Diatone Mamba F722 Stack", Price: 94.99, Currency: "USD", Manufacturer: "Diatone", InStock: true, Category: models.CategoryStacks},
 		},
 		models.CategoryVTX: {
 			{ID: "gfpv-demo-7", Name: "Rush Tank Solo 5.8GHz", Price: 39.99, Currency: "USD", Manufacturer: "Rush", InStock: true, Category: models.CategoryVTX},

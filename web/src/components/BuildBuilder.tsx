@@ -35,6 +35,7 @@ const REQUIRED_ROWS: BuildRow[] = [
 
 const POWER_ROWS: BuildRow[] = [
   { label: 'AIO', gearType: 'aio', categoryKey: 'aio' },
+  { label: 'FC/ESC Stack', gearType: 'stack', categoryKey: 'stack' },
   { label: 'Flight Controller', gearType: 'fc', categoryKey: 'fc' },
   { label: 'ESC', gearType: 'esc', categoryKey: 'esc' },
 ];
@@ -81,9 +82,10 @@ export function BuildBuilder({
   }, [validationErrors]);
 
   const hasAIO = Boolean(partsByType.get('aio')?.catalogItemId);
+  const hasStack = Boolean(partsByType.get('stack')?.catalogItemId);
   const hasFC = Boolean(partsByType.get('fc')?.catalogItemId);
   const hasESC = Boolean(partsByType.get('esc')?.catalogItemId);
-  const powerComplete = hasAIO || (hasFC && hasESC);
+  const powerComplete = hasAIO || hasStack || (hasFC && hasESC);
 
   const upsertPart = (gearType: GearType, item: GearCatalogItem) => {
     const remaining = parts.filter((part) => part.gearType !== gearType);
@@ -229,7 +231,7 @@ export function BuildBuilder({
               {powerComplete ? 'Complete' : 'Missing'}
             </span>
           </div>
-          <p className="text-xs text-slate-500">Pick either one AIO, or select both FC and ESC.</p>
+          <p className="text-xs text-slate-500">Pick an AIO, an FC/ESC stack, or select both FC and ESC.</p>
           {errorMap.get('power-stack') && (
             <p className="text-xs text-red-400">{errorMap.get('power-stack')}</p>
           )}

@@ -6,6 +6,7 @@ export type GearType =
   | 'esc'
   | 'fc'
   | 'aio'
+  | 'stack'
   | 'frame'
   | 'vtx'
   | 'receiver'
@@ -21,6 +22,7 @@ export const GEAR_TYPES: { value: GearType; label: string }[] = [
   { value: 'esc', label: 'ESCs' },
   { value: 'fc', label: 'Flight Controllers' },
   { value: 'aio', label: 'AIO (FC/ESC)' },
+  { value: 'stack', label: 'FC/ESC Stacks' },
   { value: 'frame', label: 'Frames' },
   { value: 'vtx', label: 'Video Transmitters' },
   { value: 'receiver', label: 'Receivers' },
@@ -196,6 +198,7 @@ export function gearTypeToEquipmentCategory(gearType: GearType): EquipmentCatego
     esc: 'esc',
     fc: 'flight_controllers',
     aio: 'aio',
+    stack: 'stacks',
     frame: 'frames',
     vtx: 'vtx',
     receiver: 'receivers',
@@ -216,6 +219,7 @@ export function equipmentCategoryToGearType(category: EquipmentCategory): GearTy
     esc: 'esc',
     flight_controllers: 'fc',
     aio: 'aio',
+    stacks: 'stack',
     frames: 'frame',
     vtx: 'vtx',
     receivers: 'receiver',

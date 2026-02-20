@@ -44,7 +44,7 @@ export function PublicBuildDetailsPage() {
     { label: 'Motors', part: partsByType.get('motor') },
     {
       label: 'Power Stack',
-      part: partsByType.get('aio') ?? undefined,
+      part: partsByType.get('aio') ?? partsByType.get('stack') ?? undefined,
     },
     { label: 'Flight Controller', part: partsByType.get('fc') },
     { label: 'ESC', part: partsByType.get('esc') },

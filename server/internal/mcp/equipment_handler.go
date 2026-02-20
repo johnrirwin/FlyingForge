@@ -42,7 +42,7 @@ func (h *EquipmentHandler) GetTools() []ToolDefinition {
 					},
 					"category": {
 						"type": "string",
-						"enum": ["frames", "vtx", "flight_controllers", "esc", "aio", "motors", "propellers", "receivers", "batteries", "cameras", "antennas", "accessories"],
+						"enum": ["frames", "vtx", "flight_controllers", "esc", "aio", "stacks", "motors", "propellers", "receivers", "batteries", "cameras", "antennas", "accessories"],
 						"description": "Filter by equipment category"
 					},
 					"seller": {
@@ -77,7 +77,7 @@ func (h *EquipmentHandler) GetTools() []ToolDefinition {
 				"properties": {
 					"category": {
 						"type": "string",
-						"enum": ["frames", "vtx", "flight_controllers", "esc", "aio", "motors", "propellers", "receivers", "batteries", "cameras", "antennas", "accessories"],
+						"enum": ["frames", "vtx", "flight_controllers", "esc", "aio", "stacks", "motors", "propellers", "receivers", "batteries", "cameras", "antennas", "accessories"],
 						"description": "Equipment category to browse"
 					},
 					"limit": {
@@ -112,7 +112,7 @@ func (h *EquipmentHandler) GetTools() []ToolDefinition {
 					},
 					"category": {
 						"type": "string",
-						"enum": ["frames", "vtx", "flight_controllers", "esc", "aio", "motors", "propellers", "receivers", "batteries", "cameras", "antennas", "accessories"],
+						"enum": ["frames", "vtx", "flight_controllers", "esc", "aio", "stacks", "motors", "propellers", "receivers", "batteries", "cameras", "antennas", "accessories"],
 						"description": "Category to sync"
 					}
 				},
@@ -132,7 +132,7 @@ func (h *EquipmentHandler) GetTools() []ToolDefinition {
 					},
 					"category": {
 						"type": "string",
-						"enum": ["frames", "vtx", "flight_controllers", "esc", "aio", "motors", "propellers", "receivers", "batteries", "cameras", "antennas", "accessories"],
+						"enum": ["frames", "vtx", "flight_controllers", "esc", "aio", "stacks", "motors", "propellers", "receivers", "batteries", "cameras", "antennas", "accessories"],
 						"description": "Equipment category"
 					},
 					"manufacturer": {
@@ -179,7 +179,7 @@ func (h *EquipmentHandler) GetTools() []ToolDefinition {
 				"properties": {
 					"category": {
 						"type": "string",
-						"enum": ["frames", "vtx", "flight_controllers", "esc", "aio", "motors", "propellers", "receivers", "batteries", "cameras", "antennas", "accessories"],
+						"enum": ["frames", "vtx", "flight_controllers", "esc", "aio", "stacks", "motors", "propellers", "receivers", "batteries", "cameras", "antennas", "accessories"],
 						"description": "Filter by category"
 					},
 					"buildId": {

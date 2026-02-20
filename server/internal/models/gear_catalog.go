@@ -19,6 +19,7 @@ const (
 	GearTypeESC      GearType = "esc"
 	GearTypeFC       GearType = "fc"
 	GearTypeAIO      GearType = "aio"
+	GearTypeStack    GearType = "stack"
 	GearTypeFrame    GearType = "frame"
 	GearTypeVTX      GearType = "vtx"
 	GearTypeReceiver GearType = "receiver"
@@ -37,6 +38,7 @@ func AllGearTypes() []GearType {
 		GearTypeESC,
 		GearTypeFC,
 		GearTypeAIO,
+		GearTypeStack,
 		GearTypeFrame,
 		GearTypeVTX,
 		GearTypeReceiver,
@@ -60,6 +62,8 @@ func GearTypeFromEquipmentCategory(cat EquipmentCategory) GearType {
 		return GearTypeFC
 	case CategoryAIO:
 		return GearTypeAIO
+	case CategoryStacks:
+		return GearTypeStack
 	case CategoryFrames:
 		return GearTypeFrame
 	case CategoryVTX:
@@ -90,6 +94,8 @@ func (gt GearType) ToEquipmentCategory() EquipmentCategory {
 		return CategoryFC
 	case GearTypeAIO:
 		return CategoryAIO
+	case GearTypeStack:
+		return CategoryStacks
 	case GearTypeFrame:
 		return CategoryFrames
 	case GearTypeVTX:
