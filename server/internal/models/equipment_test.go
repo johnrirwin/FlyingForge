@@ -15,6 +15,7 @@ func TestEquipmentCategory_Values(t *testing.T) {
 		{"flight_controllers", CategoryFC, "flight_controllers"},
 		{"esc", CategoryESC, "esc"},
 		{"aio", CategoryAIO, "aio"},
+		{"stacks", CategoryStacks, "stacks"},
 		{"motors", CategoryMotors, "motors"},
 		{"propellers", CategoryPropellers, "propellers"},
 		{"receivers", CategoryReceivers, "receivers"},
@@ -36,9 +37,9 @@ func TestEquipmentCategory_Values(t *testing.T) {
 func TestAllCategories(t *testing.T) {
 	categories := AllCategories()
 
-	// Should have 12 categories
-	if len(categories) != 12 {
-		t.Errorf("AllCategories() returned %d categories, want 12", len(categories))
+	// Should have 13 categories
+	if len(categories) != 13 {
+		t.Errorf("AllCategories() returned %d categories, want 13", len(categories))
 	}
 
 	// All categories should be non-empty
@@ -55,6 +56,7 @@ func TestAllCategories(t *testing.T) {
 		CategoryFC:          false,
 		CategoryESC:         false,
 		CategoryAIO:         false,
+		CategoryStacks:      false,
 		CategoryMotors:      false,
 		CategoryPropellers:  false,
 		CategoryReceivers:   false,

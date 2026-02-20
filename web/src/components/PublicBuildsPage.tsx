@@ -153,6 +153,7 @@ export function PublicBuildsPage() {
                 const receiver = findPart(build.parts, 'receiver');
                 const vtx = findPart(build.parts, 'vtx');
                 const aio = findPart(build.parts, 'aio');
+                const stack = findPart(build.parts, 'stack');
                 const fc = findPart(build.parts, 'fc');
                 const esc = findPart(build.parts, 'esc');
                 const pilotName = build.pilot?.callSign || build.pilot?.displayName || 'Pilot';
@@ -181,6 +182,8 @@ export function PublicBuildsPage() {
                         <li>
                           Power: {aio?.catalogItem
                             ? `AIO — ${getBuildPartDisplayName(aio)}`
+                            : stack?.catalogItem
+                              ? `FC/ESC Stack — ${getBuildPartDisplayName(stack)}`
                             : fc?.catalogItem || esc?.catalogItem
                               ? `${fc?.catalogItem ? getBuildPartDisplayName(fc) : 'FC'} + ${esc?.catalogItem ? getBuildPartDisplayName(esc) : 'ESC'}`
                               : '—'}

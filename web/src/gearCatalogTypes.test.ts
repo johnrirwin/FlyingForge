@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractDomainFromUrl, getShoppingLinkDisplayName } from './gearCatalogTypes';
+import {
+  GEAR_TYPES,
+  equipmentCategoryToGearType,
+  extractDomainFromUrl,
+  gearTypeToEquipmentCategory,
+  getShoppingLinkDisplayName,
+} from './gearCatalogTypes';
 
 describe('getShoppingLinkDisplayName', () => {
   it('maps Amazon short links to amazon label', () => {
@@ -19,5 +25,19 @@ describe('getShoppingLinkDisplayName', () => {
 describe('extractDomainFromUrl', () => {
   it('returns empty string for invalid urls', () => {
     expect(extractDomainFromUrl('not-a-url')).toBe('');
+  });
+});
+
+describe('stack gear type support', () => {
+  it('maps stack gear type to stacks inventory category', () => {
+    expect(gearTypeToEquipmentCategory('stack')).toBe('stacks');
+  });
+
+  it('maps stacks inventory category back to stack gear type', () => {
+    expect(equipmentCategoryToGearType('stacks')).toBe('stack');
+  });
+
+  it('exposes stack in gear type selector options', () => {
+    expect(GEAR_TYPES.some((entry) => entry.value === 'stack')).toBe(true);
   });
 });

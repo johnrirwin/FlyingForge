@@ -127,6 +127,7 @@ const categoryDisplayNames: Record<EquipmentCategory, string> = {
   flight_controllers: 'Flight Controller',
   esc: 'ESC',
   aio: 'AIO',
+  stacks: 'FC/ESC Stack',
   motors: 'Motor',
   propellers: 'Propeller',
   receivers: 'Receiver',

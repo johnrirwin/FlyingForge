@@ -196,6 +196,7 @@ func TestGearTypeFromEquipmentCategory(t *testing.T) {
 		{CategoryESC, GearTypeESC},
 		{CategoryFC, GearTypeFC},
 		{CategoryAIO, GearTypeAIO},
+		{CategoryStacks, GearTypeStack},
 		{CategoryFrames, GearTypeFrame},
 		{CategoryVTX, GearTypeVTX},
 		{CategoryReceivers, GearTypeReceiver},
@@ -225,6 +226,7 @@ func TestGearType_ToEquipmentCategory(t *testing.T) {
 		{GearTypeESC, CategoryESC},
 		{GearTypeFC, CategoryFC},
 		{GearTypeAIO, CategoryAIO},
+		{GearTypeStack, CategoryStacks},
 		{GearTypeFrame, CategoryFrames},
 		{GearTypeVTX, CategoryVTX},
 		{GearTypeReceiver, CategoryReceivers},
@@ -303,14 +305,14 @@ func TestAllGearTypes(t *testing.T) {
 	gearTypes := AllGearTypes()
 
 	// Should include all defined gear types
-	expectedCount := 13 // motor, esc, fc, aio, frame, vtx, receiver, antenna, battery, prop, radio, camera, other
+	expectedCount := 14 // motor, esc, fc, aio, stack, frame, vtx, receiver, antenna, battery, prop, radio, camera, other
 	if len(gearTypes) != expectedCount {
 		t.Errorf("AllGearTypes() returned %d types, want %d", len(gearTypes), expectedCount)
 	}
 
 	// Check that specific gear types are included
 	expectedTypes := []GearType{
-		GearTypeMotor, GearTypeESC, GearTypeFC, GearTypeAIO,
+		GearTypeMotor, GearTypeESC, GearTypeFC, GearTypeAIO, GearTypeStack,
 		GearTypeFrame, GearTypeVTX, GearTypeReceiver, GearTypeAntenna,
 		GearTypeBattery, GearTypeProp, GearTypeRadio, GearTypeCamera, GearTypeOther,
 	}
