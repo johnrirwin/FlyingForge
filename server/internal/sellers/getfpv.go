@@ -80,7 +80,7 @@ func (g *GetFPV) Search(ctx context.Context, query string, category models.Equip
 	defer resp.Body.Close()
 
 	// For now, return demo data since parsing HTML would require additional libraries
-	return g.getDemoProducts(category, limit), nil
+	return filterItemsByPowerCategoryIntent(g.getDemoProducts(category, limit), category), nil
 }
 
 func (g *GetFPV) GetByCategory(ctx context.Context, category models.EquipmentCategory, limit, offset int) ([]models.EquipmentItem, error) {
@@ -90,7 +90,7 @@ func (g *GetFPV) GetByCategory(ctx context.Context, category models.EquipmentCat
 	}
 
 	// For now, return demo data
-	return g.getDemoProducts(category, limit), nil
+	return filterItemsByPowerCategoryIntent(g.getDemoProducts(category, limit), category), nil
 }
 
 func (g *GetFPV) GetProduct(ctx context.Context, productID string) (*models.EquipmentItem, error) {
@@ -122,6 +122,10 @@ func (g *GetFPV) getDemoProducts(category models.EquipmentCategory, limit int) [
 		models.CategoryFC: {
 			{ID: "gfpv-demo-5", Name: "BetaFPV Toothpick F4 2-4S", Price: 29.99, Currency: "USD", Manufacturer: "BetaFPV", InStock: true, Category: models.CategoryFC},
 			{ID: "gfpv-demo-6", Name: "Holybro Kakute H7 Mini", Price: 49.99, Currency: "USD", Manufacturer: "Holybro", InStock: true, Category: models.CategoryFC},
+		},
+		models.CategoryAIO: {
+			{ID: "gfpv-demo-13", Name: "Diatone Mamba F722 AIO 35A", Price: 79.99, Currency: "USD", Manufacturer: "Diatone", InStock: true, Category: models.CategoryAIO},
+			{ID: "gfpv-demo-14", Name: "SpeedyBee F405 AIO 40A", Price: 69.99, Currency: "USD", Manufacturer: "SpeedyBee", InStock: true, Category: models.CategoryAIO},
 		},
 		models.CategoryStacks: {
 			{ID: "gfpv-demo-11", Name: "SpeedyBee F405 V4 Stack", Price: 84.99, Currency: "USD", Manufacturer: "SpeedyBee", InStock: true, Category: models.CategoryStacks},

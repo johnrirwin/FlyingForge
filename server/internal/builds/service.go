@@ -904,25 +904,27 @@ func ValidateForPublish(build *models.Build) models.BuildValidationResult {
 				label    string
 				category string
 			}{models.GearTypeAIO, "AIO", "aio"})
-		} else if hasStack {
+		}
+		if hasStack {
 			checkPublished = append(checkPublished, struct {
 				gearType models.GearType
 				label    string
 				category string
 			}{models.GearTypeStack, "FC/ESC Stack", "stack"})
-		} else {
-			checkPublished = append(checkPublished,
-				struct {
-					gearType models.GearType
-					label    string
-					category string
-				}{models.GearTypeFC, "Flight Controller", "fc"},
-				struct {
-					gearType models.GearType
-					label    string
-					category string
-				}{models.GearTypeESC, "ESC", "esc"},
-			)
+		}
+		if hasFC {
+			checkPublished = append(checkPublished, struct {
+				gearType models.GearType
+				label    string
+				category string
+			}{models.GearTypeFC, "Flight Controller", "fc"})
+		}
+		if hasESC {
+			checkPublished = append(checkPublished, struct {
+				gearType models.GearType
+				label    string
+				category string
+			}{models.GearTypeESC, "ESC", "esc"})
 		}
 
 		for _, part := range checkPublished {
