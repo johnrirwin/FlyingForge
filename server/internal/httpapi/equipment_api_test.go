@@ -403,3 +403,85 @@ func TestUpdateInventoryItem_PartialDeltaBatteryCreationIncludesWarning(t *testi
 		t.Fatalf("warning = %q, want partial delta detail", warning)
 	}
 }
+
+func TestUpdateInventoryItem_CategoryChangedToBatteriesCreatesTrackers(t *testing.T) {
+	inventory := &mockInventoryManager{
+		getItem: &models.InventoryItem{
+			ID:       "inv-convert-1",
+			Name:     "Tattu 1200mAh 6S",
+			Category: models.CategoryAccessories,
+			Quantity: 3,
+		},
+		updateItem: &models.InventoryItem{
+			ID:       "inv-convert-1",
+			Name:     "Tattu 1200mAh 6S",
+			Category: models.CategoryBatteries,
+			Quantity: 3,
+		},
+	}
+	battery := &mockBatteryCreator{}
+
+	api := &EquipmentAPI{
+		inventorySvc: inventory,
+		batterySvc:   battery,
+		logger:       logging.New(logging.LevelError),
+	}
+
+	req := httptest.NewRequest(http.MethodPatch, "/api/inventory/inv-convert-1", strings.NewReader(`{"category":"batteries"}`))
+	req = req.WithContext(context.WithValue(req.Context(), auth.UserIDKey, "user-123"))
+	w := httptest.NewRecorder()
+
+	api.updateInventoryItem(w, req, "inv-convert-1")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if len(battery.createCalls) != 3 {
+		t.Fatalf("battery Create calls = %d, want 3", len(battery.createCalls))
+	}
+}
+
+func TestUpdateInventoryItem_DecreasingBatteryQuantityCreatesNoTrackers(t *testing.T) {
+	inventory := &mockInventoryManager{
+		getItem: &models.InventoryItem{
+			ID:       "inv-battery-dec",
+			Name:     "Tattu 1200mAh 6S",
+			Category: models.CategoryBatteries,
+			Quantity: 5,
+		},
+		updateItem: &models.InventoryItem{
+			ID:       "inv-battery-dec",
+			Name:     "Tattu 1200mAh 6S",
+			Category: models.CategoryBatteries,
+			Quantity: 3,
+		},
+	}
+	battery := &mockBatteryCreator{}
+
+	api := &EquipmentAPI{
+		inventorySvc: inventory,
+		batterySvc:   battery,
+		logger:       logging.New(logging.LevelError),
+	}
+
+	req := httptest.NewRequest(http.MethodPut, "/api/inventory/inv-battery-dec", strings.NewReader(`{"quantity":3}`))
+	req = req.WithContext(context.WithValue(req.Context(), auth.UserIDKey, "user-123"))
+	w := httptest.NewRecorder()
+
+	api.updateInventoryItem(w, req, "inv-battery-dec")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if len(battery.createCalls) != 0 {
+		t.Fatalf("battery Create calls = %d, want 0", len(battery.createCalls))
+	}
+
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response body: %v", err)
+	}
+	if _, hasWarning := response["warning"]; hasWarning {
+		t.Fatalf("did not expect warning, got: %v", response["warning"])
+	}
+}
