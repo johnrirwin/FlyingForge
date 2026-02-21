@@ -192,7 +192,7 @@ func (api *EquipmentAPI) handleSyncProducts(w http.ResponseWriter, r *http.Reque
 
 	api.writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status":  "success",
-		"message": "Product sync triggered",
+		"message": "No external seller sync configured",
 	})
 }
 

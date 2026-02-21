@@ -4,23 +4,29 @@ import (
 	"context"
 	"sort"
 	"strings"
-	"sync"
 
-	"github.com/johnrirwin/flyingforge/internal/cache"
 	"github.com/johnrirwin/flyingforge/internal/logging"
 	"github.com/johnrirwin/flyingforge/internal/models"
-	"github.com/johnrirwin/flyingforge/internal/sellers"
 )
 
-// Service handles equipment aggregation from multiple sellers
-type Service struct {
-	registry *sellers.Registry
-	cache    cache.Cache
-	logger   *logging.Logger
-	products map[string][]models.EquipmentItem // Cached products by category
+const (
+	catalogSellerID   = "gear-catalog"
+	catalogSellerName = "Gear Catalog"
+)
+
+type gearCatalogReader interface {
+	Search(ctx context.Context, params models.GearCatalogSearchParams) (*models.GearCatalogSearchResponse, error)
+	GetPopular(ctx context.Context, gearType models.GearType, limit int) ([]models.GearCatalogItem, error)
+	Get(ctx context.Context, id string) (*models.GearCatalogItem, error)
 }
 
-// ServiceError represents an equipment service error
+// Service serves equipment data from the moderated gear catalog.
+type Service struct {
+	catalog gearCatalogReader
+	logger  *logging.Logger
+}
+
+// ServiceError represents an equipment service error.
 type ServiceError struct {
 	Message string
 }
@@ -29,308 +35,262 @@ func (e *ServiceError) Error() string {
 	return e.Message
 }
 
-// NewService creates a new equipment service
-func NewService(registry *sellers.Registry, c cache.Cache, logger *logging.Logger) *Service {
+// NewService creates a new equipment service.
+func NewService(catalog gearCatalogReader, logger *logging.Logger) *Service {
 	return &Service{
-		registry: registry,
-		cache:    c,
-		logger:   logger,
-		products: make(map[string][]models.EquipmentItem),
+		catalog: catalog,
+		logger:  logger,
 	}
 }
 
-// Search searches for equipment across all registered sellers
+// Search searches for equipment in the shared gear catalog.
 func (s *Service) Search(ctx context.Context, params models.EquipmentSearchParams) (*models.EquipmentSearchResponse, error) {
-	adapters := s.registry.List()
-	if len(adapters) == 0 {
-		return &models.EquipmentSearchResponse{
-			Items:      []models.EquipmentItem{},
-			TotalCount: 0,
-			Page:       1,
-			PageSize:   params.Limit,
-		}, nil
+	limit := normalizeLimit(params.Limit)
+	offset := normalizeOffset(params.Offset)
+
+	if params.Seller != "" && params.Seller != catalogSellerID {
+		return nil, &ServiceError{Message: "Unknown seller: " + params.Seller}
 	}
 
-	// If a specific seller is requested, only search that one
-	if params.Seller != "" {
-		adapter := s.registry.Get(params.Seller)
-		if adapter == nil {
-			return nil, &ServiceError{Message: "Unknown seller: " + params.Seller}
-		}
-		adapters = []sellers.Adapter{adapter}
+	if s.catalog == nil {
+		return emptyResponse(limit, offset, params.Query), nil
 	}
 
-	limit := params.Limit
-	if limit <= 0 {
-		limit = 20
+	fetchLimit := limit + offset
+	if fetchLimit > 100 {
+		fetchLimit = 100
 	}
 
-	// If no query and no category, return featured products from all categories
-	if params.Query == "" && params.Category == "" {
-		return s.getFeaturedProducts(ctx, adapters, limit, params)
+	var (
+		items []models.EquipmentItem
+		err   error
+	)
+
+	if strings.TrimSpace(params.Query) == "" && strings.TrimSpace(string(params.Category)) == "" {
+		items, err = s.getPopularCatalogItems(ctx, fetchLimit)
+	} else {
+		items, err = s.searchCatalogItems(ctx, params, fetchLimit)
+	}
+	if err != nil {
+		return nil, err
 	}
 
-	// Search all adapters in parallel
-	var wg sync.WaitGroup
-	resultChan := make(chan []models.EquipmentItem, len(adapters))
-
-	for _, adapter := range adapters {
-		wg.Add(1)
-		go func(a sellers.Adapter) {
-			defer wg.Done()
-
-			items, err := a.Search(ctx, params.Query, params.Category, limit)
-			if err != nil {
-				s.logger.Warn("Search failed for seller", logging.WithFields(map[string]interface{}{
-					"seller": a.ID(),
-					"error":  err.Error(),
-				}))
-				return
-			}
-			resultChan <- items
-		}(adapter)
-	}
-
-	// Wait and collect results
-	go func() {
-		wg.Wait()
-		close(resultChan)
-	}()
-
-	var allItems []models.EquipmentItem
-	for items := range resultChan {
-		allItems = append(allItems, items...)
-	}
-
-	// Apply filters
-	allItems = s.applyFilters(allItems, params)
-
-	// Sort results
-	allItems = s.sortItems(allItems, params.Sort)
-
-	// Paginate
-	totalCount := len(allItems)
-	offset := params.Offset
-	if offset > totalCount {
-		offset = totalCount
-	}
-	end := offset + limit
-	if end > totalCount {
-		end = totalCount
-	}
-
-	pagedItems := allItems[offset:end]
+	filtered := s.applyFilters(items, params)
+	filtered = s.sortItems(filtered, params.Sort)
+	paged := paginate(filtered, limit, offset)
 
 	return &models.EquipmentSearchResponse{
-		Items:      pagedItems,
-		TotalCount: totalCount,
+		Items:      paged,
+		TotalCount: len(filtered),
 		Page:       (offset / limit) + 1,
 		PageSize:   limit,
 		Query:      params.Query,
 	}, nil
 }
 
-// GetByCategory returns equipment for a specific category
+// GetByCategory returns catalog equipment for a specific category.
 func (s *Service) GetByCategory(ctx context.Context, category models.EquipmentCategory, limit, offset int) (*models.EquipmentSearchResponse, error) {
-	adapters := s.registry.List()
-	if len(adapters) == 0 {
-		return &models.EquipmentSearchResponse{
-			Items:      []models.EquipmentItem{},
-			TotalCount: 0,
-		}, nil
-	}
-
-	if limit <= 0 {
-		limit = 20
-	}
-
-	// Get from all adapters in parallel
-	var wg sync.WaitGroup
-	resultChan := make(chan []models.EquipmentItem, len(adapters))
-
-	for _, adapter := range adapters {
-		wg.Add(1)
-		go func(a sellers.Adapter) {
-			defer wg.Done()
-
-			items, err := a.GetByCategory(ctx, category, limit, 0)
-			if err != nil {
-				s.logger.Warn("GetByCategory failed for seller", logging.WithFields(map[string]interface{}{
-					"seller":   a.ID(),
-					"category": category,
-					"error":    err.Error(),
-				}))
-				return
-			}
-			resultChan <- items
-		}(adapter)
-	}
-
-	// Wait and collect results
-	go func() {
-		wg.Wait()
-		close(resultChan)
-	}()
-
-	var allItems []models.EquipmentItem
-	for items := range resultChan {
-		allItems = append(allItems, items...)
-	}
-
-	// Sort by price ascending
-	sort.Slice(allItems, func(i, j int) bool {
-		return allItems[i].Price < allItems[j].Price
+	return s.Search(ctx, models.EquipmentSearchParams{
+		Category: category,
+		Limit:    limit,
+		Offset:   offset,
+		Sort:     "price_asc",
 	})
-
-	totalCount := len(allItems)
-	if offset > totalCount {
-		offset = totalCount
-	}
-	end := offset + limit
-	if end > totalCount {
-		end = totalCount
-	}
-
-	pagedItems := allItems[offset:end]
-
-	return &models.EquipmentSearchResponse{
-		Items:      pagedItems,
-		TotalCount: totalCount,
-		Page:       (offset / limit) + 1,
-		PageSize:   limit,
-	}, nil
 }
 
-// GetSellers returns information about all registered sellers
+// GetSellers returns the only catalog source exposed by the app.
 func (s *Service) GetSellers() []models.SellerInfo {
-	return s.registry.GetSellerInfo()
+	return []models.SellerInfo{
+		{
+			ID:          catalogSellerID,
+			Name:        catalogSellerName,
+			URL:         "/gear-catalog",
+			Description: "Curated community gear catalog",
+			Categories:  equipmentCategoryStrings(),
+			Enabled:     true,
+		},
+	}
 }
 
-// getFeaturedProducts returns a mix of products from all categories for browsing
-func (s *Service) getFeaturedProducts(ctx context.Context, adapters []sellers.Adapter, limit int, params models.EquipmentSearchParams) (*models.EquipmentSearchResponse, error) {
-	// Featured categories to show on initial browse
-	featuredCategories := []models.EquipmentCategory{
-		models.CategoryFrames,
-		models.CategoryMotors,
-		models.CategoryFC,
-		models.CategoryVTX,
-		models.CategoryCameras,
-		models.CategoryBatteries,
-	}
-
-	var wg sync.WaitGroup
-	resultChan := make(chan []models.EquipmentItem, len(adapters)*len(featuredCategories))
-
-	// Get a few items from each featured category from each adapter
-	itemsPerCategory := 3
-	if limit > 0 {
-		itemsPerCategory = (limit / len(featuredCategories)) + 1
-	}
-
-	for _, adapter := range adapters {
-		for _, cat := range featuredCategories {
-			wg.Add(1)
-			go func(a sellers.Adapter, category models.EquipmentCategory) {
-				defer wg.Done()
-
-				items, err := a.GetByCategory(ctx, category, itemsPerCategory, 0)
-				if err != nil {
-					s.logger.Debug("GetByCategory failed for featured", logging.WithFields(map[string]interface{}{
-						"seller":   a.ID(),
-						"category": category,
-						"error":    err.Error(),
-					}))
-					return
-				}
-				resultChan <- items
-			}(adapter, cat)
-		}
-	}
-
-	go func() {
-		wg.Wait()
-		close(resultChan)
-	}()
-
-	var allItems []models.EquipmentItem
-	for items := range resultChan {
-		allItems = append(allItems, items...)
-	}
-
-	// Apply any filters
-	allItems = s.applyFilters(allItems, params)
-
-	// Sort by category then price for nice browsing
-	sort.Slice(allItems, func(i, j int) bool {
-		if allItems[i].Category != allItems[j].Category {
-			return allItems[i].Category < allItems[j].Category
-		}
-		return allItems[i].Price < allItems[j].Price
-	})
-
-	totalCount := len(allItems)
-	offset := params.Offset
-	if offset > totalCount {
-		offset = totalCount
-	}
-	end := offset + limit
-	if end > totalCount {
-		end = totalCount
-	}
-
-	pagedItems := allItems[offset:end]
-
-	return &models.EquipmentSearchResponse{
-		Items:      pagedItems,
-		TotalCount: totalCount,
-		Page:       (offset / limit) + 1,
-		PageSize:   limit,
-	}, nil
-}
-
-// GetProduct gets a specific product by ID
+// GetProduct gets a specific catalog-backed product by ID.
 func (s *Service) GetProduct(ctx context.Context, productID string) (*models.EquipmentItem, error) {
-	// Determine seller from product ID prefix
-	var sellerID string
-	if strings.HasPrefix(productID, "rdq-") {
-		sellerID = "racedayquads"
-	} else if strings.HasPrefix(productID, "gfpv-") {
-		sellerID = "getfpv"
-	} else {
+	if s.catalog == nil {
+		return nil, &ServiceError{Message: "catalog unavailable"}
+	}
+
+	id := strings.TrimSpace(productID)
+	id = strings.TrimPrefix(id, "catalog-")
+	if id == "" {
 		return nil, &ServiceError{Message: "Unknown product ID format"}
 	}
 
-	adapter := s.registry.Get(sellerID)
-	if adapter == nil {
-		return nil, &ServiceError{Message: "Unknown seller for product"}
+	item, err := s.catalog.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if item == nil {
+		return nil, &ServiceError{Message: "product not found"}
 	}
 
-	return adapter.GetProduct(ctx, productID)
+	normalized := mapCatalogItemToEquipmentItem(*item)
+	return &normalized, nil
 }
 
-// SyncProducts triggers a product sync for all sellers
+// SyncProducts is kept as a no-op for backward compatibility.
 func (s *Service) SyncProducts(ctx context.Context) error {
-	adapters := s.registry.List()
-
-	var wg sync.WaitGroup
-	for _, adapter := range adapters {
-		wg.Add(1)
-		go func(a sellers.Adapter) {
-			defer wg.Done()
-			if err := a.SyncProducts(ctx); err != nil {
-				s.logger.Warn("SyncProducts failed for seller", logging.WithFields(map[string]interface{}{
-					"seller": a.ID(),
-					"error":  err.Error(),
-				}))
-			}
-		}(adapter)
-	}
-
-	wg.Wait()
 	return nil
 }
 
-// applyFilters applies search filters to items
+func (s *Service) getPopularCatalogItems(ctx context.Context, limit int) ([]models.EquipmentItem, error) {
+	items, err := s.catalog.GetPopular(ctx, "", limit)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Warn("Failed to get popular catalog items", logging.WithField("error", err.Error()))
+		}
+		return nil, &ServiceError{Message: "failed to fetch catalog items"}
+	}
+
+	return mapCatalogItems(items), nil
+}
+
+func (s *Service) searchCatalogItems(ctx context.Context, params models.EquipmentSearchParams, limit int) ([]models.EquipmentItem, error) {
+	searchParams := models.GearCatalogSearchParams{
+		Query:  strings.TrimSpace(params.Query),
+		Limit:  limit,
+		Offset: 0,
+	}
+
+	if gearType, ok := categoryToGearTypeFilter(params.Category); ok {
+		searchParams.GearType = gearType
+	}
+
+	response, err := s.catalog.Search(ctx, searchParams)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Warn("Catalog-backed equipment search failed", logging.WithField("error", err.Error()))
+		}
+		return nil, &ServiceError{Message: "search failed"}
+	}
+
+	return mapCatalogItems(response.Items), nil
+}
+
+func categoryToGearTypeFilter(category models.EquipmentCategory) (models.GearType, bool) {
+	switch category {
+	case "":
+		return "", false
+	case models.CategoryAccessories:
+		// "accessories" maps to multiple catalog gear types (radio/other), so filter post-query.
+		return "", false
+	default:
+		return models.GearTypeFromEquipmentCategory(category), true
+	}
+}
+
+func mapCatalogItems(items []models.GearCatalogItem) []models.EquipmentItem {
+	normalized := make([]models.EquipmentItem, 0, len(items))
+	for _, item := range items {
+		normalized = append(normalized, mapCatalogItemToEquipmentItem(item))
+	}
+	return normalized
+}
+
+func mapCatalogItemToEquipmentItem(item models.GearCatalogItem) models.EquipmentItem {
+	price := 0.0
+	if item.MSRP != nil {
+		price = *item.MSRP
+	}
+
+	name := item.DisplayName()
+	if name == "" {
+		name = strings.TrimSpace(item.Brand + " " + item.Model)
+	}
+	if name == "" {
+		name = item.CanonicalKey
+	}
+
+	productURL := "/gear-catalog"
+	for _, link := range item.ShoppingLinks {
+		trimmed := strings.TrimSpace(link)
+		if trimmed != "" {
+			productURL = trimmed
+			break
+		}
+	}
+
+	return models.EquipmentItem{
+		ID:           item.ID,
+		Name:         name,
+		Category:     item.GearType.ToEquipmentCategory(),
+		Manufacturer: item.Brand,
+		Price:        price,
+		Currency:     "USD",
+		Seller:       catalogSellerName,
+		SellerID:     catalogSellerID,
+		ProductURL:   productURL,
+		ImageURL:     item.ImageURL,
+		KeySpecs:     item.Specs,
+		InStock:      true,
+		LastChecked:  item.UpdatedAt,
+		Description:  item.Description,
+	}
+}
+
+func equipmentCategoryStrings() []string {
+	categories := models.AllCategories()
+	out := make([]string, 0, len(categories))
+	for _, category := range categories {
+		out = append(out, string(category))
+	}
+	return out
+}
+
+func emptyResponse(limit, offset int, query string) *models.EquipmentSearchResponse {
+	if limit <= 0 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	return &models.EquipmentSearchResponse{
+		Items:      []models.EquipmentItem{},
+		TotalCount: 0,
+		Page:       (offset / limit) + 1,
+		PageSize:   limit,
+		Query:      query,
+	}
+}
+
+func normalizeLimit(limit int) int {
+	if limit <= 0 {
+		return 20
+	}
+	if limit > 100 {
+		return 100
+	}
+	return limit
+}
+
+func normalizeOffset(offset int) int {
+	if offset < 0 {
+		return 0
+	}
+	return offset
+}
+
+func paginate(items []models.EquipmentItem, limit, offset int) []models.EquipmentItem {
+	if offset >= len(items) {
+		return []models.EquipmentItem{}
+	}
+
+	end := offset + limit
+	if end > len(items) {
+		end = len(items)
+	}
+	return items[offset:end]
+}
+
+// applyFilters applies search filters to items.
 func (s *Service) applyFilters(items []models.EquipmentItem, params models.EquipmentSearchParams) []models.EquipmentItem {
 	filtered := make([]models.EquipmentItem, 0, len(items))
 
@@ -359,7 +319,7 @@ func (s *Service) applyFilters(items []models.EquipmentItem, params models.Equip
 	return filtered
 }
 
-// sortItems sorts items by the specified criteria
+// sortItems sorts items by the specified criteria.
 func (s *Service) sortItems(items []models.EquipmentItem, sortBy string) []models.EquipmentItem {
 	switch sortBy {
 	case "price_asc":
