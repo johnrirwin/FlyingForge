@@ -126,6 +126,7 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationDropLegacyImageURLs,                       // Drops legacy image_url columns in favor of image_assets
 		migrationGearItemImageURLOverrides,                 // Adds back optional external image_url overrides for gear items
 		migrationGearCatalogAttributionAndShoppingLinks,    // Adds image source attribution + shopping links fields
+		migrationInventoryBatteryCategory,                  // Reclassifies catalog-linked battery inventory from accessories -> batteries
 	}
 
 	for i, migration := range migrations {
@@ -1004,4 +1005,14 @@ WHERE COALESCE(image_status, 'missing') = 'missing'
 const migrationGearCatalogAttributionAndShoppingLinks = `
 ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS image_source_domain VARCHAR(255);
 ALTER TABLE gear_catalog ADD COLUMN IF NOT EXISTS shopping_links TEXT[] DEFAULT '{}';
+`
+
+const migrationInventoryBatteryCategory = `
+UPDATE inventory_items i
+SET category = 'batteries',
+    updated_at = NOW()
+FROM gear_catalog gc
+WHERE i.catalog_id = gc.id
+  AND gc.gear_type = 'battery'
+  AND i.category = 'accessories';
 `

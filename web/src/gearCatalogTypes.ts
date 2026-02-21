@@ -203,7 +203,7 @@ export function gearTypeToEquipmentCategory(gearType: GearType): EquipmentCatego
     vtx: 'vtx',
     receiver: 'receivers',
     antenna: 'antennas',
-    battery: 'accessories', // Note: batteries is handled differently in existing code
+    battery: 'batteries',
     prop: 'propellers',
     radio: 'accessories',
     camera: 'cameras',
@@ -224,6 +224,7 @@ export function equipmentCategoryToGearType(category: EquipmentCategory): GearTy
     vtx: 'vtx',
     receivers: 'receiver',
     antennas: 'antenna',
+    batteries: 'battery',
     propellers: 'prop',
     cameras: 'camera',
     accessories: 'other',

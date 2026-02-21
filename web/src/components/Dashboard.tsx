@@ -131,6 +131,7 @@ const categoryDisplayNames: Record<EquipmentCategory, string> = {
   motors: 'Motor',
   propellers: 'Propeller',
   receivers: 'Receiver',
+  batteries: 'Battery',
   cameras: 'Camera',
   antennas: 'Antenna',
   accessories: 'Accessory',
