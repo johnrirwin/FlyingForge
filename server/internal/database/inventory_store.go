@@ -503,8 +503,8 @@ func (s *InventoryStore) GetSummary(ctx context.Context, userID string) (*models
 			return nil, fmt.Errorf("failed to scan inventory summary row: %w", err)
 		}
 
-		summary.TotalItems++
-		summary.ByCategory[category]++
+		summary.TotalItems += quantity
+		summary.ByCategory[category] += quantity
 
 		var pricePtr *float64
 		if purchasePrice.Valid {
