@@ -134,6 +134,7 @@ const categoryDisplayNames: Record<EquipmentCategory, string> = {
   batteries: 'Battery',
   cameras: 'Camera',
   antennas: 'Antenna',
+  gps: 'GPS',
   accessories: 'Accessory',
 };
 

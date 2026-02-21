@@ -129,6 +129,11 @@ func TestMapComponentToEquipmentCategory(t *testing.T) {
 			input:    models.ComponentCategory("stacks"),
 			expected: models.CategoryStacks,
 		},
+		{
+			name:     "maps gps to gps equipment category",
+			input:    models.ComponentCategoryGPS,
+			expected: models.CategoryGPS,
+		},
 	}
 
 	for _, tt := range tests {

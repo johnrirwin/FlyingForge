@@ -22,6 +22,7 @@ func TestEquipmentCategory_Values(t *testing.T) {
 		{"batteries", CategoryBatteries, "batteries"},
 		{"cameras", CategoryCameras, "cameras"},
 		{"antennas", CategoryAntennas, "antennas"},
+		{"gps", CategoryGPS, "gps"},
 		{"accessories", CategoryAccessories, "accessories"},
 	}
 
@@ -37,9 +38,9 @@ func TestEquipmentCategory_Values(t *testing.T) {
 func TestAllCategories(t *testing.T) {
 	categories := AllCategories()
 
-	// Should have 13 categories
-	if len(categories) != 13 {
-		t.Errorf("AllCategories() returned %d categories, want 13", len(categories))
+	// Should have 14 categories
+	if len(categories) != 14 {
+		t.Errorf("AllCategories() returned %d categories, want 14", len(categories))
 	}
 
 	// All categories should be non-empty
@@ -63,6 +64,7 @@ func TestAllCategories(t *testing.T) {
 		CategoryBatteries:   false,
 		CategoryCameras:     false,
 		CategoryAntennas:    false,
+		CategoryGPS:         false,
 		CategoryAccessories: false,
 	}
 

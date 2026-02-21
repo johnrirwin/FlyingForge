@@ -48,4 +48,12 @@ describe('stack gear type support', () => {
   it('maps batteries inventory category back to battery gear type', () => {
     expect(equipmentCategoryToGearType('batteries')).toBe('battery');
   });
+
+  it('maps gps gear type to gps inventory category', () => {
+    expect(gearTypeToEquipmentCategory('gps')).toBe('gps');
+  });
+
+  it('maps gps inventory category back to gps gear type', () => {
+    expect(equipmentCategoryToGearType('gps')).toBe('gps');
+  });
 });

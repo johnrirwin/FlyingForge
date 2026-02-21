@@ -345,6 +345,7 @@ export function AircraftDetail({
                           {cat.value === 'frame' && '🏗️'}
                           {cat.value === 'props' && '🍃'}
                           {cat.value === 'antenna' && '📶'}
+                          {cat.value === 'gps' && '🛰️'}
                         </div>
                         <div>
                           <h4 className="text-white font-medium">{cat.label}</h4>

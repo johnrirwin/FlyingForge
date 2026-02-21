@@ -270,6 +270,12 @@ func TestAircraftComponentCategoryAliasMapping(t *testing.T) {
 			gearType: models.GearTypeStack,
 			eqCat:    models.CategoryStacks,
 		},
+		{
+			name:     "gps component category",
+			category: models.ComponentCategoryGPS,
+			gearType: models.GearTypeGPS,
+			eqCat:    models.CategoryGPS,
+		},
 	}
 
 	for _, tt := range tests {

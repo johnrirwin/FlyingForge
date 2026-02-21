@@ -56,7 +56,8 @@ export function PublicBuildDetailsPage() {
     { label: 'Camera', part: partsByType.get('camera') },
     { label: 'Propellers', part: partsByType.get('prop') },
     { label: 'Antenna', part: partsByType.get('antenna') },
-    { label: 'GPS / Other', part: partsByType.get('other') },
+    { label: 'GPS', part: partsByType.get('gps') },
+    { label: 'Other', part: partsByType.get('other') },
   ];
 
   const handleBuildYourOwn = useCallback(async () => {

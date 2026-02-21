@@ -11,6 +11,7 @@ export type GearType =
   | 'vtx'
   | 'receiver'
   | 'antenna'
+  | 'gps'
   | 'battery'
   | 'prop'
   | 'radio'
@@ -27,6 +28,7 @@ export const GEAR_TYPES: { value: GearType; label: string }[] = [
   { value: 'vtx', label: 'Video Transmitters' },
   { value: 'receiver', label: 'Receivers' },
   { value: 'antenna', label: 'Antennas' },
+  { value: 'gps', label: 'GPS' },
   { value: 'battery', label: 'Batteries' },
   { value: 'prop', label: 'Propellers' },
   { value: 'radio', label: 'Radios' },
@@ -203,6 +205,7 @@ export function gearTypeToEquipmentCategory(gearType: GearType): EquipmentCatego
     vtx: 'vtx',
     receiver: 'receivers',
     antenna: 'antennas',
+    gps: 'gps',
     battery: 'batteries',
     prop: 'propellers',
     radio: 'accessories',
@@ -224,6 +227,7 @@ export function equipmentCategoryToGearType(category: EquipmentCategory): GearTy
     vtx: 'vtx',
     receivers: 'receiver',
     antennas: 'antenna',
+    gps: 'gps',
     batteries: 'battery',
     propellers: 'prop',
     cameras: 'camera',

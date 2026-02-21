@@ -44,7 +44,8 @@ const OPTIONAL_ROWS: BuildRow[] = [
   { label: 'Camera', gearType: 'camera', categoryKey: 'camera' },
   { label: 'Propellers', gearType: 'prop', categoryKey: 'prop' },
   { label: 'Antenna', gearType: 'antenna', categoryKey: 'antenna' },
-  { label: 'GPS / Other', gearType: 'other', categoryKey: 'other' },
+  { label: 'GPS', gearType: 'gps', categoryKey: 'gps' },
+  { label: 'Other', gearType: 'other', categoryKey: 'other' },
 ];
 
 export function BuildBuilder({

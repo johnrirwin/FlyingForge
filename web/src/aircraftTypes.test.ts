@@ -9,4 +9,12 @@ describe('aircraft component categories', () => {
       equipmentCategory: 'stacks',
     });
   });
+
+  it('includes GPS as an assignable component', () => {
+    expect(COMPONENT_CATEGORIES).toContainEqual({
+      value: 'gps',
+      label: 'GPS',
+      equipmentCategory: 'gps',
+    });
+  });
 });

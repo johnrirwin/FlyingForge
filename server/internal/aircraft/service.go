@@ -428,6 +428,8 @@ func mapComponentToEquipmentCategory(category models.ComponentCategory) models.E
 		return models.CategoryPropellers
 	case models.ComponentCategoryAntenna:
 		return models.CategoryAntennas
+	case models.ComponentCategoryGPS:
+		return models.CategoryGPS
 	default:
 		return models.CategoryAccessories
 	}

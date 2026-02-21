@@ -21,6 +21,7 @@ const (
 	CategoryBatteries   EquipmentCategory = "batteries"
 	CategoryCameras     EquipmentCategory = "cameras"
 	CategoryAntennas    EquipmentCategory = "antennas"
+	CategoryGPS         EquipmentCategory = "gps"
 	CategoryAccessories EquipmentCategory = "accessories"
 )
 
@@ -39,6 +40,7 @@ func AllCategories() []EquipmentCategory {
 		CategoryBatteries,
 		CategoryCameras,
 		CategoryAntennas,
+		CategoryGPS,
 		CategoryAccessories,
 	}
 }

@@ -49,7 +49,8 @@ export type ComponentCategory =
   | 'camera' 
   | 'frame' 
   | 'propellers' 
-  | 'antenna';
+  | 'antenna'
+  | 'gps';
 
 // Public component info (no purchase details)
 // NOTE: Purchase price, seller, and notes are intentionally omitted for privacy

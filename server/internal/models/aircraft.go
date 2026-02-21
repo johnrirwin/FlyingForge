@@ -33,6 +33,7 @@ const (
 	ComponentCategoryFrame    ComponentCategory = "frame"
 	ComponentCategoryProps    ComponentCategory = "propellers"
 	ComponentCategoryAntenna  ComponentCategory = "antenna"
+	ComponentCategoryGPS      ComponentCategory = "gps"
 )
 
 // NormalizeComponentCategory trims and canonicalizes component category aliases.
