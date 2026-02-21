@@ -387,7 +387,7 @@ func (s *InMemoryService) GetSummary(ctx context.Context, userID string) (*model
 		}
 		summary.TotalItems += item.Quantity
 		summary.TotalValue += models.CalculateInventoryItemTotalValue(item.Quantity, item.PurchasePrice, item.Specs)
-		summary.ByCategory[item.Category]++
+		summary.ByCategory[item.Category] += item.Quantity
 	}
 
 	return summary, nil
