@@ -42,6 +42,7 @@ export type ComponentCategory =
   | 'fc' 
   | 'esc' 
   | 'aio'
+  | 'stack'
   | 'receiver' 
   | 'vtx' 
   | 'motors' 

@@ -25,6 +25,7 @@ const (
 	ComponentCategoryFC       ComponentCategory = "fc"
 	ComponentCategoryESC      ComponentCategory = "esc"
 	ComponentCategoryAIO      ComponentCategory = "aio"
+	ComponentCategoryStack    ComponentCategory = "stack"
 	ComponentCategoryReceiver ComponentCategory = "receiver"
 	ComponentCategoryVTX      ComponentCategory = "vtx"
 	ComponentCategoryMotors   ComponentCategory = "motors"
@@ -40,6 +41,8 @@ func NormalizeComponentCategory(category ComponentCategory) ComponentCategory {
 	switch normalized {
 	case "props":
 		return ComponentCategoryProps
+	case "stacks":
+		return ComponentCategoryStack
 	default:
 		return normalized
 	}

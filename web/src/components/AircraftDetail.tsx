@@ -336,6 +336,8 @@ export function AircraftDetail({
                         <div className="w-10 h-10 bg-slate-600 rounded-lg flex items-center justify-center text-xl">
                           {cat.value === 'fc' && '🧠'}
                           {cat.value === 'esc' && '⚡'}
+                          {cat.value === 'aio' && '🔌'}
+                          {cat.value === 'stack' && '🧩'}
                           {cat.value === 'receiver' && '📡'}
                           {cat.value === 'vtx' && '📺'}
                           {cat.value === 'motors' && '🔄'}

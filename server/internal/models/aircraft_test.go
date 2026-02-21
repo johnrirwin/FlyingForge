@@ -36,6 +36,7 @@ func TestComponentCategory_Values(t *testing.T) {
 		{"fc", ComponentCategoryFC, "fc"},
 		{"esc", ComponentCategoryESC, "esc"},
 		{"aio", ComponentCategoryAIO, "aio"},
+		{"stack", ComponentCategoryStack, "stack"},
 		{"receiver", ComponentCategoryReceiver, "receiver"},
 		{"vtx", ComponentCategoryVTX, "vtx"},
 		{"motors", ComponentCategoryMotors, "motors"},
@@ -80,6 +81,7 @@ func TestNormalizeComponentCategory(t *testing.T) {
 		{name: "canonical fc", input: ComponentCategoryFC, expected: ComponentCategoryFC},
 		{name: "canonical propellers", input: ComponentCategoryProps, expected: ComponentCategoryProps},
 		{name: "legacy props alias", input: ComponentCategory("props"), expected: ComponentCategoryProps},
+		{name: "legacy stacks alias", input: ComponentCategory("stacks"), expected: ComponentCategoryStack},
 		{name: "trim and lowercase", input: ComponentCategory("  ProPs  "), expected: ComponentCategoryProps},
 		{name: "unknown passes through normalized", input: ComponentCategory("  custom  "), expected: ComponentCategory("custom")},
 	}

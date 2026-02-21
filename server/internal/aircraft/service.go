@@ -406,6 +406,10 @@ func (s *Service) DeleteImage(ctx context.Context, aircraftID string, userID str
 // mapComponentToEquipmentCategory maps aircraft component category to equipment category
 func mapComponentToEquipmentCategory(category models.ComponentCategory) models.EquipmentCategory {
 	switch models.NormalizeComponentCategory(category) {
+	case models.ComponentCategoryAIO:
+		return models.CategoryAIO
+	case models.ComponentCategoryStack:
+		return models.CategoryStacks
 	case models.ComponentCategoryFC:
 		return models.CategoryFC
 	case models.ComponentCategoryESC:

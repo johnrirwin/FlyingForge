@@ -33,6 +33,23 @@ function revokeBlobUrl(url?: string | null) {
   }
 }
 
+const POWER_STACK_VALIDATION_ERROR: BuildValidationError = {
+  category: 'power-stack',
+  code: 'missing_required',
+  message: 'Power stack requires an AIO, an FC/ESC stack, or both FC and ESC',
+};
+
+function hasPowerStackRequirement(parts: Build['parts'] | undefined): boolean {
+  if (!parts || parts.length === 0) {
+    return false;
+  }
+  const hasAIO = parts.some((part) => part.gearType === 'aio' && !!part.catalogItemId);
+  const hasStack = parts.some((part) => part.gearType === 'stack' && !!part.catalogItemId);
+  const hasFC = parts.some((part) => part.gearType === 'fc' && !!part.catalogItemId);
+  const hasESC = parts.some((part) => part.gearType === 'esc' && !!part.catalogItemId);
+  return hasAIO || hasStack || (hasFC && hasESC);
+}
+
 export function MyBuildsPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -167,10 +184,18 @@ export function MyBuildsPage() {
 
   const handleSave = async () => {
     if (!editorBuild) return;
+    if (!hasPowerStackRequirement(editorBuild.parts)) {
+      setValidationErrors((prev) => {
+        const withoutPower = prev.filter((err) => err.category !== 'power-stack');
+        return [...withoutPower, POWER_STACK_VALIDATION_ERROR];
+      });
+      return;
+    }
 
     setIsSaving(true);
     setError(null);
     try {
+      setValidationErrors((prev) => prev.filter((err) => err.category !== 'power-stack'));
       const updated = await updateMyBuild(editorBuild.id, {
         title: editorBuild.title,
         description: editorBuild.description,
@@ -570,7 +595,7 @@ export function MyBuildsPage() {
 
                 {validationErrors.length > 0 && (
                   <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
-                    <p className="font-medium">Publishing is blocked:</p>
+                    <p className="font-medium">Build requirements are not met:</p>
                     <ul className="mt-1 list-inside list-disc space-y-1 text-xs">
                       {validationErrors.map((validation) => (
                         <li key={`${validation.category}-${validation.code}-${validation.message}`}>{validation.message}</li>

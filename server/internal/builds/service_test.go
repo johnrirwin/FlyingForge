@@ -88,6 +88,72 @@ func TestValidateForPublish_PowerStackLogic(t *testing.T) {
 	}
 }
 
+func TestIsBuildVerified_RequiresCompletePowerStack(t *testing.T) {
+	baseCore := []models.BuildPart{
+		{GearType: models.GearTypeFrame, CatalogItemID: "frame-1", CatalogItem: publishedCatalog("frame-1", models.GearTypeFrame)},
+		{GearType: models.GearTypeMotor, CatalogItemID: "motor-1", CatalogItem: publishedCatalog("motor-1", models.GearTypeMotor)},
+		{GearType: models.GearTypeReceiver, CatalogItemID: "rx-1", CatalogItem: publishedCatalog("rx-1", models.GearTypeReceiver)},
+		{GearType: models.GearTypeVTX, CatalogItemID: "vtx-1", CatalogItem: publishedCatalog("vtx-1", models.GearTypeVTX)},
+	}
+
+	tests := []struct {
+		name     string
+		parts    []models.BuildPart
+		expected bool
+	}{
+		{
+			name: "verified with aio",
+			parts: append(append([]models.BuildPart{}, baseCore...),
+				models.BuildPart{GearType: models.GearTypeAIO, CatalogItemID: "aio-1", CatalogItem: publishedCatalog("aio-1", models.GearTypeAIO)},
+			),
+			expected: true,
+		},
+		{
+			name: "verified with stack",
+			parts: append(append([]models.BuildPart{}, baseCore...),
+				models.BuildPart{GearType: models.GearTypeStack, CatalogItemID: "stack-1", CatalogItem: publishedCatalog("stack-1", models.GearTypeStack)},
+			),
+			expected: true,
+		},
+		{
+			name: "verified with fc and esc",
+			parts: append(append([]models.BuildPart{}, baseCore...),
+				models.BuildPart{GearType: models.GearTypeFC, CatalogItemID: "fc-1", CatalogItem: publishedCatalog("fc-1", models.GearTypeFC)},
+				models.BuildPart{GearType: models.GearTypeESC, CatalogItemID: "esc-1", CatalogItem: publishedCatalog("esc-1", models.GearTypeESC)},
+			),
+			expected: true,
+		},
+		{
+			name: "not verified with fc only",
+			parts: append(append([]models.BuildPart{}, baseCore...),
+				models.BuildPart{GearType: models.GearTypeFC, CatalogItemID: "fc-1", CatalogItem: publishedCatalog("fc-1", models.GearTypeFC)},
+			),
+			expected: false,
+		},
+		{
+			name: "not verified with esc only",
+			parts: append(append([]models.BuildPart{}, baseCore...),
+				models.BuildPart{GearType: models.GearTypeESC, CatalogItemID: "esc-1", CatalogItem: publishedCatalog("esc-1", models.GearTypeESC)},
+			),
+			expected: false,
+		},
+		{
+			name:     "not verified without power components",
+			parts:    append([]models.BuildPart{}, baseCore...),
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			build := &models.Build{Parts: tt.parts}
+			if got := isBuildVerified(build); got != tt.expected {
+				t.Fatalf("isBuildVerified() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestValidateForPublish_FromAircraftRequiresPublishedCatalogParts(t *testing.T) {
 	build := &models.Build{
 		ImageAssetID:     "asset-1",
@@ -191,6 +257,18 @@ func TestAircraftComponentCategoryAliasMapping(t *testing.T) {
 			category: models.ComponentCategoryProps,
 			gearType: models.GearTypeProp,
 			eqCat:    models.CategoryPropellers,
+		},
+		{
+			name:     "stack component category",
+			category: models.ComponentCategoryStack,
+			gearType: models.GearTypeStack,
+			eqCat:    models.CategoryStacks,
+		},
+		{
+			name:     "plural stacks alias",
+			category: models.ComponentCategory("stacks"),
+			gearType: models.GearTypeStack,
+			eqCat:    models.CategoryStacks,
 		},
 	}
 

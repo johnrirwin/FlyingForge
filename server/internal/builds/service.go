@@ -879,7 +879,7 @@ func ValidateForPublish(build *models.Build) models.BuildValidationResult {
 	hasStack := hasPart(build.Parts, models.GearTypeStack)
 	hasFC := hasPart(build.Parts, models.GearTypeFC)
 	hasESC := hasPart(build.Parts, models.GearTypeESC)
-	if !hasAIO && !hasStack && (!hasFC || !hasESC) {
+	if !hasCompletePowerStack(build.Parts) {
 		errors = append(errors, models.BuildValidationError{
 			Category: "power-stack",
 			Code:     "missing_required",
@@ -1000,6 +1000,29 @@ func hasPart(parts []models.BuildPart, gearType models.GearType) bool {
 	return false
 }
 
+func hasCompletePowerStack(parts []models.BuildPart) bool {
+	hasAIO := hasPart(parts, models.GearTypeAIO)
+	hasStack := hasPart(parts, models.GearTypeStack)
+	hasFC := hasPart(parts, models.GearTypeFC)
+	hasESC := hasPart(parts, models.GearTypeESC)
+	return hasAIO || hasStack || (hasFC && hasESC)
+}
+
+func hasRequiredCoreParts(parts []models.BuildPart) bool {
+	required := []models.GearType{
+		models.GearTypeFrame,
+		models.GearTypeMotor,
+		models.GearTypeReceiver,
+		models.GearTypeVTX,
+	}
+	for _, gearType := range required {
+		if !hasPart(parts, gearType) {
+			return false
+		}
+	}
+	return hasCompletePowerStack(parts)
+}
+
 func findFirstPart(parts []models.BuildPart, gearType models.GearType) *models.BuildPart {
 	for i := range parts {
 		if parts[i].GearType == gearType {
@@ -1014,6 +1037,9 @@ func isBuildVerified(build *models.Build) bool {
 		return false
 	}
 	if len(build.Parts) == 0 {
+		return false
+	}
+	if !hasRequiredCoreParts(build.Parts) {
 		return false
 	}
 	for _, part := range build.Parts {
@@ -1031,13 +1057,15 @@ func isBuildVerified(build *models.Build) bool {
 }
 
 func aircraftComponentToGearType(category models.ComponentCategory) models.GearType {
-	switch category {
+	switch models.NormalizeComponentCategory(category) {
 	case models.ComponentCategoryFrame:
 		return models.GearTypeFrame
 	case models.ComponentCategoryMotors:
 		return models.GearTypeMotor
 	case models.ComponentCategoryAIO:
 		return models.GearTypeAIO
+	case models.ComponentCategoryStack:
+		return models.GearTypeStack
 	case models.ComponentCategoryFC:
 		return models.GearTypeFC
 	case models.ComponentCategoryESC:
@@ -1058,13 +1086,15 @@ func aircraftComponentToGearType(category models.ComponentCategory) models.GearT
 }
 
 func componentCategoryToEquipmentCategory(category models.ComponentCategory) models.EquipmentCategory {
-	switch category {
+	switch models.NormalizeComponentCategory(category) {
 	case models.ComponentCategoryFrame:
 		return models.CategoryFrames
 	case models.ComponentCategoryMotors:
 		return models.CategoryMotors
 	case models.ComponentCategoryAIO:
 		return models.CategoryAIO
+	case models.ComponentCategoryStack:
+		return models.CategoryStacks
 	case models.ComponentCategoryFC:
 		return models.CategoryFC
 	case models.ComponentCategoryESC:
