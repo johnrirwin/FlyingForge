@@ -40,4 +40,12 @@ describe('stack gear type support', () => {
   it('exposes stack in gear type selector options', () => {
     expect(GEAR_TYPES.some((entry) => entry.value === 'stack')).toBe(true);
   });
+
+  it('maps battery gear type to batteries inventory category', () => {
+    expect(gearTypeToEquipmentCategory('battery')).toBe('batteries');
+  });
+
+  it('maps batteries inventory category back to battery gear type', () => {
+    expect(equipmentCategoryToGearType('batteries')).toBe('battery');
+  });
 });

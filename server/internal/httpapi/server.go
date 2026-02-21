@@ -87,7 +87,7 @@ func (s *Server) Start(addr string) error {
 	}
 
 	// Equipment and inventory routes
-	equipmentAPI := NewEquipmentAPI(s.equipmentSvc, s.inventorySvc, s.authMiddleware, s.logger)
+	equipmentAPI := NewEquipmentAPI(s.equipmentSvc, s.inventorySvc, s.batterySvc, s.authMiddleware, s.logger)
 	equipmentAPI.RegisterRoutes(mux, s.corsMiddleware)
 
 	// Aircraft routes
