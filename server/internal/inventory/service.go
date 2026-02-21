@@ -386,9 +386,7 @@ func (s *InMemoryService) GetSummary(ctx context.Context, userID string) (*model
 			continue
 		}
 		summary.TotalItems += item.Quantity
-		if item.PurchasePrice != nil {
-			summary.TotalValue += *item.PurchasePrice * float64(item.Quantity)
-		}
+		summary.TotalValue += models.CalculateInventoryItemTotalValue(item.Quantity, item.PurchasePrice, item.Specs)
 		summary.ByCategory[item.Category]++
 	}
 
