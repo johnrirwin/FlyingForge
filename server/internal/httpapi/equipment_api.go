@@ -19,8 +19,11 @@ import (
 )
 
 const (
-	defaultBatteryCells       = 4
-	defaultBatteryCapacityMah = 1500
+	defaultBatteryCells           = 4
+	defaultBatteryCapacityMah     = 1500
+	batteryTrackingBaseTimeout    = 15 * time.Second
+	batteryTrackingPerItemTimeout = 1200 * time.Millisecond
+	batteryTrackingMaxTimeout     = 90 * time.Second
 )
 
 var (
@@ -37,6 +40,11 @@ var (
 
 type batteryCreator interface {
 	Create(ctx context.Context, userID string, params models.CreateBatteryParams) (*models.Battery, error)
+}
+
+type inventoryItemCreateResponse struct {
+	models.InventoryItem
+	Warning string `json:"warning,omitempty"`
 }
 
 // EquipmentAPI handles HTTP API requests for equipment and inventory
@@ -296,7 +304,32 @@ func (api *EquipmentAPI) addInventoryItem(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	api.createTrackedBatteries(ctx, userID, params)
+	createdBatteries := 0
+	if api.batterySvc != nil && params.Category == models.CategoryBatteries {
+		batteryCtx, batteryCancel := context.WithTimeout(context.WithoutCancel(r.Context()), batteryTrackingTimeout(params.Quantity))
+		defer batteryCancel()
+
+		createdBatteries = api.createTrackedBatteries(batteryCtx, userID, params)
+		expectedBatteries := normalizeBatteryQuantity(params.Quantity)
+		if createdBatteries < expectedBatteries {
+			warning := fmt.Sprintf(
+				"Created inventory item, but battery tracker setup was partial (%d of %d created).",
+				createdBatteries,
+				expectedBatteries,
+			)
+			api.logger.Warn("Battery tracker setup partially failed", logging.WithFields(map[string]interface{}{
+				"user_id":  userID,
+				"item_id":  item.ID,
+				"expected": expectedBatteries,
+				"created":  createdBatteries,
+			}))
+			api.writeJSON(w, http.StatusCreated, inventoryItemCreateResponse{
+				InventoryItem: *item,
+				Warning:       warning,
+			})
+			return
+		}
+	}
 
 	api.writeJSON(w, http.StatusCreated, item)
 }
@@ -306,10 +339,7 @@ func (api *EquipmentAPI) createTrackedBatteries(ctx context.Context, userID stri
 		return 0
 	}
 
-	quantity := params.Quantity
-	if quantity <= 0 {
-		quantity = 1
-	}
+	quantity := normalizeBatteryQuantity(params.Quantity)
 
 	createParams := inferBatteryCreateParams(params)
 	created := 0
@@ -328,6 +358,22 @@ func (api *EquipmentAPI) createTrackedBatteries(ctx context.Context, userID stri
 	}
 
 	return created
+}
+
+func normalizeBatteryQuantity(quantity int) int {
+	if quantity <= 0 {
+		return 1
+	}
+	return quantity
+}
+
+func batteryTrackingTimeout(quantity int) time.Duration {
+	normalizedQuantity := normalizeBatteryQuantity(quantity)
+	timeout := batteryTrackingBaseTimeout + (time.Duration(normalizedQuantity) * batteryTrackingPerItemTimeout)
+	if timeout > batteryTrackingMaxTimeout {
+		return batteryTrackingMaxTimeout
+	}
+	return timeout
 }
 
 func inferBatteryCreateParams(params models.AddInventoryParams) models.CreateBatteryParams {

@@ -63,10 +63,14 @@ func (m *mockInventoryManager) GetSummary(ctx context.Context, userID string) (*
 type mockBatteryCreator struct {
 	createCalls []models.CreateBatteryParams
 	createErr   error
+	failOnCall  int
 }
 
 func (m *mockBatteryCreator) Create(ctx context.Context, userID string, params models.CreateBatteryParams) (*models.Battery, error) {
 	m.createCalls = append(m.createCalls, params)
+	if m.failOnCall > 0 && len(m.createCalls) >= m.failOnCall {
+		return nil, &models.ValidationError{Field: "battery", Message: "simulated battery create failure"}
+	}
 	if m.createErr != nil {
 		return nil, m.createErr
 	}
@@ -214,5 +218,68 @@ func TestInferBatteryCreateParams_Defaults(t *testing.T) {
 	}
 	if got.CapacityMah != defaultBatteryCapacityMah {
 		t.Fatalf("CapacityMah = %d, want %d", got.CapacityMah, defaultBatteryCapacityMah)
+	}
+}
+
+func TestAddInventoryItem_PartialBatteryCreationIncludesWarning(t *testing.T) {
+	inventory := &mockInventoryManager{
+		addItem: &models.InventoryItem{
+			ID:       "inv-battery-partial",
+			Category: models.CategoryBatteries,
+			Quantity: 3,
+		},
+	}
+	battery := &mockBatteryCreator{
+		failOnCall: 2,
+	}
+
+	api := &EquipmentAPI{
+		inventorySvc: inventory,
+		batterySvc:   battery,
+		logger:       logging.New(logging.LevelError),
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/inventory", strings.NewReader(`{
+		"name":"Tattu 1400mAh 6S",
+		"category":"batteries",
+		"quantity":3
+	}`))
+	req = req.WithContext(context.WithValue(req.Context(), auth.UserIDKey, "user-123"))
+	w := httptest.NewRecorder()
+
+	api.addInventoryItem(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusCreated)
+	}
+
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response body: %v", err)
+	}
+
+	if gotID, _ := response["id"].(string); gotID != "inv-battery-partial" {
+		t.Fatalf("response id = %q, want inv-battery-partial", gotID)
+	}
+
+	warning, ok := response["warning"].(string)
+	if !ok || warning == "" {
+		t.Fatalf("expected warning in response, got: %#v", response["warning"])
+	}
+	if !strings.Contains(warning, "1 of 3") {
+		t.Fatalf("warning = %q, want partial creation detail", warning)
+	}
+}
+
+func TestBatteryTrackingTimeoutScalesAndCaps(t *testing.T) {
+	small := batteryTrackingTimeout(1)
+	large := batteryTrackingTimeout(30)
+	if large <= small {
+		t.Fatalf("batteryTrackingTimeout(30) = %v, want > %v", large, small)
+	}
+
+	capped := batteryTrackingTimeout(500)
+	if capped != batteryTrackingMaxTimeout {
+		t.Fatalf("batteryTrackingTimeout(500) = %v, want %v", capped, batteryTrackingMaxTimeout)
 	}
 }
