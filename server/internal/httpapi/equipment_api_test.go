@@ -14,9 +14,14 @@ import (
 )
 
 type mockInventoryManager struct {
-	added   []models.AddInventoryParams
-	addItem *models.InventoryItem
-	addErr  error
+	added       []models.AddInventoryParams
+	addItem     *models.InventoryItem
+	addErr      error
+	getItem     *models.InventoryItem
+	getItemErr  error
+	updateItem  *models.InventoryItem
+	updateErr   error
+	updateCalls []models.UpdateInventoryParams
 }
 
 func (m *mockInventoryManager) AddItem(ctx context.Context, userID string, params models.AddInventoryParams) (*models.InventoryItem, error) {
@@ -41,7 +46,10 @@ func (m *mockInventoryManager) AddFromEquipment(ctx context.Context, userID stri
 }
 
 func (m *mockInventoryManager) GetItem(ctx context.Context, id string, userID string) (*models.InventoryItem, error) {
-	return nil, nil
+	if m.getItemErr != nil {
+		return nil, m.getItemErr
+	}
+	return m.getItem, nil
 }
 
 func (m *mockInventoryManager) GetInventory(ctx context.Context, userID string, params models.InventoryFilterParams) (*models.InventoryResponse, error) {
@@ -49,7 +57,19 @@ func (m *mockInventoryManager) GetInventory(ctx context.Context, userID string, 
 }
 
 func (m *mockInventoryManager) UpdateItem(ctx context.Context, userID string, params models.UpdateInventoryParams) (*models.InventoryItem, error) {
-	return nil, nil
+	m.updateCalls = append(m.updateCalls, params)
+	if m.updateErr != nil {
+		return nil, m.updateErr
+	}
+	if m.updateItem != nil {
+		return m.updateItem, nil
+	}
+	return &models.InventoryItem{
+		ID:       params.ID,
+		UserID:   userID,
+		Category: models.CategoryAccessories,
+		Quantity: 1,
+	}, nil
 }
 
 func (m *mockInventoryManager) RemoveItem(ctx context.Context, id string, userID string) error {
@@ -281,5 +301,105 @@ func TestBatteryTrackingTimeoutScalesAndCaps(t *testing.T) {
 	capped := batteryTrackingTimeout(500)
 	if capped != batteryTrackingMaxTimeout {
 		t.Fatalf("batteryTrackingTimeout(500) = %v, want %v", capped, batteryTrackingMaxTimeout)
+	}
+}
+
+func TestUpdateInventoryItem_IncreasingBatteryQuantityCreatesDeltaTrackers(t *testing.T) {
+	inventory := &mockInventoryManager{
+		getItem: &models.InventoryItem{
+			ID:       "inv-battery-1",
+			Name:     "Tattu 1300mAh 6S",
+			Category: models.CategoryBatteries,
+			Quantity: 1,
+		},
+		updateItem: &models.InventoryItem{
+			ID:       "inv-battery-1",
+			Name:     "Tattu 1300mAh 6S",
+			Category: models.CategoryBatteries,
+			Quantity: 6,
+		},
+	}
+	battery := &mockBatteryCreator{}
+
+	api := &EquipmentAPI{
+		inventorySvc: inventory,
+		batterySvc:   battery,
+		logger:       logging.New(logging.LevelError),
+	}
+
+	req := httptest.NewRequest(http.MethodPut, "/api/inventory/inv-battery-1", strings.NewReader(`{"quantity":6}`))
+	req = req.WithContext(context.WithValue(req.Context(), auth.UserIDKey, "user-123"))
+	w := httptest.NewRecorder()
+
+	api.updateInventoryItem(w, req, "inv-battery-1")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if len(inventory.updateCalls) != 1 {
+		t.Fatalf("update calls = %d, want 1", len(inventory.updateCalls))
+	}
+	if len(battery.createCalls) != 5 {
+		t.Fatalf("battery Create calls = %d, want 5", len(battery.createCalls))
+	}
+
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response body: %v", err)
+	}
+	if _, hasWarning := response["warning"]; hasWarning {
+		t.Fatalf("did not expect warning, got: %v", response["warning"])
+	}
+}
+
+func TestUpdateInventoryItem_PartialDeltaBatteryCreationIncludesWarning(t *testing.T) {
+	inventory := &mockInventoryManager{
+		getItem: &models.InventoryItem{
+			ID:       "inv-battery-2",
+			Name:     "Tattu 1400mAh 6S",
+			Category: models.CategoryBatteries,
+			Quantity: 1,
+		},
+		updateItem: &models.InventoryItem{
+			ID:       "inv-battery-2",
+			Name:     "Tattu 1400mAh 6S",
+			Category: models.CategoryBatteries,
+			Quantity: 6,
+		},
+	}
+	battery := &mockBatteryCreator{
+		failOnCall: 3,
+	}
+
+	api := &EquipmentAPI{
+		inventorySvc: inventory,
+		batterySvc:   battery,
+		logger:       logging.New(logging.LevelError),
+	}
+
+	req := httptest.NewRequest(http.MethodPatch, "/api/inventory/inv-battery-2", strings.NewReader(`{"quantity":6}`))
+	req = req.WithContext(context.WithValue(req.Context(), auth.UserIDKey, "user-123"))
+	w := httptest.NewRecorder()
+
+	api.updateInventoryItem(w, req, "inv-battery-2")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if len(battery.createCalls) != 3 {
+		t.Fatalf("battery Create calls = %d, want 3", len(battery.createCalls))
+	}
+
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response body: %v", err)
+	}
+
+	warning, ok := response["warning"].(string)
+	if !ok || warning == "" {
+		t.Fatalf("expected warning in response, got: %#v", response["warning"])
+	}
+	if !strings.Contains(warning, "2 of 5") {
+		t.Fatalf("warning = %q, want partial delta detail", warning)
 	}
 }
