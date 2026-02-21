@@ -1,7 +1,13 @@
 package equipment
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"testing"
+	"time"
+
+	"github.com/johnrirwin/flyingforge/internal/models"
 )
 
 func TestServiceError(t *testing.T) {
@@ -11,46 +17,174 @@ func TestServiceError(t *testing.T) {
 	}
 }
 
-func TestServiceError_UnknownSeller(t *testing.T) {
-	err := &ServiceError{Message: "Unknown seller: fakeseller"}
-	expected := "Unknown seller: fakeseller"
-	if err.Error() != expected {
-		t.Errorf("ServiceError.Error() = %s, want %s", err.Error(), expected)
+func TestSearch_UsesCatalogData(t *testing.T) {
+	now := time.Now().UTC()
+	msrp := 89.99
+
+	catalog := &fakeGearCatalog{
+		searchResponse: &models.GearCatalogSearchResponse{
+			Items: []models.GearCatalogItem{
+				{
+					ID:       "gear-1",
+					GearType: models.GearTypeStack,
+					Brand:    "SpeedyBee",
+					Model:    "F405 V4",
+					MSRP:     &msrp,
+					Specs:    json.RawMessage(`{"esc":"55A"}`),
+					ShoppingLinks: []string{
+						"https://example.com/product/speedybee-f405-v4-stack",
+					},
+					ImageURL:   "https://example.com/image.jpg",
+					UpdatedAt:  now,
+					Status:     models.CatalogStatusPublished,
+					UsageCount: 5,
+				},
+			},
+		},
+	}
+
+	svc := NewService(catalog, nil)
+	result, err := svc.Search(context.Background(), models.EquipmentSearchParams{
+		Query: "speedybee",
+		Limit: 20,
+	})
+	if err != nil {
+		t.Fatalf("Search returned error: %v", err)
+	}
+
+	if len(result.Items) != 1 {
+		t.Fatalf("len(result.Items) = %d, want 1", len(result.Items))
+	}
+
+	item := result.Items[0]
+	if item.SellerID != catalogSellerID {
+		t.Fatalf("item.SellerID = %q, want %q", item.SellerID, catalogSellerID)
+	}
+	if item.Category != models.CategoryStacks {
+		t.Fatalf("item.Category = %q, want %q", item.Category, models.CategoryStacks)
+	}
+	if item.Price != msrp {
+		t.Fatalf("item.Price = %v, want %v", item.Price, msrp)
+	}
+	if item.ProductURL != "https://example.com/product/speedybee-f405-v4-stack" {
+		t.Fatalf("item.ProductURL = %q", item.ProductURL)
+	}
+	if item.Name != "SpeedyBee F405 V4" {
+		t.Fatalf("item.Name = %q", item.Name)
 	}
 }
 
-func TestSearchParamsDefaults(t *testing.T) {
-	tests := []struct {
-		name          string
-		inputLimit    int
-		expectedLimit int
-	}{
-		{
-			name:          "zero limit defaults to 20",
-			inputLimit:    0,
-			expectedLimit: 20,
-		},
-		{
-			name:          "negative limit defaults to 20",
-			inputLimit:    -1,
-			expectedLimit: 20,
-		},
-		{
-			name:          "positive limit preserved",
-			inputLimit:    50,
-			expectedLimit: 50,
+func TestSearch_UnknownSeller(t *testing.T) {
+	svc := NewService(&fakeGearCatalog{}, nil)
+	_, err := svc.Search(context.Background(), models.EquipmentSearchParams{
+		Query:  "stack",
+		Seller: "racedayquads",
+	})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if err.Error() != "Unknown seller: racedayquads" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestSearch_WithoutCatalogReturnsEmpty(t *testing.T) {
+	svc := NewService(nil, nil)
+	result, err := svc.Search(context.Background(), models.EquipmentSearchParams{})
+	if err != nil {
+		t.Fatalf("Search returned error: %v", err)
+	}
+	if result.TotalCount != 0 || len(result.Items) != 0 {
+		t.Fatalf("expected empty result, got %+v", result)
+	}
+}
+
+func TestGetSellers_ReturnsCatalogSource(t *testing.T) {
+	svc := NewService(nil, nil)
+	sellers := svc.GetSellers()
+	if len(sellers) != 1 {
+		t.Fatalf("len(sellers) = %d, want 1", len(sellers))
+	}
+	if sellers[0].ID != catalogSellerID {
+		t.Fatalf("sellers[0].ID = %q, want %q", sellers[0].ID, catalogSellerID)
+	}
+	if sellers[0].Name != catalogSellerName {
+		t.Fatalf("sellers[0].Name = %q, want %q", sellers[0].Name, catalogSellerName)
+	}
+}
+
+func TestGetProduct_LoadsCatalogItem(t *testing.T) {
+	catalog := &fakeGearCatalog{
+		getByID: map[string]*models.GearCatalogItem{
+			"abc123": {
+				ID:        "abc123",
+				GearType:  models.GearTypeAIO,
+				Brand:     "Brand",
+				Model:     "Model",
+				UpdatedAt: time.Now().UTC(),
+			},
 		},
 	}
+	svc := NewService(catalog, nil)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			limit := tt.inputLimit
-			if limit <= 0 {
-				limit = 20
-			}
-			if limit != tt.expectedLimit {
-				t.Errorf("limit = %d, want %d", limit, tt.expectedLimit)
-			}
-		})
+	item, err := svc.GetProduct(context.Background(), "catalog-abc123")
+	if err != nil {
+		t.Fatalf("GetProduct returned error: %v", err)
+	}
+	if item == nil {
+		t.Fatalf("expected item")
+	}
+	if item.ID != "abc123" {
+		t.Fatalf("item.ID = %q, want abc123", item.ID)
+	}
+	if item.Category != models.CategoryAIO {
+		t.Fatalf("item.Category = %q, want %q", item.Category, models.CategoryAIO)
+	}
+}
+
+type fakeGearCatalog struct {
+	searchResponse *models.GearCatalogSearchResponse
+	popularItems   []models.GearCatalogItem
+	getByID        map[string]*models.GearCatalogItem
+	searchErr      error
+	popularErr     error
+	getErr         error
+}
+
+func (f *fakeGearCatalog) Search(ctx context.Context, params models.GearCatalogSearchParams) (*models.GearCatalogSearchResponse, error) {
+	if f.searchErr != nil {
+		return nil, f.searchErr
+	}
+	if f.searchResponse == nil {
+		return &models.GearCatalogSearchResponse{}, nil
+	}
+	return f.searchResponse, nil
+}
+
+func (f *fakeGearCatalog) GetPopular(ctx context.Context, gearType models.GearType, limit int) ([]models.GearCatalogItem, error) {
+	if f.popularErr != nil {
+		return nil, f.popularErr
+	}
+	return f.popularItems, nil
+}
+
+func (f *fakeGearCatalog) Get(ctx context.Context, id string) (*models.GearCatalogItem, error) {
+	if f.getErr != nil {
+		return nil, f.getErr
+	}
+	if f.getByID == nil {
+		return nil, nil
+	}
+	return f.getByID[id], nil
+}
+
+func TestSearch_HandlesCatalogFailure(t *testing.T) {
+	svc := NewService(&fakeGearCatalog{searchErr: errors.New("db down")}, nil)
+	_, err := svc.Search(context.Background(), models.EquipmentSearchParams{Query: "f7"})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if err.Error() != "search failed" {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

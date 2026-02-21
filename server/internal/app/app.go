@@ -24,7 +24,6 @@ import (
 	"github.com/johnrirwin/flyingforge/internal/moderation"
 	"github.com/johnrirwin/flyingforge/internal/radio"
 	"github.com/johnrirwin/flyingforge/internal/ratelimit"
-	"github.com/johnrirwin/flyingforge/internal/sellers"
 	"github.com/johnrirwin/flyingforge/internal/sources"
 	"github.com/johnrirwin/flyingforge/internal/tagging"
 )
@@ -78,14 +77,11 @@ func New(cfg *config.Config) (*App, error) {
 	app.Aggregator = aggregator.New(fetchers, app.Cache, tagger, app.Logger)
 	app.Aggregator.SetRetentionDays(cfg.Server.FeedRetentionDays)
 
-	// Initialize seller registry
-	sellerRegistry := app.initSellers(limiter)
-
-	// Initialize equipment service
-	app.EquipmentSvc = equipment.NewService(sellerRegistry, app.Cache, app.Logger)
-
 	// Initialize database, inventory, and auth services
 	app.initDatabaseServices()
+
+	// Initialize catalog-backed equipment service (seller APIs removed).
+	app.EquipmentSvc = equipment.NewService(app.gearCatalogStore, app.Logger)
 
 	// Initialize servers
 	app.initServers()
@@ -184,14 +180,6 @@ func (a *App) initFetchers(limiter *ratelimit.Limiter) []sources.Fetcher {
 	// Fallback to default config
 	defaultConfig := sources.GetDefaultFeedsConfig()
 	return sources.CreateFetchersFromConfig(defaultConfig, limiter, fetcherConfig)
-}
-
-func (a *App) initSellers(limiter *ratelimit.Limiter) *sellers.Registry {
-	registry := sellers.NewRegistry()
-	registry.Register(sellers.NewRaceDayQuads(limiter, a.Cache))
-	registry.Register(sellers.NewGetFPV(limiter, a.Cache))
-	a.Logger.Info("Registered seller adapters", logging.WithField("count", len(registry.List())))
-	return registry
 }
 
 func (a *App) initDatabaseServices() {

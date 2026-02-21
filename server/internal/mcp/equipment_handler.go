@@ -32,7 +32,7 @@ func (h *EquipmentHandler) GetTools() []ToolDefinition {
 		// Equipment tools
 		{
 			Name:        "search_equipment",
-			Description: "Search for drone equipment across all supported sellers. Returns matching products with prices, availability, and specifications.",
+			Description: "Search the moderated gear catalog. Returns matching products with category, price (MSRP when available), and metadata.",
 			InputSchema: json.RawMessage(`{
 				"type": "object",
 				"properties": {
@@ -47,7 +47,7 @@ func (h *EquipmentHandler) GetTools() []ToolDefinition {
 					},
 					"seller": {
 						"type": "string",
-						"description": "Filter by seller ID (e.g., 'racedayquads', 'getfpv')"
+						"description": "Filter by source ID (currently 'gear-catalog')"
 					},
 					"minPrice": {
 						"type": "number",
@@ -71,7 +71,7 @@ func (h *EquipmentHandler) GetTools() []ToolDefinition {
 		},
 		{
 			Name:        "get_equipment_by_category",
-			Description: "Browse drone equipment by category. Returns products from all supported sellers sorted by price.",
+			Description: "Browse moderated gear catalog items by category, sorted by price.",
 			InputSchema: json.RawMessage(`{
 				"type": "object",
 				"properties": {
@@ -94,7 +94,7 @@ func (h *EquipmentHandler) GetTools() []ToolDefinition {
 		},
 		{
 			Name:        "get_sellers",
-			Description: "Get a list of all supported equipment sellers/retailers.",
+			Description: "Get available equipment data sources.",
 			InputSchema: json.RawMessage(`{
 				"type": "object",
 				"properties": {}
@@ -102,13 +102,13 @@ func (h *EquipmentHandler) GetTools() []ToolDefinition {
 		},
 		{
 			Name:        "sync_seller_products",
-			Description: "Trigger a sync of products from a specific seller and category. Returns the number of products synced.",
+			Description: "Compatibility no-op. External seller sync is disabled because equipment comes from the moderated gear catalog.",
 			InputSchema: json.RawMessage(`{
 				"type": "object",
 				"properties": {
 					"seller": {
 						"type": "string",
-						"description": "Seller ID to sync (e.g., 'racedayquads', 'getfpv')"
+						"description": "Source ID to sync (currently ignored)"
 					},
 					"category": {
 						"type": "string",
@@ -355,7 +355,7 @@ func (h *EquipmentHandler) handleSyncSellerProducts(ctx context.Context, argumen
 
 	return map[string]interface{}{
 		"status":  "success",
-		"message": "Product sync triggered",
+		"message": "No external seller sync configured",
 	}, nil
 }
 
