@@ -4,6 +4,8 @@ import { EQUIPMENT_CATEGORIES } from '../equipmentTypes';
 import type { GearCatalogItem } from '../gearCatalogTypes';
 import { getCatalogItemDisplayName, gearTypeToEquipmentCategory, equipmentCategoryToGearType } from '../gearCatalogTypes';
 import { moderateGearCatalogImageUpload, saveGearCatalogImageUpload } from '../gearCatalogApi';
+import type { InventoryItemDetail } from '../inventoryItemDetails';
+import { buildInventoryItemDetails, setInventoryItemDetailsOnSpecs } from '../inventoryItemDetails';
 import { CatalogSearchModal } from './CatalogSearchModal';
 
 interface AddGearModalProps {
@@ -15,6 +17,33 @@ interface AddGearModalProps {
   catalogItem?: GearCatalogItem | null; // Pre-selected from gear catalog page
   editItem?: InventoryItem | null;
   initialCategory?: EquipmentCategory;
+}
+
+interface InventoryItemDetailForm {
+  purchasePrice: string;
+  purchaseSeller: string;
+  buildId: string;
+}
+
+function toDetailForm(detail: InventoryItemDetail): InventoryItemDetailForm {
+  return {
+    purchasePrice: detail.purchasePrice !== undefined ? String(detail.purchasePrice) : '',
+    purchaseSeller: detail.purchaseSeller || '',
+    buildId: detail.buildId || '',
+  };
+}
+
+function resizeDetailForms(forms: InventoryItemDetailForm[], quantity: number): InventoryItemDetailForm[] {
+  if (quantity <= 0) return [];
+  if (forms.length === quantity) return forms;
+  if (forms.length > quantity) return forms.slice(0, quantity);
+
+  const extra = Array.from({ length: quantity - forms.length }, () => ({
+    purchasePrice: '',
+    purchaseSeller: '',
+    buildId: '',
+  }));
+  return [...forms, ...extra];
 }
 
 export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentItem, catalogItem, editItem, initialCategory }: AddGearModalProps) {
@@ -47,6 +76,8 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
   const [purchaseSeller, setPurchaseSeller] = useState('');
   const [notes, setNotes] = useState('');
   const [buildId, setBuildId] = useState('');
+  const [itemDetailForms, setItemDetailForms] = useState<InventoryItemDetailForm[]>([]);
+  const [activeItemDetailIndex, setActiveItemDetailIndex] = useState(0);
 
   // Auto-add pre-selected catalog item to inventory
   const autoAddCatalogItem = useCallback(async (item: GearCatalogItem) => {
@@ -108,6 +139,8 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
       setQuantityInput('1');
       setNotes('');
       setBuildId('');
+      setItemDetailForms([]);
+      setActiveItemDetailIndex(0);
     } else if (editItem) {
       setName(editItem.name);
       setCategory(editItem.category);
@@ -117,6 +150,8 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
       setPurchaseSeller(editItem.purchaseSeller || '');
       setNotes(editItem.notes || '');
       setBuildId(editItem.buildId || '');
+      setItemDetailForms(buildInventoryItemDetails(editItem).map(toDetailForm));
+      setActiveItemDetailIndex(0);
     } else {
       // Reset form
       setName('');
@@ -127,6 +162,8 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
       setPurchaseSeller('');
       setNotes('');
       setBuildId('');
+      setItemDetailForms([]);
+      setActiveItemDetailIndex(0);
     }
     setError(null);
     setShowDeleteConfirmModal(false);
@@ -139,6 +176,17 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
 
     wasDeleteConfirmOpenRef.current = showDeleteConfirmModal;
   }, [showDeleteConfirmModal]);
+
+  const updateItemDetail = useCallback((index: number, updates: Partial<InventoryItemDetailForm>) => {
+    setItemDetailForms((prev) => {
+      if (index < 0 || index >= prev.length) return prev;
+      const next = [...prev];
+      next[index] = { ...next[index], ...updates };
+      return next;
+    });
+  }, []);
+
+  const activeItemDetail = itemDetailForms[activeItemDetailIndex];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,16 +213,55 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
         return;
       }
 
-      const trimmedPurchasePrice = purchasePrice.trim();
       let parsedPurchasePrice: number | undefined;
-      if (trimmedPurchasePrice) {
-        const parsed = Number(trimmedPurchasePrice);
-        if (!Number.isFinite(parsed) || parsed < 0) {
-          setError('Enter a valid purchase price');
-          setIsSubmitting(false);
-          return;
+      let parsedPurchaseSeller: string | undefined;
+      let parsedBuildID: string | undefined;
+      let specsForSubmit: Record<string, unknown> | undefined;
+
+      if (editItem) {
+        const detailForms = resizeDetailForms(itemDetailForms, parsedQuantity);
+        const parsedDetails: InventoryItemDetail[] = [];
+
+        for (let index = 0; index < detailForms.length; index += 1) {
+          const detailForm = detailForms[index];
+          const trimmedItemPrice = detailForm.purchasePrice.trim();
+          let itemPrice: number | undefined;
+          if (trimmedItemPrice) {
+            const parsed = Number(trimmedItemPrice);
+            if (!Number.isFinite(parsed) || parsed < 0) {
+              setError(`Item ${index + 1}: enter a valid purchase price`);
+              setIsSubmitting(false);
+              return;
+            }
+            itemPrice = parsed;
+          }
+
+          parsedDetails.push({
+            purchasePrice: itemPrice,
+            purchaseSeller: detailForm.purchaseSeller.trim() || undefined,
+            buildId: detailForm.buildId.trim() || undefined,
+          });
         }
-        parsedPurchasePrice = parsed;
+
+        const primaryDetail = parsedDetails[0];
+        parsedPurchasePrice = primaryDetail?.purchasePrice;
+        parsedPurchaseSeller = primaryDetail?.purchaseSeller;
+        parsedBuildID = primaryDetail?.buildId;
+        specsForSubmit = setInventoryItemDetailsOnSpecs(editItem.specs, parsedDetails);
+      } else {
+        const trimmedPurchasePrice = purchasePrice.trim();
+        if (trimmedPurchasePrice) {
+          const parsed = Number(trimmedPurchasePrice);
+          if (!Number.isFinite(parsed) || parsed < 0) {
+            setError('Enter a valid purchase price');
+            setIsSubmitting(false);
+            return;
+          }
+          parsedPurchasePrice = parsed;
+        }
+
+        parsedPurchaseSeller = purchaseSeller.trim() || undefined;
+        parsedBuildID = buildId.trim() || undefined;
       }
 
       const params: AddInventoryParams = {
@@ -183,9 +270,10 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
         manufacturer: manufacturer.trim() || undefined,
         quantity: parsedQuantity,
         purchasePrice: parsedPurchasePrice,
-        purchaseSeller: purchaseSeller.trim() || undefined,
+        purchaseSeller: parsedPurchaseSeller,
         notes: notes.trim() || undefined,
-        buildId: buildId.trim() || undefined,
+        buildId: parsedBuildID,
+        specs: specsForSubmit,
         sourceEquipmentId: equipmentItem?.id,
       };
 
@@ -389,6 +477,11 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
                     const nextValue = e.target.value;
                     if (nextValue === '' || /^\d+$/.test(nextValue)) {
                       setQuantityInput(nextValue);
+                      if (isEditing && nextValue !== '') {
+                        const nextQuantity = Number(nextValue);
+                        setItemDetailForms((prev) => resizeDetailForms(prev, nextQuantity));
+                        setActiveItemDetailIndex((prev) => (nextQuantity === 0 ? 0 : Math.min(prev, nextQuantity - 1)));
+                      }
                     }
                   }}
                   inputMode="numeric"
@@ -399,51 +492,141 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
               </div>
             </div>
 
-            {/* Purchase Price & Seller */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
-                  Purchase Price
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+            {isEditing ? (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                    Individual Item Details
+                  </label>
+                  <p className="text-xs text-slate-500">
+                    Each tab represents one item in this stack so purchase details can vary per item.
+                  </p>
+                </div>
+
+                {itemDetailForms.length > 0 ? (
+                  <>
+                    <div className="flex gap-2 overflow-x-auto pb-1">
+                      {itemDetailForms.map((_, index) => (
+                        <button
+                          key={`item-detail-tab-${index}`}
+                          type="button"
+                          onClick={() => setActiveItemDetailIndex(index)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+                            activeItemDetailIndex === index
+                              ? 'bg-primary-600 text-white'
+                              : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
+                          }`}
+                        >
+                          Item {index + 1}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="p-4 rounded-lg border border-slate-700 bg-slate-900/30 space-y-4">
+                      <div className="text-xs text-slate-400 uppercase tracking-wide">
+                        Editing item {activeItemDetailIndex + 1} of {itemDetailForms.length}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-slate-300 mb-1">
+                            Purchase Price
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={activeItemDetail?.purchasePrice || ''}
+                              onChange={(e) => updateItemDetail(activeItemDetailIndex, { purchasePrice: e.target.value })}
+                              className="w-full pl-7 pr-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
+                              placeholder="0.00"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-slate-300 mb-1">
+                            Purchased From
+                          </label>
+                          <input
+                            type="text"
+                            value={activeItemDetail?.purchaseSeller || ''}
+                            onChange={(e) => updateItemDetail(activeItemDetailIndex, { purchaseSeller: e.target.value })}
+                            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
+                            placeholder="Seller name"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">
+                          Build/Quad Name
+                        </label>
+                        <input
+                          type="text"
+                          value={activeItemDetail?.buildId || ''}
+                          onChange={(e) => updateItemDetail(activeItemDetailIndex, { buildId: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
+                          placeholder='e.g., 5" Freestyle'
+                        />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="p-3 rounded-lg border border-slate-700 bg-slate-900/30 text-sm text-slate-400">
+                    Increase quantity above 0 to edit individual item details.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                {/* Purchase Price & Seller */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">
+                      Purchase Price
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={purchasePrice}
+                        onChange={(e) => setPurchasePrice(e.target.value)}
+                        className="w-full pl-7 pr-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">
+                      Purchased From
+                    </label>
+                    <input
+                      type="text"
+                      value={purchaseSeller}
+                      onChange={(e) => setPurchaseSeller(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
+                      placeholder="Seller name"
+                    />
+                  </div>
+                </div>
+
+                {/* Build Name */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                    Build/Quad Name
+                  </label>
                   <input
                     type="text"
-                    inputMode="decimal"
-                    value={purchasePrice}
-                    onChange={(e) => setPurchasePrice(e.target.value)}
-                    className="w-full pl-7 pr-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
-                    placeholder="0.00"
+                    value={buildId}
+                    onChange={(e) => setBuildId(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
+                    placeholder='e.g., 5" Freestyle'
                   />
                 </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
-                  Purchased From
-                </label>
-                <input
-                  type="text"
-                  value={purchaseSeller}
-                  onChange={(e) => setPurchaseSeller(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
-                  placeholder="Seller name"
-                />
-              </div>
-            </div>
-
-            {/* Build Name */}
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">
-                Build/Quad Name
-              </label>
-              <input
-                type="text"
-                value={buildId}
-                onChange={(e) => setBuildId(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-primary-500"
-                placeholder='e.g., 5" Freestyle'
-              />
-            </div>
+              </>
+            )}
 
             {/* Notes */}
             <div>

@@ -15,6 +15,7 @@ vi.mock('./CatalogSearchModal', () => ({
 
 import { AddGearModal } from './AddGearModal';
 import type { InventoryItem } from '../equipmentTypes';
+import { INVENTORY_ITEM_DETAILS_SPEC_KEY } from '../inventoryItemDetails';
 
 const editItem: InventoryItem = {
   id: 'inv-1',
@@ -100,6 +101,55 @@ describe('AddGearModal quantity editing', () => {
         expect.objectContaining({ quantity: 0 }),
       );
     });
+  });
+
+  it('shows per-item tabs and persists per-item purchase details while editing', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const multiItem: InventoryItem = {
+      ...editItem,
+      quantity: 2,
+      purchasePrice: 79.99,
+      purchaseSeller: 'RDQ',
+      buildId: 'Quad One',
+    };
+
+    render(
+      <AddGearModal
+        isOpen
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+        editItem={multiItem}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Item 1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Item 2' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Item 2' }));
+    fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '91.5' } });
+    fireEvent.change(screen.getByPlaceholderText('Seller name'), { target: { value: 'GetFPV' } });
+    fireEvent.change(screen.getByPlaceholderText('e.g., 5" Freestyle'), { target: { value: 'Quad Two' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+
+    const submitted = onSubmit.mock.calls[0][0];
+    expect(submitted).toEqual(
+      expect.objectContaining({
+        quantity: 2,
+        purchasePrice: 79.99,
+        purchaseSeller: 'RDQ',
+        buildId: 'Quad One',
+      }),
+    );
+    expect(submitted.specs).toEqual(
+      expect.objectContaining({
+        [INVENTORY_ITEM_DETAILS_SPEC_KEY]: [
+          { purchasePrice: 79.99, purchaseSeller: 'RDQ', buildId: 'Quad One' },
+          { purchasePrice: 91.5, purchaseSeller: 'GetFPV', buildId: 'Quad Two' },
+        ],
+      }),
+    );
   });
 
   it('rejects quantity 0 while adding new gear', async () => {
