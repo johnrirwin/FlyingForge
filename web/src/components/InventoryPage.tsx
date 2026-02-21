@@ -28,6 +28,12 @@ export function InventoryPage({
   onOpenItem,
 }: InventoryPageProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const formattedTotalValue = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(inventorySummary?.totalValue || 0);
 
   const controls = (
     <div className="px-4 md:px-6 py-4 border-b border-slate-800 bg-slate-900">
@@ -70,7 +76,7 @@ export function InventoryPage({
             </div>
             <div className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700">
               <div className="text-[11px] uppercase tracking-wide text-slate-500">Total Value</div>
-              <div className="text-sm font-semibold text-primary-400">${inventorySummary.totalValue.toFixed(0)}</div>
+              <div className="text-sm font-semibold text-primary-400">{formattedTotalValue}</div>
             </div>
           </div>
         )}

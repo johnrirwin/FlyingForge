@@ -476,52 +476,50 @@ func (s *InventoryStore) Delete(ctx context.Context, id string, userID string) e
 
 // GetSummary returns a summary of the inventory (scoped to user if userID provided)
 func (s *InventoryStore) GetSummary(ctx context.Context, userID string) (*models.InventorySummary, error) {
-	// Get total items and value
-	var totalItems int
-	var totalValue sql.NullFloat64
+	summary := &models.InventorySummary{
+		ByCategory: make(map[models.EquipmentCategory]int),
+	}
 
-	query := `SELECT COUNT(*), COALESCE(SUM(purchase_price * quantity), 0) FROM inventory_items`
+	query := `SELECT category, quantity, purchase_price, specs FROM inventory_items`
 	args := []interface{}{}
-
 	if userID != "" {
 		query += " WHERE user_id = $1"
 		args = append(args, userID)
 	}
 
-	err := s.db.QueryRowContext(ctx, query, args...).Scan(&totalItems, &totalValue)
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get inventory summary: %w", err)
-	}
-
-	// Get counts by category
-	byCategory := make(map[models.EquipmentCategory]int)
-
-	categoryQuery := `SELECT category, COUNT(*) FROM inventory_items`
-	if userID != "" {
-		categoryQuery += " WHERE user_id = $1"
-	}
-	categoryQuery += " GROUP BY category"
-
-	rows, err := s.db.QueryContext(ctx, categoryQuery, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get category counts: %w", err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var category models.EquipmentCategory
-		var count int
-		if err := rows.Scan(&category, &count); err != nil {
-			continue
+		var quantity int
+		var purchasePrice sql.NullFloat64
+		var specs json.RawMessage
+
+		if err := rows.Scan(&category, &quantity, &purchasePrice, &specs); err != nil {
+			return nil, fmt.Errorf("failed to scan inventory summary row: %w", err)
 		}
-		byCategory[category] = count
+
+		summary.TotalItems++
+		summary.ByCategory[category]++
+
+		var pricePtr *float64
+		if purchasePrice.Valid {
+			price := purchasePrice.Float64
+			pricePtr = &price
+		}
+
+		summary.TotalValue += models.CalculateInventoryItemTotalValue(quantity, pricePtr, specs)
 	}
 
-	return &models.InventorySummary{
-		TotalItems: totalItems,
-		TotalValue: totalValue.Float64,
-		ByCategory: byCategory,
-	}, nil
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate inventory summary rows: %w", err)
+	}
+
+	return summary, nil
 }
 
 // GetByCatalogID finds an inventory item by catalog ID for a user
