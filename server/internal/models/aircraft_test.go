@@ -44,6 +44,7 @@ func TestComponentCategory_Values(t *testing.T) {
 		{"frame", ComponentCategoryFrame, "frame"},
 		{"propellers", ComponentCategoryProps, "propellers"},
 		{"antenna", ComponentCategoryAntenna, "antenna"},
+		{"gps", ComponentCategoryGPS, "gps"},
 	}
 
 	for _, tt := range tests {
@@ -80,6 +81,7 @@ func TestNormalizeComponentCategory(t *testing.T) {
 	}{
 		{name: "canonical fc", input: ComponentCategoryFC, expected: ComponentCategoryFC},
 		{name: "canonical propellers", input: ComponentCategoryProps, expected: ComponentCategoryProps},
+		{name: "canonical gps", input: ComponentCategoryGPS, expected: ComponentCategoryGPS},
 		{name: "legacy props alias", input: ComponentCategory("props"), expected: ComponentCategoryProps},
 		{name: "legacy stacks alias", input: ComponentCategory("stacks"), expected: ComponentCategoryStack},
 		{name: "trim and lowercase", input: ComponentCategory("  ProPs  "), expected: ComponentCategoryProps},

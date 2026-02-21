@@ -14,6 +14,7 @@ export type EquipmentCategory =
   | 'batteries'
   | 'cameras'
   | 'antennas'
+  | 'gps'
   | 'accessories';
 
 export const EQUIPMENT_CATEGORIES: { value: EquipmentCategory; label: string }[] = [
@@ -29,6 +30,7 @@ export const EQUIPMENT_CATEGORIES: { value: EquipmentCategory; label: string }[]
   { value: 'batteries', label: 'Batteries' },
   { value: 'cameras', label: 'Cameras' },
   { value: 'antennas', label: 'Antennas' },
+  { value: 'gps', label: 'GPS' },
   { value: 'accessories', label: 'Accessories' },
 ];
 

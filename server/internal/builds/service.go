@@ -1080,6 +1080,8 @@ func aircraftComponentToGearType(category models.ComponentCategory) models.GearT
 		return models.GearTypeProp
 	case models.ComponentCategoryAntenna:
 		return models.GearTypeAntenna
+	case models.ComponentCategoryGPS:
+		return models.GearTypeGPS
 	default:
 		return ""
 	}
@@ -1109,6 +1111,8 @@ func componentCategoryToEquipmentCategory(category models.ComponentCategory) mod
 		return models.CategoryPropellers
 	case models.ComponentCategoryAntenna:
 		return models.CategoryAntennas
+	case models.ComponentCategoryGPS:
+		return models.CategoryGPS
 	default:
 		return ""
 	}

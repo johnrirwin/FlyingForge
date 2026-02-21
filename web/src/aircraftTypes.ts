@@ -15,7 +15,7 @@ export const AIRCRAFT_TYPES: { value: AircraftType; label: string; icon: string 
 ];
 
 // Component categories for aircraft
-export type ComponentCategory = 'fc' | 'esc' | 'aio' | 'stack' | 'receiver' | 'vtx' | 'motors' | 'camera' | 'frame' | 'props' | 'antenna';
+export type ComponentCategory = 'fc' | 'esc' | 'aio' | 'stack' | 'receiver' | 'vtx' | 'motors' | 'camera' | 'frame' | 'props' | 'antenna' | 'gps';
 
 export const COMPONENT_CATEGORIES: { value: ComponentCategory; label: string; equipmentCategory: EquipmentCategory }[] = [
   { value: 'fc', label: 'Flight Controller', equipmentCategory: 'flight_controllers' },
@@ -29,6 +29,7 @@ export const COMPONENT_CATEGORIES: { value: ComponentCategory; label: string; eq
   { value: 'frame', label: 'Frame', equipmentCategory: 'frames' },
   { value: 'props', label: 'Propellers', equipmentCategory: 'propellers' },
   { value: 'antenna', label: 'Antenna', equipmentCategory: 'antennas' },
+  { value: 'gps', label: 'GPS', equipmentCategory: 'gps' },
 ];
 
 // Aircraft model

@@ -24,6 +24,7 @@ const (
 	GearTypeVTX      GearType = "vtx"
 	GearTypeReceiver GearType = "receiver"
 	GearTypeAntenna  GearType = "antenna"
+	GearTypeGPS      GearType = "gps"
 	GearTypeBattery  GearType = "battery"
 	GearTypeProp     GearType = "prop"
 	GearTypeRadio    GearType = "radio"
@@ -43,6 +44,7 @@ func AllGearTypes() []GearType {
 		GearTypeVTX,
 		GearTypeReceiver,
 		GearTypeAntenna,
+		GearTypeGPS,
 		GearTypeBattery,
 		GearTypeProp,
 		GearTypeRadio,
@@ -72,6 +74,8 @@ func GearTypeFromEquipmentCategory(cat EquipmentCategory) GearType {
 		return GearTypeReceiver
 	case CategoryAntennas:
 		return GearTypeAntenna
+	case CategoryGPS:
+		return GearTypeGPS
 	case CategoryBatteries:
 		return GearTypeBattery
 	case CategoryPropellers:
@@ -104,6 +108,8 @@ func (gt GearType) ToEquipmentCategory() EquipmentCategory {
 		return CategoryReceivers
 	case GearTypeAntenna:
 		return CategoryAntennas
+	case GearTypeGPS:
+		return CategoryGPS
 	case GearTypeBattery:
 		return CategoryBatteries
 	case GearTypeProp:
