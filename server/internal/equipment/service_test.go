@@ -69,8 +69,127 @@ func TestSearch_UsesCatalogData(t *testing.T) {
 	if item.ProductURL != "https://example.com/product/speedybee-f405-v4-stack" {
 		t.Fatalf("item.ProductURL = %q", item.ProductURL)
 	}
+	if !item.InStock {
+		t.Fatalf("item.InStock = %v, want true", item.InStock)
+	}
 	if item.Name != "SpeedyBee F405 V4" {
 		t.Fatalf("item.Name = %q", item.Name)
+	}
+}
+
+func TestSearch_OffsetBeyondWindowReturnsEmptyWithoutCatalogQuery(t *testing.T) {
+	catalog := &fakeGearCatalog{
+		searchResponse: &models.GearCatalogSearchResponse{
+			Items: []models.GearCatalogItem{
+				{ID: "gear-1", Brand: "Brand", Model: "Model", GearType: models.GearTypeOther},
+			},
+		},
+	}
+
+	svc := NewService(catalog, nil)
+	result, err := svc.Search(context.Background(), models.EquipmentSearchParams{
+		Query:  "anything",
+		Limit:  20,
+		Offset: 100,
+	})
+	if err != nil {
+		t.Fatalf("Search returned error: %v", err)
+	}
+	if len(result.Items) != 0 || result.TotalCount != 0 {
+		t.Fatalf("expected empty result, got %+v", result)
+	}
+	if catalog.searchCalls != 0 {
+		t.Fatalf("catalog.searchCalls = %d, want 0", catalog.searchCalls)
+	}
+}
+
+func TestSearch_SkipsUnknownPriceWhenFilteringAndSortsUnknownLast(t *testing.T) {
+	knownPrice := 120.0
+	catalog := &fakeGearCatalog{
+		searchResponse: &models.GearCatalogSearchResponse{
+			Items: []models.GearCatalogItem{
+				{
+					ID:       "unknown-price",
+					GearType: models.GearTypeStack,
+					Brand:    "NoPrice",
+					Model:    "Stack",
+				},
+				{
+					ID:       "known-price",
+					GearType: models.GearTypeStack,
+					Brand:    "Known",
+					Model:    "Stack",
+					MSRP:     &knownPrice,
+				},
+			},
+		},
+	}
+
+	svc := NewService(catalog, nil)
+
+	// Unknown price should be sorted after known price.
+	sorted, err := svc.Search(context.Background(), models.EquipmentSearchParams{
+		Query: "stack",
+		Sort:  "price_asc",
+	})
+	if err != nil {
+		t.Fatalf("Search returned error: %v", err)
+	}
+	if len(sorted.Items) != 2 {
+		t.Fatalf("len(sorted.Items) = %d, want 2", len(sorted.Items))
+	}
+	if sorted.Items[0].ID != "known-price" || sorted.Items[1].ID != "unknown-price" {
+		t.Fatalf("unexpected order: %+v", sorted.Items)
+	}
+
+	// Unknown price should be excluded when price filters are active.
+	min := 100.0
+	filtered, err := svc.Search(context.Background(), models.EquipmentSearchParams{
+		Query:    "stack",
+		MinPrice: &min,
+	})
+	if err != nil {
+		t.Fatalf("Search returned error: %v", err)
+	}
+	if len(filtered.Items) != 1 || filtered.Items[0].ID != "known-price" {
+		t.Fatalf("unexpected filtered result: %+v", filtered.Items)
+	}
+}
+
+func TestSearch_InvalidShoppingLinkFallsBackToCatalogURLAndOutOfStock(t *testing.T) {
+	catalog := &fakeGearCatalog{
+		searchResponse: &models.GearCatalogSearchResponse{
+			Items: []models.GearCatalogItem{
+				{
+					ID:       "gear-unsafe-link",
+					GearType: models.GearTypeOther,
+					Brand:    "Unsafe",
+					Model:    "Link",
+					ShoppingLinks: []string{
+						"javascript:alert(1)",
+						"data:text/html,<h1>x</h1>",
+					},
+				},
+			},
+		},
+	}
+
+	svc := NewService(catalog, nil)
+	result, err := svc.Search(context.Background(), models.EquipmentSearchParams{
+		Query: "unsafe",
+	})
+	if err != nil {
+		t.Fatalf("Search returned error: %v", err)
+	}
+	if len(result.Items) != 1 {
+		t.Fatalf("len(result.Items) = %d, want 1", len(result.Items))
+	}
+	item := result.Items[0]
+	if item.ProductURL != "/gear-catalog" {
+		t.Fatalf("item.ProductURL = %q, want /gear-catalog", item.ProductURL)
+	}
+	if item.InStock {
+		t.Fatalf("item.InStock = %v, want false", item.InStock)
 	}
 }
 
@@ -149,9 +268,11 @@ type fakeGearCatalog struct {
 	searchErr      error
 	popularErr     error
 	getErr         error
+	searchCalls    int
 }
 
 func (f *fakeGearCatalog) Search(ctx context.Context, params models.GearCatalogSearchParams) (*models.GearCatalogSearchResponse, error) {
+	f.searchCalls++
 	if f.searchErr != nil {
 		return nil, f.searchErr
 	}

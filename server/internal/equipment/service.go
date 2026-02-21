@@ -2,6 +2,7 @@ package equipment
 
 import (
 	"context"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -12,6 +13,7 @@ import (
 const (
 	catalogSellerID   = "gear-catalog"
 	catalogSellerName = "Gear Catalog"
+	maxSearchWindow   = 100
 )
 
 type gearCatalogReader interface {
@@ -52,14 +54,20 @@ func (s *Service) Search(ctx context.Context, params models.EquipmentSearchParam
 		return nil, &ServiceError{Message: "Unknown seller: " + params.Seller}
 	}
 
+	// The catalog-backed equipment endpoint supports a bounded search window.
+	// Clamp offset/limit explicitly so pagination behavior is deterministic.
+	if offset >= maxSearchWindow {
+		return emptyResponse(limit, offset, params.Query), nil
+	}
+	if limit+offset > maxSearchWindow {
+		limit = maxSearchWindow - offset
+	}
+
 	if s.catalog == nil {
 		return emptyResponse(limit, offset, params.Query), nil
 	}
 
 	fetchLimit := limit + offset
-	if fetchLimit > 100 {
-		fetchLimit = 100
-	}
 
 	var (
 		items []models.EquipmentItem
@@ -209,14 +217,7 @@ func mapCatalogItemToEquipmentItem(item models.GearCatalogItem) models.Equipment
 		name = item.CanonicalKey
 	}
 
-	productURL := "/gear-catalog"
-	for _, link := range item.ShoppingLinks {
-		trimmed := strings.TrimSpace(link)
-		if trimmed != "" {
-			productURL = trimmed
-			break
-		}
-	}
+	productURL, hasShoppingLink := firstValidShoppingLink(item.ShoppingLinks)
 
 	return models.EquipmentItem{
 		ID:           item.ID,
@@ -230,10 +231,38 @@ func mapCatalogItemToEquipmentItem(item models.GearCatalogItem) models.Equipment
 		ProductURL:   productURL,
 		ImageURL:     item.ImageURL,
 		KeySpecs:     item.Specs,
-		InStock:      true,
+		InStock:      hasShoppingLink,
 		LastChecked:  item.UpdatedAt,
 		Description:  item.Description,
 	}
+}
+
+func firstValidShoppingLink(links []string) (string, bool) {
+	for _, link := range links {
+		trimmed := strings.TrimSpace(link)
+		if trimmed == "" {
+			continue
+		}
+
+		parsed, err := url.Parse(trimmed)
+		if err != nil {
+			continue
+		}
+
+		scheme := strings.ToLower(strings.TrimSpace(parsed.Scheme))
+		if (scheme != "http" && scheme != "https") || strings.TrimSpace(parsed.Host) == "" {
+			continue
+		}
+
+		return parsed.String(), true
+	}
+
+	return "/gear-catalog", false
+}
+
+func hasKnownPrice(item models.EquipmentItem) bool {
+	// MSRP is optional in catalog records. Price <= 0 means unknown/unset.
+	return item.Price > 0
 }
 
 func equipmentCategoryStrings() []string {
@@ -296,6 +325,9 @@ func (s *Service) applyFilters(items []models.EquipmentItem, params models.Equip
 
 	for _, item := range items {
 		// Filter by price range
+		if (params.MinPrice != nil || params.MaxPrice != nil) && !hasKnownPrice(item) {
+			continue
+		}
 		if params.MinPrice != nil && item.Price < *params.MinPrice {
 			continue
 		}
@@ -324,10 +356,32 @@ func (s *Service) sortItems(items []models.EquipmentItem, sortBy string) []model
 	switch sortBy {
 	case "price_asc":
 		sort.Slice(items, func(i, j int) bool {
+			iKnown := hasKnownPrice(items[i])
+			jKnown := hasKnownPrice(items[j])
+			if iKnown != jKnown {
+				return iKnown
+			}
+			if !iKnown {
+				return items[i].Name < items[j].Name
+			}
+			if items[i].Price == items[j].Price {
+				return items[i].Name < items[j].Name
+			}
 			return items[i].Price < items[j].Price
 		})
 	case "price_desc":
 		sort.Slice(items, func(i, j int) bool {
+			iKnown := hasKnownPrice(items[i])
+			jKnown := hasKnownPrice(items[j])
+			if iKnown != jKnown {
+				return iKnown
+			}
+			if !iKnown {
+				return items[i].Name < items[j].Name
+			}
+			if items[i].Price == items[j].Price {
+				return items[i].Name < items[j].Name
+			}
 			return items[i].Price > items[j].Price
 		})
 	case "name":
