@@ -17,6 +17,7 @@ const COMPONENT_INFO: Record<ComponentCategory, { label: string; icon: string }>
   fc: { label: 'Flight Controller', icon: '🧠' },
   esc: { label: 'ESC', icon: '⚡' },
   aio: { label: 'AIO (FC/ESC)', icon: '🔌' },
+  stack: { label: 'FC/ESC Stack', icon: '🧩' },
   receiver: { label: 'Receiver', icon: '📡' },
   vtx: { label: 'Video Transmitter', icon: '📺' },
   motors: { label: 'Motors', icon: '🔄' },
@@ -28,7 +29,7 @@ const COMPONENT_INFO: Record<ComponentCategory, { label: string; icon: string }>
 
 // All component categories in display order
 const CATEGORY_ORDER: ComponentCategory[] = [
-  'fc', 'esc', 'aio', 'receiver', 'vtx', 'motors', 'camera', 'frame', 'propellers', 'antenna'
+  'fc', 'esc', 'aio', 'stack', 'receiver', 'vtx', 'motors', 'camera', 'frame', 'propellers', 'antenna'
 ];
 
 export function PublicAircraftModal({ aircraft, onClose }: PublicAircraftModalProps) {

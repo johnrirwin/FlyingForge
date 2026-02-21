@@ -227,6 +227,7 @@ export function BuildBuilder({
         <section className="space-y-3">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Power Stack</h3>
+            <span className="rounded bg-slate-700 px-2 py-0.5 text-[11px] uppercase tracking-wide text-slate-300">Required</span>
             <span className={`rounded px-2 py-0.5 text-[11px] uppercase tracking-wide ${powerComplete ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}`}>
               {powerComplete ? 'Complete' : 'Missing'}
             </span>

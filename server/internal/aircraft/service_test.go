@@ -107,3 +107,35 @@ func TestDelete_Validation(t *testing.T) {
 		})
 	}
 }
+
+func TestMapComponentToEquipmentCategory(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    models.ComponentCategory
+		expected models.EquipmentCategory
+	}{
+		{
+			name:     "maps aio to aio equipment category",
+			input:    models.ComponentCategoryAIO,
+			expected: models.CategoryAIO,
+		},
+		{
+			name:     "maps stack to stacks equipment category",
+			input:    models.ComponentCategoryStack,
+			expected: models.CategoryStacks,
+		},
+		{
+			name:     "maps plural stacks alias",
+			input:    models.ComponentCategory("stacks"),
+			expected: models.CategoryStacks,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := mapComponentToEquipmentCategory(tt.input); got != tt.expected {
+				t.Fatalf("mapComponentToEquipmentCategory(%q) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
