@@ -67,12 +67,12 @@ export function getInventoryItemDetailsFromSpecs(specs?: Record<string, unknown>
 
   const parsed: InventoryItemDetail[] = [];
   for (const detail of rawDetails) {
-    if (!isRecord(detail)) continue;
+    const record = isRecord(detail) ? detail : {};
     parsed.push(
       sanitizeDetail({
-        purchasePrice: detail.purchasePrice,
-        purchaseSeller: detail.purchaseSeller,
-        buildId: detail.buildId,
+        purchasePrice: record.purchasePrice,
+        purchaseSeller: record.purchaseSeller,
+        buildId: record.buildId,
       }),
     );
   }

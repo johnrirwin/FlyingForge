@@ -103,6 +103,20 @@ describe('AddGearModal quantity editing', () => {
     });
   });
 
+  it('does not render item tabs when editing a single-quantity item', () => {
+    render(
+      <AddGearModal
+        isOpen
+        onClose={vi.fn()}
+        onSubmit={vi.fn().mockResolvedValue(undefined)}
+        editItem={editItem}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Item 1' })).not.toBeInTheDocument();
+    expect(screen.getByText('Set purchase and build details for this item.')).toBeInTheDocument();
+  });
+
   it('shows per-item tabs and persists per-item purchase details while editing', async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const multiItem: InventoryItem = {
