@@ -187,6 +187,7 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
   }, []);
 
   const activeItemDetail = itemDetailForms[activeItemDetailIndex];
+  const hasMultipleItemDetails = isEditing && itemDetailForms.length > 1;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -215,7 +216,7 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
 
       let parsedPurchasePrice: number | undefined;
       let parsedPurchaseSeller: string | undefined;
-      let parsedBuildID: string | undefined;
+      let parsedBuildId: string | undefined;
       let specsForSubmit: Record<string, unknown> | undefined;
 
       if (editItem) {
@@ -246,7 +247,7 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
         const primaryDetail = parsedDetails[0];
         parsedPurchasePrice = primaryDetail?.purchasePrice;
         parsedPurchaseSeller = primaryDetail?.purchaseSeller;
-        parsedBuildID = primaryDetail?.buildId;
+        parsedBuildId = primaryDetail?.buildId;
         specsForSubmit = setInventoryItemDetailsOnSpecs(editItem.specs, parsedDetails);
       } else {
         const trimmedPurchasePrice = purchasePrice.trim();
@@ -261,7 +262,7 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
         }
 
         parsedPurchaseSeller = purchaseSeller.trim() || undefined;
-        parsedBuildID = buildId.trim() || undefined;
+        parsedBuildId = buildId.trim() || undefined;
       }
 
       const params: AddInventoryParams = {
@@ -272,7 +273,7 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
         purchasePrice: parsedPurchasePrice,
         purchaseSeller: parsedPurchaseSeller,
         notes: notes.trim() || undefined,
-        buildId: parsedBuildID,
+        buildId: parsedBuildId,
         specs: specsForSubmit,
         sourceEquipmentId: equipmentItem?.id,
       };
@@ -496,36 +497,42 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
               <div className="space-y-3">
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1">
-                    Individual Item Details
+                    {hasMultipleItemDetails ? 'Individual Item Details' : 'Item Details'}
                   </label>
                   <p className="text-xs text-slate-500">
-                    Each tab represents one item in this stack so purchase details can vary per item.
+                    {hasMultipleItemDetails
+                      ? 'Each tab represents one item in this stack so purchase details can vary per item.'
+                      : 'Set purchase and build details for this item.'}
                   </p>
                 </div>
 
                 {itemDetailForms.length > 0 ? (
-                  <>
-                    <div className="flex gap-2 overflow-x-auto pb-1">
-                      {itemDetailForms.map((_, index) => (
-                        <button
-                          key={`item-detail-tab-${index}`}
-                          type="button"
-                          onClick={() => setActiveItemDetailIndex(index)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
-                            activeItemDetailIndex === index
-                              ? 'bg-primary-600 text-white'
-                              : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
-                          }`}
-                        >
-                          Item {index + 1}
-                        </button>
-                      ))}
-                    </div>
+                  <div className="space-y-3">
+                    {hasMultipleItemDetails && (
+                      <div className="flex gap-2 overflow-x-auto pb-1">
+                        {itemDetailForms.map((_, index) => (
+                          <button
+                            key={`item-detail-tab-${index}`}
+                            type="button"
+                            onClick={() => setActiveItemDetailIndex(index)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+                              activeItemDetailIndex === index
+                                ? 'bg-primary-600 text-white'
+                                : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
+                            }`}
+                          >
+                            Item {index + 1}
+                          </button>
+                        ))}
+                      </div>
+                    )}
 
                     <div className="p-4 rounded-lg border border-slate-700 bg-slate-900/30 space-y-4">
-                      <div className="text-xs text-slate-400 uppercase tracking-wide">
-                        Editing item {activeItemDetailIndex + 1} of {itemDetailForms.length}
-                      </div>
+                      {hasMultipleItemDetails && (
+                        <div className="text-xs text-slate-400 uppercase tracking-wide">
+                          Editing item {activeItemDetailIndex + 1} of {itemDetailForms.length}
+                        </div>
+                      )}
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
@@ -571,10 +578,10 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
                         />
                       </div>
                     </div>
-                  </>
+                  </div>
                 ) : (
                   <div className="p-3 rounded-lg border border-slate-700 bg-slate-900/30 text-sm text-slate-400">
-                    Increase quantity above 0 to edit individual item details.
+                    Increase quantity above 0 to edit item details.
                   </div>
                 )}
               </div>

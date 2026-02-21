@@ -41,6 +41,22 @@ describe('inventoryItemDetails', () => {
     ]);
   });
 
+  it('preserves array position when a stored detail entry is malformed', () => {
+    const details = getInventoryItemDetailsFromSpecs({
+      [INVENTORY_ITEM_DETAILS_SPEC_KEY]: [
+        { purchasePrice: 90, purchaseSeller: 'RDQ', buildId: 'Quad A' },
+        'unexpected-value',
+        { purchasePrice: 95, purchaseSeller: 'GetFPV', buildId: 'Quad C' },
+      ],
+    });
+
+    expect(details).toEqual([
+      { purchasePrice: 90, purchaseSeller: 'RDQ', buildId: 'Quad A' },
+      {},
+      { purchasePrice: 95, purchaseSeller: 'GetFPV', buildId: 'Quad C' },
+    ]);
+  });
+
   it('preserves existing specs while storing per-item details', () => {
     const updated = setInventoryItemDetailsOnSpecs(
       { kv: '1950', [INVENTORY_ITEM_DETAILS_SPEC_KEY]: [{ purchaseSeller: 'Old Seller' }] },
