@@ -335,21 +335,24 @@ func (api *EquipmentAPI) addInventoryItem(w http.ResponseWriter, r *http.Request
 }
 
 func (api *EquipmentAPI) createTrackedBatteries(ctx context.Context, userID string, params models.AddInventoryParams) int {
-	if api.batterySvc == nil || params.Category != models.CategoryBatteries {
+	quantity := normalizeBatteryQuantity(params.Quantity)
+	return api.createTrackedBatteriesWithCount(ctx, userID, params, quantity)
+}
+
+func (api *EquipmentAPI) createTrackedBatteriesWithCount(ctx context.Context, userID string, params models.AddInventoryParams, count int) int {
+	if api.batterySvc == nil || params.Category != models.CategoryBatteries || count <= 0 {
 		return 0
 	}
 
-	quantity := normalizeBatteryQuantity(params.Quantity)
-
 	createParams := inferBatteryCreateParams(params)
 	created := 0
-	for i := 0; i < quantity; i++ {
+	for i := 0; i < count; i++ {
 		if _, err := api.batterySvc.Create(ctx, userID, createParams); err != nil {
 			api.logger.Error("Failed to create battery from inventory item", logging.WithFields(map[string]interface{}{
 				"user_id":    userID,
 				"item_name":  params.Name,
 				"item_index": i + 1,
-				"quantity":   quantity,
+				"quantity":   count,
 				"error":      err.Error(),
 			}))
 			return created
@@ -695,6 +698,22 @@ func (api *EquipmentAPI) updateInventoryItem(w http.ResponseWriter, r *http.Requ
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
+	var previousItem *models.InventoryItem
+	var err error
+	if api.batterySvc != nil {
+		previousItem, err = api.inventorySvc.GetItem(ctx, id, userID)
+		if err != nil {
+			api.logger.Error("Get inventory item before update failed", logging.WithFields(map[string]interface{}{
+				"id":    id,
+				"error": err.Error(),
+			}))
+			api.writeJSON(w, http.StatusInternalServerError, map[string]string{
+				"error": err.Error(),
+			})
+			return
+		}
+	}
+
 	item, err := api.inventorySvc.UpdateItem(ctx, userID, params)
 	if err != nil {
 		api.logger.Error("Update inventory item failed", logging.WithFields(map[string]interface{}{
@@ -707,7 +726,72 @@ func (api *EquipmentAPI) updateInventoryItem(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	additionalTrackers := expectedBatteryTrackerCreatesForUpdate(previousItem, item)
+	if additionalTrackers > 0 {
+		batteryParams := addInventoryParamsFromInventoryItem(item)
+		batteryCtx, batteryCancel := context.WithTimeout(context.WithoutCancel(r.Context()), batteryTrackingTimeout(additionalTrackers))
+		defer batteryCancel()
+
+		createdTrackers := api.createTrackedBatteriesWithCount(batteryCtx, userID, batteryParams, additionalTrackers)
+		if createdTrackers < additionalTrackers {
+			warning := fmt.Sprintf(
+				"Updated inventory item, but battery tracker setup was partial (%d of %d created).",
+				createdTrackers,
+				additionalTrackers,
+			)
+			api.logger.Warn("Battery tracker setup partially failed after inventory update", logging.WithFields(map[string]interface{}{
+				"user_id":  userID,
+				"item_id":  item.ID,
+				"expected": additionalTrackers,
+				"created":  createdTrackers,
+			}))
+			api.writeJSON(w, http.StatusOK, inventoryItemCreateResponse{
+				InventoryItem: *item,
+				Warning:       warning,
+			})
+			return
+		}
+	}
+
 	api.writeJSON(w, http.StatusOK, item)
+}
+
+func expectedBatteryTrackerCreatesForUpdate(previousItem, updatedItem *models.InventoryItem) int {
+	if updatedItem == nil || updatedItem.Category != models.CategoryBatteries || updatedItem.Quantity <= 0 {
+		return 0
+	}
+
+	if previousItem == nil || previousItem.Category != models.CategoryBatteries {
+		return updatedItem.Quantity
+	}
+
+	delta := updatedItem.Quantity - previousItem.Quantity
+	if delta <= 0 {
+		return 0
+	}
+
+	return delta
+}
+
+func addInventoryParamsFromInventoryItem(item *models.InventoryItem) models.AddInventoryParams {
+	if item == nil {
+		return models.AddInventoryParams{}
+	}
+
+	return models.AddInventoryParams{
+		Name:              item.Name,
+		Category:          item.Category,
+		Manufacturer:      item.Manufacturer,
+		Quantity:          item.Quantity,
+		Notes:             item.Notes,
+		CatalogID:         item.CatalogID,
+		BuildID:           item.BuildID,
+		PurchasePrice:     item.PurchasePrice,
+		PurchaseSeller:    item.PurchaseSeller,
+		ProductURL:        item.ProductURL,
+		Specs:             item.Specs,
+		SourceEquipmentID: item.SourceEquipmentID,
+	}
 }
 
 func (api *EquipmentAPI) deleteInventoryItem(w http.ResponseWriter, r *http.Request, id string) {
