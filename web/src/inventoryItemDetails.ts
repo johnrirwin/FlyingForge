@@ -82,6 +82,11 @@ export function getInventoryItemDetailsFromSpecs(specs?: Record<string, unknown>
 export function buildInventoryItemDetails(item: InventoryItem): InventoryItemDetail[] {
   const quantity = Number.isInteger(item.quantity) && item.quantity > 0 ? item.quantity : 0;
   const detailsFromSpecs = getInventoryItemDetailsFromSpecs(item.specs);
+  const fallback = sanitizeDetail({
+    purchasePrice: item.purchasePrice,
+    purchaseSeller: item.purchaseSeller,
+    buildId: item.buildId,
+  });
 
   if (quantity === 0) {
     return [];
@@ -89,18 +94,13 @@ export function buildInventoryItemDetails(item: InventoryItem): InventoryItemDet
 
   const details = detailsFromSpecs.map(cloneDetail);
   if (details.length === 0) {
-    const fallback = sanitizeDetail({
-      purchasePrice: item.purchasePrice,
-      purchaseSeller: item.purchaseSeller,
-      buildId: item.buildId,
-    });
     return Array.from({ length: quantity }, () => cloneDetail(fallback));
   }
 
   if (details.length < quantity) {
     const missing = quantity - details.length;
     for (let i = 0; i < missing; i += 1) {
-      details.push({});
+      details.push(cloneDetail(fallback));
     }
   }
 
