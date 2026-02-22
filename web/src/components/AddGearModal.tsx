@@ -33,16 +33,24 @@ function toDetailForm(detail: InventoryItemDetail): InventoryItemDetailForm {
   };
 }
 
-function resizeDetailForms(forms: InventoryItemDetailForm[], quantity: number): InventoryItemDetailForm[] {
+function cloneDetailForm(detail: InventoryItemDetailForm): InventoryItemDetailForm {
+  return {
+    purchasePrice: detail.purchasePrice,
+    purchaseSeller: detail.purchaseSeller,
+    buildId: detail.buildId,
+  };
+}
+
+function resizeDetailForms(
+  forms: InventoryItemDetailForm[],
+  quantity: number,
+  fallbackDetail: InventoryItemDetailForm,
+): InventoryItemDetailForm[] {
   if (quantity <= 0) return [];
   if (forms.length === quantity) return forms;
   if (forms.length > quantity) return forms.slice(0, quantity);
 
-  const extra = Array.from({ length: quantity - forms.length }, () => ({
-    purchasePrice: '',
-    purchaseSeller: '',
-    buildId: '',
-  }));
+  const extra = Array.from({ length: quantity - forms.length }, () => cloneDetailForm(fallbackDetail));
   return [...forms, ...extra];
 }
 
@@ -220,7 +228,12 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
       let specsForSubmit: Record<string, unknown> | undefined;
 
       if (editItem) {
-        const detailForms = resizeDetailForms(itemDetailForms, parsedQuantity);
+        const fallbackDetail: InventoryItemDetailForm = itemDetailForms[0] || {
+          purchasePrice,
+          purchaseSeller,
+          buildId,
+        };
+        const detailForms = resizeDetailForms(itemDetailForms, parsedQuantity, fallbackDetail);
         const parsedDetails: InventoryItemDetail[] = [];
 
         for (let index = 0; index < detailForms.length; index += 1) {
@@ -480,7 +493,14 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
                       setQuantityInput(nextValue);
                       if (isEditing && nextValue !== '') {
                         const nextQuantity = Number(nextValue);
-                        setItemDetailForms((prev) => resizeDetailForms(prev, nextQuantity));
+                        setItemDetailForms((prev) => {
+                          const fallbackDetail: InventoryItemDetailForm = prev[0] || {
+                            purchasePrice,
+                            purchaseSeller,
+                            buildId,
+                          };
+                          return resizeDetailForms(prev, nextQuantity, fallbackDetail);
+                        });
                         setActiveItemDetailIndex((prev) => (nextQuantity === 0 ? 0 : Math.min(prev, nextQuantity - 1)));
                       }
                     }

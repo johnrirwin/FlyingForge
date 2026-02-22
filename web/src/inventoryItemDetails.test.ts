@@ -91,4 +91,22 @@ describe('inventoryItemDetails', () => {
       { purchasePrice: 89.99, purchaseSeller: 'RDQ', buildId: 'Freestyle 5' },
     ]);
   });
+
+  it('fills empty stored detail entries using top-level fallback fields', () => {
+    const item: InventoryItem = {
+      ...baseItem,
+      quantity: 2,
+      specs: {
+        [INVENTORY_ITEM_DETAILS_SPEC_KEY]: [
+          { purchasePrice: 100, purchaseSeller: 'Store A', buildId: 'Build A' },
+          {},
+        ],
+      },
+    };
+
+    expect(buildInventoryItemDetails(item)).toEqual([
+      { purchasePrice: 100, purchaseSeller: 'Store A', buildId: 'Build A' },
+      { purchasePrice: 89.99, purchaseSeller: 'RDQ', buildId: 'Freestyle 5' },
+    ]);
+  });
 });
