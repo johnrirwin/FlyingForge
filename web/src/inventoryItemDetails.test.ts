@@ -81,13 +81,13 @@ describe('inventoryItemDetails', () => {
       quantity: 2,
       specs: {
         [INVENTORY_ITEM_DETAILS_SPEC_KEY]: [
-          { purchasePrice: 89.99, purchaseSeller: 'RDQ', buildId: 'Freestyle 5' },
+          { purchasePrice: 100, purchaseSeller: 'Store A', buildId: 'Build A' },
         ],
       },
     };
 
     expect(buildInventoryItemDetails(item)).toEqual([
-      { purchasePrice: 89.99, purchaseSeller: 'RDQ', buildId: 'Freestyle 5' },
+      { purchasePrice: 100, purchaseSeller: 'Store A', buildId: 'Build A' },
       { purchasePrice: 89.99, purchaseSeller: 'RDQ', buildId: 'Freestyle 5' },
     ]);
   });
