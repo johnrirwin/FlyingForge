@@ -117,6 +117,30 @@ describe('AddGearModal quantity editing', () => {
     expect(screen.getByText('Set purchase and build details for this item.')).toBeInTheDocument();
   });
 
+  it('prefills newly added quantity tabs with the existing item purchase price', () => {
+    const singleItem: InventoryItem = {
+      ...editItem,
+      quantity: 1,
+      purchasePrice: 124.95,
+      purchaseSeller: 'RDQ',
+      buildId: 'Quad One',
+    };
+
+    render(
+      <AddGearModal
+        isOpen
+        onClose={vi.fn()}
+        onSubmit={vi.fn().mockResolvedValue(undefined)}
+        editItem={singleItem}
+      />,
+    );
+
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Item 2' }));
+
+    expect((screen.getByPlaceholderText('0.00') as HTMLInputElement).value).toBe('124.95');
+  });
+
   it('shows per-item tabs and persists per-item purchase details while editing', async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const multiItem: InventoryItem = {

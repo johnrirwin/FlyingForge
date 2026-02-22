@@ -9,7 +9,15 @@ import (
 const InventoryItemDetailsSpecKey = "__ff_inventory_item_details"
 
 type inventoryItemDetailSpec struct {
-	PurchasePrice *float64 `json:"purchasePrice"`
+	PurchasePrice  *float64 `json:"purchasePrice"`
+	PurchaseSeller string   `json:"purchaseSeller"`
+	BuildID        string   `json:"buildId"`
+}
+
+func (d inventoryItemDetailSpec) isEmpty() bool {
+	return d.PurchasePrice == nil &&
+		strings.TrimSpace(d.PurchaseSeller) == "" &&
+		strings.TrimSpace(d.BuildID) == ""
 }
 
 // CalculateInventoryItemTotalValue returns the total known value for an inventory row.
@@ -27,15 +35,23 @@ func CalculateInventoryItemTotalValue(quantity int, purchasePrice *float64, spec
 	details, hasDetails := extractInventoryItemDetailSpecs(specs)
 	if hasDetails {
 		total := 0.0
+		fallbackCount := 0
 		for _, detail := range details {
-			if detail.PurchasePrice == nil || *detail.PurchasePrice < 0 {
+			if detail.PurchasePrice != nil && *detail.PurchasePrice >= 0 {
+				total += *detail.PurchasePrice
 				continue
 			}
-			total += *detail.PurchasePrice
+
+			if purchasePrice != nil && *purchasePrice >= 0 && detail.isEmpty() {
+				fallbackCount++
+			}
 		}
 
-		if len(details) < quantity && purchasePrice != nil && *purchasePrice >= 0 {
-			total += *purchasePrice * float64(quantity-len(details))
+		if purchasePrice != nil && *purchasePrice >= 0 {
+			if len(details) < quantity {
+				fallbackCount += quantity - len(details)
+			}
+			total += *purchasePrice * float64(fallbackCount)
 		}
 
 		return total

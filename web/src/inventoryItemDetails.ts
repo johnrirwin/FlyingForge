@@ -49,6 +49,10 @@ function cloneDetail(detail: InventoryItemDetail): InventoryItemDetail {
   };
 }
 
+function isEmptyDetail(detail: InventoryItemDetail): boolean {
+  return detail.purchasePrice === undefined && detail.purchaseSeller === undefined && detail.buildId === undefined;
+}
+
 function baseSpecsWithoutDetails(specs?: Record<string, unknown>): Record<string, unknown> {
   if (!isRecord(specs)) return {};
   const next: Record<string, unknown> = {};
@@ -92,7 +96,13 @@ export function buildInventoryItemDetails(item: InventoryItem): InventoryItemDet
     return [];
   }
 
-  const details = detailsFromSpecs.map(cloneDetail);
+  const details = detailsFromSpecs.map((detail) => {
+    const normalized = cloneDetail(detail);
+    if (isEmptyDetail(normalized)) {
+      return cloneDetail(fallback);
+    }
+    return normalized;
+  });
   if (details.length === 0) {
     return Array.from({ length: quantity }, () => cloneDetail(fallback));
   }
