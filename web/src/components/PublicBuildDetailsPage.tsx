@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { createTempBuild, getPublicBuild } from '../buildApi';
+import { createDraftBuild, createTempBuild, getPublicBuild } from '../buildApi';
 import type { Build, BuildPart } from '../buildTypes';
 import { getBuildPartDisplayName } from '../buildTypes';
+import { copyURLToClipboard, getPublishedBuildUrl } from '../buildShare';
 import { getGearCatalogItem } from '../gearCatalogApi';
 import type { GearCatalogItem } from '../gearCatalogTypes';
 import { useAuth } from '../hooks/useAuth';
@@ -35,6 +36,8 @@ export function PublicBuildDetailsPage({ onAddToInventory }: PublicBuildDetailsP
   const [partDetailError, setPartDetailError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreatingTemp, setIsCreatingTemp] = useState(false);
+  const [isCopyingURL, setIsCopyingURL] = useState(false);
+  const [copyStatusMessage, setCopyStatusMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const catalogItemsRef = useRef<Record<string, GearCatalogItem>>({});
   const pendingCatalogRequestsRef = useRef<Map<string, Promise<GearCatalogItem>>>(new Map());
@@ -58,6 +61,7 @@ export function PublicBuildDetailsPage({ onAddToInventory }: PublicBuildDetailsP
     setIsDetailModalOpen(false);
     setLoadingCatalogItemId(null);
     setPartDetailError(null);
+    setCopyStatusMessage(null);
   }, [build?.id]);
 
   const loadCatalogItemDetails = useCallback(async (catalogItemId: string): Promise<GearCatalogItem> => {
@@ -210,15 +214,19 @@ export function PublicBuildDetailsPage({ onAddToInventory }: PublicBuildDetailsP
         notes: part.notes,
       }));
 
-    if (isAuthenticated) {
-      // TODO: support pre-populating authenticated drafts from public builds.
-      navigate('/me/builds?new=1');
-      return;
-    }
-
     setIsCreatingTemp(true);
     setError(null);
     try {
+      if (isAuthenticated) {
+        await createDraftBuild({
+          title: build.title ? `${build.title} Copy` : 'Untitled Build',
+          description: build.description || '',
+          parts: clonedParts,
+        });
+        navigate('/me/builds');
+        return;
+      }
+
       const temp = await createTempBuild({
         title: build.title ? `${build.title} Copy` : 'Temporary Build',
         description: build.description || '',
@@ -226,11 +234,28 @@ export function PublicBuildDetailsPage({ onAddToInventory }: PublicBuildDetailsP
       });
       navigate(temp.url);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create temporary build');
+      setError(err instanceof Error ? err.message : 'Failed to create build copy');
     } finally {
       setIsCreatingTemp(false);
     }
   }, [build, isAuthenticated, navigate]);
+
+  const handleCopyBuildURL = useCallback(async () => {
+    if (!build || isCopyingURL) return;
+
+    setIsCopyingURL(true);
+    setCopyStatusMessage(null);
+    setError(null);
+    try {
+      const url = getPublishedBuildUrl(build.id);
+      await copyURLToClipboard(url);
+      setCopyStatusMessage('Build URL copied');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to copy build URL');
+    } finally {
+      setIsCopyingURL(false);
+    }
+  }, [build, isCopyingURL]);
 
   if (isLoading) {
     return (
@@ -253,6 +278,7 @@ export function PublicBuildDetailsPage({ onAddToInventory }: PublicBuildDetailsP
   }
 
   const pilotName = build.pilot?.callSign || build.pilot?.displayName || 'Pilot';
+  const buildURL = getPublishedBuildUrl(build.id);
 
   return (
     <div className="flex-1 overflow-y-auto p-6">
@@ -279,14 +305,31 @@ export function PublicBuildDetailsPage({ onAddToInventory }: PublicBuildDetailsP
                 <span>{build.verified ? 'Verified' : 'Unverified'}</span>
               </div>
             </div>
-            <button
-              type="button"
-              disabled={isCreatingTemp}
-              onClick={handleBuildYourOwn}
-              className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isCreatingTemp ? 'Creating...' : 'Build Your Own'}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={isCreatingTemp || isCopyingURL}
+                onClick={handleBuildYourOwn}
+                className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isCreatingTemp ? 'Creating...' : 'Build Your Own'}
+              </button>
+              <button
+                type="button"
+                disabled={isCopyingURL || isCreatingTemp}
+                onClick={handleCopyBuildURL}
+                className="rounded-lg border border-primary-500/60 px-4 py-2 text-sm font-medium text-primary-200 transition hover:border-primary-400 hover:text-primary-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isCopyingURL ? 'Copying...' : 'Copy Build URL'}
+              </button>
+            </div>
+          </div>
+          {copyStatusMessage && (
+            <p className="mt-3 text-xs text-emerald-300">{copyStatusMessage}</p>
+          )}
+          <div className="mt-4 rounded-lg border border-slate-700 bg-slate-900/60 p-3 text-xs">
+            <p className="text-slate-400">Build URL</p>
+            <p className="mt-1 break-all text-slate-200">{buildURL}</p>
           </div>
           {build.description && <p className="mt-4 text-sm text-slate-300">{build.description}</p>}
         </header>
