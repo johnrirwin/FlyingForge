@@ -54,4 +54,14 @@ describe('ItemDetail', () => {
 
     expect(screen.getByRole('link', { name: 'View Video' })).toHaveAttribute('href', item.url)
   })
+
+  it('shows "View Video" for items tagged as video', () => {
+    const item = createFeedItem({
+      tags: ['video', 'fpv'],
+    })
+
+    render(<ItemDetail item={item} onClose={vi.fn()} />)
+
+    expect(screen.getByRole('link', { name: 'View Video' })).toHaveAttribute('href', item.url)
+  })
 })
