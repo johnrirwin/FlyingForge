@@ -949,18 +949,16 @@ CREATE TABLE IF NOT EXISTS build_reactions (
 
 DO $$
 BEGIN
-    IF EXISTS (
+    IF NOT EXISTS (
         SELECT 1
         FROM pg_constraint
         WHERE conname = 'chk_build_reactions_reaction'
     ) THEN
-        ALTER TABLE build_reactions DROP CONSTRAINT chk_build_reactions_reaction;
+        ALTER TABLE build_reactions
+        ADD CONSTRAINT chk_build_reactions_reaction
+        CHECK (reaction IN ('LIKE', 'DISLIKE'));
     END IF;
 END $$;
-
-ALTER TABLE build_reactions
-ADD CONSTRAINT chk_build_reactions_reaction
-CHECK (reaction IN ('LIKE', 'DISLIKE'));
 
 CREATE INDEX IF NOT EXISTS idx_build_reactions_build ON build_reactions(build_id);
 CREATE INDEX IF NOT EXISTS idx_build_reactions_build_reaction ON build_reactions(build_id, reaction);
