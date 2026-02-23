@@ -7,6 +7,7 @@ import type { Build } from '../buildTypes';
 import type { GearCatalogItem } from '../gearCatalogTypes';
 
 vi.mock('../buildApi', () => ({
+  createDraftBuild: vi.fn(),
   getPublicBuild: vi.fn(),
   createTempBuild: vi.fn(),
 }));
@@ -19,10 +20,22 @@ vi.mock('../hooks/useAuth', () => ({
   useAuth: vi.fn(),
 }));
 
-import { getPublicBuild } from '../buildApi';
+vi.mock('../buildShare', async () => {
+  const actual = await vi.importActual<typeof import('../buildShare')>('../buildShare');
+  return {
+    ...actual,
+    copyURLToClipboard: vi.fn(),
+  };
+});
+
+import { createDraftBuild, createTempBuild, getPublicBuild } from '../buildApi';
+import { copyURLToClipboard } from '../buildShare';
 import { getGearCatalogItem } from '../gearCatalogApi';
 import { useAuth } from '../hooks/useAuth';
 
+const mockedCreateDraftBuild = vi.mocked(createDraftBuild);
+const mockedCreateTempBuild = vi.mocked(createTempBuild);
+const mockedCopyURLToClipboard = vi.mocked(copyURLToClipboard);
 const mockedGetPublicBuild = vi.mocked(getPublicBuild);
 const mockedGetGearCatalogItem = vi.mocked(getGearCatalogItem);
 const mockedUseAuth = vi.mocked(useAuth);
@@ -115,6 +128,34 @@ function buildFixture(): Build {
 describe('PublicBuildDetailsPage', () => {
   beforeEach(() => {
     mockAuth(false);
+    mockedCreateDraftBuild.mockReset();
+    mockedCreateDraftBuild.mockResolvedValue({
+      id: 'draft-copy-1',
+      status: 'DRAFT',
+      title: 'Micro Racer Copy',
+      description: 'Fast and lightweight.',
+      createdAt: '2026-02-01T00:00:00Z',
+      updatedAt: '2026-02-01T00:00:00Z',
+      verified: false,
+      parts: [],
+    });
+    mockedCreateTempBuild.mockReset();
+    mockedCreateTempBuild.mockResolvedValue({
+      token: 'temp-token-1',
+      url: '/builds/temp/temp-token-1',
+      build: {
+        id: 'temp-build-1',
+        status: 'TEMP',
+        title: 'Micro Racer Copy',
+        description: 'Fast and lightweight.',
+        createdAt: '2026-02-01T00:00:00Z',
+        updatedAt: '2026-02-01T00:00:00Z',
+        verified: false,
+        parts: [],
+      },
+    });
+    mockedCopyURLToClipboard.mockReset();
+    mockedCopyURLToClipboard.mockResolvedValue(undefined);
     mockedGetPublicBuild.mockResolvedValue(buildFixture());
     mockedGetGearCatalogItem.mockImplementation(async (id: string) => {
       if (id === 'frame-1') {
@@ -150,6 +191,7 @@ describe('PublicBuildDetailsPage', () => {
             path="/builds/:id"
             element={<PublicBuildDetailsPage onAddToInventory={onAddToInventory} />}
           />
+          <Route path="/me/builds" element={<div>My Builds</div>} />
         </Routes>
       </MemoryRouter>,
     );
@@ -243,5 +285,53 @@ describe('PublicBuildDetailsPage', () => {
     }));
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('creates a prefilled draft when authenticated users click Build Your Own', async () => {
+    mockAuth(true);
+    const user = userEvent.setup();
+    renderPage();
+
+    await waitFor(() => {
+      expect(mockedGetPublicBuild).toHaveBeenCalledWith('build-1');
+    });
+
+    await user.click(await screen.findByRole('button', { name: /build your own/i }));
+
+    expect(mockedCreateDraftBuild).toHaveBeenCalledWith({
+      title: 'Micro Racer Copy',
+      description: 'Fast and lightweight.',
+      parts: [
+        {
+          gearType: 'frame',
+          catalogItemId: 'frame-1',
+          notes: undefined,
+          position: undefined,
+        },
+        {
+          gearType: 'motor',
+          catalogItemId: 'motor-1',
+          notes: undefined,
+          position: undefined,
+        },
+      ],
+    });
+    expect(mockedCreateTempBuild).not.toHaveBeenCalled();
+  });
+
+  it('copies published build URL', async () => {
+    const user = userEvent.setup();
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(mockedGetPublicBuild).toHaveBeenCalledWith('build-1');
+    });
+
+    await user.click(await screen.findByRole('button', { name: /copy build url/i }));
+
+    expect(mockedCopyURLToClipboard).toHaveBeenCalledTimes(1);
+    expect(mockedCopyURLToClipboard.mock.calls[0][0]).toContain('/builds/build-1');
+    expect(await screen.findByText('Build URL copied')).toBeInTheDocument();
   });
 });

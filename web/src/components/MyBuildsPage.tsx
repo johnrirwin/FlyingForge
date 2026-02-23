@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
+  createTempBuild,
   createBuildFromAircraft,
   createDraftBuild,
   deleteMyBuild,
@@ -12,11 +13,13 @@ import {
   saveBuildImageUpload,
   type ModerationStatus,
   unpublishMyBuild,
+  updateTempBuild,
   updateMyBuild,
 } from '../buildApi';
 import type { Build, BuildValidationError } from '../buildTypes';
 import type { Aircraft } from '../aircraftTypes';
 import { listAircraft } from '../aircraftApi';
+import { copyURLToClipboard, getBuildURLContext, toAbsoluteBuildUrl } from '../buildShare';
 import { BuildBuilder } from './BuildBuilder';
 import { ImageUploadModal, type UploadStatusTone } from './ImageUploadModal';
 
@@ -25,6 +28,12 @@ interface PendingBuildImage {
   uploadId?: string;
   moderationStatus?: ModerationStatus;
   moderationReason?: string;
+}
+
+interface LiveBuildShareState {
+  token: string;
+  url: string;
+  payloadKey: string;
 }
 
 function revokeBlobUrl(url?: string | null) {
@@ -75,6 +84,11 @@ export function MyBuildsPage() {
   const [isImageUploading, setIsImageUploading] = useState(false);
   const [isImageSaving, setIsImageSaving] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
+  const [isCopyingShareURL, setIsCopyingShareURL] = useState(false);
+  const [isSyncingShareURL, setIsSyncingShareURL] = useState(false);
+  const [shareStatusMessage, setShareStatusMessage] = useState<string | null>(null);
+  const [shareURLError, setShareURLError] = useState<string | null>(null);
+  const [liveShareByBuildID, setLiveShareByBuildID] = useState<Record<string, LiveBuildShareState>>({});
   const modalPreviewRef = useRef<string | null>(null);
 
   const loadBuildList = useCallback(async () => {
@@ -380,6 +394,11 @@ export function MyBuildsPage() {
       setBuilds(remaining);
       setSelectedBuildId(remaining[0]?.id ?? null);
       setEditorBuild(null);
+      setLiveShareByBuildID((prev) => {
+        const next = { ...prev };
+        delete next[buildId];
+        return next;
+      });
       setValidationErrors([]);
       setShowDeleteConfirmModal(false);
       setDeleteTargetBuildId(null);
@@ -387,6 +406,49 @@ export function MyBuildsPage() {
       setError(err instanceof Error ? err.message : 'Failed to delete build');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleCopyBuildURL = async () => {
+    if (!editorBuild || isCopyingShareURL) return;
+
+    setIsCopyingShareURL(true);
+    setShareStatusMessage(null);
+    setShareURLError(null);
+    try {
+      let shareURL = '';
+      if (editorBuild.status === 'PUBLISHED') {
+        shareURL = getBuildURLContext(editorBuild).url;
+      } else if (liveShareForSelectedBuild?.url) {
+        shareURL = liveShareForSelectedBuild.url;
+      } else {
+        const created = await createTempBuild(toBuildSharePayload(editorBuild));
+        const createdToken = created.token;
+        shareURL = toAbsoluteBuildUrl(created.url || (createdToken ? `/builds/temp/${createdToken}` : ''));
+        setLiveShareByBuildID((prev) => ({
+          ...prev,
+          [editorBuild.id]: {
+            token: createdToken,
+            url: shareURL,
+            payloadKey: buildSharePayloadKey(editorBuild),
+          },
+        }));
+      }
+
+      if (!shareURL) {
+        throw new Error('Failed to generate build URL');
+      }
+
+      await copyURLToClipboard(shareURL);
+      setShareStatusMessage(
+        editorBuild.status === 'PUBLISHED'
+          ? 'Public build URL copied'
+          : 'Share URL copied',
+      );
+    } catch (err) {
+      setShareURLError(err instanceof Error ? err.message : 'Failed to copy build URL');
+    } finally {
+      setIsCopyingShareURL(false);
     }
   };
 
@@ -423,6 +485,76 @@ export function MyBuildsPage() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [isSaving, showDeleteConfirmModal]);
 
+  useEffect(() => {
+    setShareStatusMessage(null);
+    setShareURLError(null);
+  }, [selectedBuildId]);
+
+  const editorBuildPayloadKey = useMemo(() => {
+    if (!editorBuild) return '';
+    return buildSharePayloadKey(editorBuild);
+  }, [editorBuild]);
+
+  const liveShareForSelectedBuild = useMemo(() => {
+    if (!editorBuild) return undefined;
+    return liveShareByBuildID[editorBuild.id];
+  }, [editorBuild, liveShareByBuildID]);
+
+  useEffect(() => {
+    if (!editorBuild) return;
+    if (editorBuild.status === 'PUBLISHED') return;
+    if (!editorBuildPayloadKey) return;
+
+    const existingShare = liveShareForSelectedBuild;
+    if (existingShare?.payloadKey === editorBuildPayloadKey) return;
+
+    let cancelled = false;
+    const timeout = window.setTimeout(async () => {
+      setIsSyncingShareURL(true);
+      setShareURLError(null);
+
+      const payload = toBuildSharePayload(editorBuild);
+
+      try {
+        let response;
+        if (existingShare?.token) {
+          try {
+            response = await updateTempBuild(existingShare.token, payload);
+          } catch {
+            response = await createTempBuild(payload);
+          }
+        } else {
+          response = await createTempBuild(payload);
+        }
+
+        if (cancelled) return;
+
+        const nextToken = response.token || existingShare?.token || '';
+        const nextURL = toAbsoluteBuildUrl(response.url || (nextToken ? `/builds/temp/${nextToken}` : ''));
+        setLiveShareByBuildID((prev) => ({
+          ...prev,
+          [editorBuild.id]: {
+            token: nextToken,
+            url: nextURL,
+            payloadKey: editorBuildPayloadKey,
+          },
+        }));
+      } catch (err) {
+        if (cancelled) return;
+        setShareURLError(err instanceof Error ? err.message : 'Failed to generate share URL');
+      } finally {
+        if (!cancelled) {
+          setIsSyncingShareURL(false);
+        }
+      }
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [editorBuild, editorBuildPayloadKey, liveShareForSelectedBuild]);
+
   const selectedStatusLabel = useMemo(() => {
     if (!editorBuild) return '';
     switch (editorBuild.status) {
@@ -450,6 +582,18 @@ export function MyBuildsPage() {
     }
     return editorBuild.mainImageUrl;
   }, [editorBuild?.id, editorBuild?.mainImageUrl]);
+
+  const buildURLContext = useMemo(() => {
+    if (!editorBuild) return null;
+    const context = getBuildURLContext(editorBuild, liveShareByBuildID[editorBuild.id]?.url);
+    if (!context.url && editorBuild.status !== 'PUBLISHED' && isSyncingShareURL) {
+      return {
+        ...context,
+        emptyMessage: 'Generating share URL...',
+      };
+    }
+    return context;
+  }, [editorBuild, isSyncingShareURL, liveShareByBuildID]);
 
   return (
     <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6">
@@ -557,7 +701,19 @@ export function MyBuildsPage() {
                     </button>
                     <button
                       type="button"
-                      disabled={isSaving}
+                      disabled={isSaving || isCopyingShareURL}
+                      onClick={handleCopyBuildURL}
+                      className="rounded-lg border border-primary-500/60 px-3 py-2 text-sm font-medium text-primary-200 transition hover:border-primary-400 hover:text-primary-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isCopyingShareURL
+                        ? 'Copying...'
+                        : editorBuild.status === 'PUBLISHED'
+                          ? 'Copy Build URL'
+                          : 'Copy Share URL'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSaving || isCopyingShareURL}
                       onClick={handleSave}
                       className="rounded-lg border border-slate-600 px-3 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                     >
@@ -592,6 +748,26 @@ export function MyBuildsPage() {
                     )}
                   </div>
                 </div>
+
+                {shareStatusMessage && (
+                  <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
+                    {shareStatusMessage}
+                  </div>
+                )}
+
+                {buildURLContext && (
+                  <div className="rounded-lg border border-slate-700 bg-slate-900/60 p-3 text-xs">
+                    <p className="text-slate-400">{buildURLContext.label}</p>
+                    {buildURLContext.url ? (
+                      <p className="mt-1 break-all text-slate-200">{buildURLContext.url}</p>
+                    ) : (
+                      <p className="mt-1 text-slate-400">{buildURLContext.emptyMessage}</p>
+                    )}
+                    {shareURLError && (
+                      <p className="mt-2 text-red-300">{shareURLError}</p>
+                    )}
+                  </div>
+                )}
 
                 {validationErrors.length > 0 && (
                   <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
@@ -715,4 +891,35 @@ function toPartInputs(parts: Build['parts']) {
       position: part.position,
       notes: part.notes,
     }));
+}
+
+function toBuildSharePayload(build: Build) {
+  return {
+    title: build.title || 'Temporary Build',
+    description: build.description || '',
+    sourceAircraftId: build.sourceAircraftId,
+    parts: toPartInputs(build.parts),
+  };
+}
+
+function buildSharePayloadKey(build: Build) {
+  const sortedParts = [...toPartInputs(build.parts)].sort((a, b) => {
+    if (a.gearType !== b.gearType) {
+      return a.gearType.localeCompare(b.gearType);
+    }
+    if ((a.position ?? 0) !== (b.position ?? 0)) {
+      return (a.position ?? 0) - (b.position ?? 0);
+    }
+    if (a.catalogItemId !== b.catalogItemId) {
+      return a.catalogItemId.localeCompare(b.catalogItemId);
+    }
+    return (a.notes ?? '').localeCompare(b.notes ?? '');
+  });
+
+  return JSON.stringify({
+    title: build.title ?? '',
+    description: build.description ?? '',
+    sourceAircraftId: build.sourceAircraftId ?? '',
+    parts: sortedParts,
+  });
 }
