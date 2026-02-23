@@ -567,6 +567,72 @@ func TestDeleteByOwner(t *testing.T) {
 	}
 }
 
+func TestSetReactionAndClearReaction(t *testing.T) {
+	ctx := context.Background()
+	store := newFakeBuildStore()
+	svc := NewServiceWithDeps(store, nil, nil, logging.New(logging.LevelError))
+
+	build, err := svc.CreateDraft(ctx, "owner-1", models.CreateBuildParams{Title: "Reaction Build"})
+	if err != nil {
+		t.Fatalf("CreateDraft error: %v", err)
+	}
+	if _, err := store.SetStatus(ctx, build.ID, "owner-1", models.BuildStatusPublished); err != nil {
+		t.Fatalf("SetStatus setup error: %v", err)
+	}
+
+	liked, err := svc.SetReaction(ctx, build.ID, "viewer-1", models.BuildReactionLike)
+	if err != nil {
+		t.Fatalf("SetReaction like error: %v", err)
+	}
+	if liked == nil {
+		t.Fatalf("expected updated build")
+	}
+	if liked.LikeCount != 1 || liked.DislikeCount != 0 {
+		t.Fatalf("unexpected reaction counts after like: like=%d dislike=%d", liked.LikeCount, liked.DislikeCount)
+	}
+	if liked.ViewerReaction != models.BuildReactionLike {
+		t.Fatalf("expected viewer reaction LIKE, got %q", liked.ViewerReaction)
+	}
+
+	disliked, err := svc.SetReaction(ctx, build.ID, "viewer-1", models.BuildReactionDislike)
+	if err != nil {
+		t.Fatalf("SetReaction dislike error: %v", err)
+	}
+	if disliked.LikeCount != 0 || disliked.DislikeCount != 1 {
+		t.Fatalf("unexpected reaction counts after dislike: like=%d dislike=%d", disliked.LikeCount, disliked.DislikeCount)
+	}
+	if disliked.ViewerReaction != models.BuildReactionDislike {
+		t.Fatalf("expected viewer reaction DISLIKE, got %q", disliked.ViewerReaction)
+	}
+
+	cleared, err := svc.ClearReaction(ctx, build.ID, "viewer-1")
+	if err != nil {
+		t.Fatalf("ClearReaction error: %v", err)
+	}
+	if cleared.LikeCount != 0 || cleared.DislikeCount != 0 {
+		t.Fatalf("unexpected reaction counts after clear: like=%d dislike=%d", cleared.LikeCount, cleared.DislikeCount)
+	}
+	if cleared.ViewerReaction != "" {
+		t.Fatalf("expected no viewer reaction after clear, got %q", cleared.ViewerReaction)
+	}
+}
+
+func TestSetReaction_ValidatesInput(t *testing.T) {
+	ctx := context.Background()
+	store := newFakeBuildStore()
+	svc := NewServiceWithDeps(store, nil, nil, logging.New(logging.LevelError))
+
+	if _, err := svc.SetReaction(ctx, "", "viewer-1", models.BuildReactionLike); err == nil || !strings.Contains(err.Error(), "build id is required") {
+		t.Fatalf("expected build id validation error, got %v", err)
+	}
+	if _, err := svc.SetReaction(ctx, "build-1", "", models.BuildReactionLike); err == nil || !strings.Contains(err.Error(), "user id is required") {
+		t.Fatalf("expected user id validation error, got %v", err)
+	}
+	if _, err := svc.SetReaction(ctx, "build-1", "viewer-1", models.BuildReaction("sideways")); err == nil || !strings.Contains(err.Error(), "reaction must be LIKE or DISLIKE") {
+		t.Fatalf("expected reaction validation error, got %v", err)
+	}
+}
+
 func TestPublish_SubmitsPendingReview(t *testing.T) {
 	ctx := context.Background()
 	store := newFakeBuildStore()
@@ -844,15 +910,17 @@ func pendingCatalog(id string, gearType models.GearType) *models.BuildCatalogIte
 
 // fakeBuildStore is a lightweight in-memory store used for service tests.
 type fakeBuildStore struct {
-	byID    map[string]*models.Build
-	byToken map[string]string
-	nextID  int
+	byID      map[string]*models.Build
+	byToken   map[string]string
+	reactions map[string]map[string]models.BuildReaction
+	nextID    int
 }
 
 func newFakeBuildStore() *fakeBuildStore {
 	return &fakeBuildStore{
-		byID:    map[string]*models.Build{},
-		byToken: map[string]string{},
+		byID:      map[string]*models.Build{},
+		byToken:   map[string]string{},
+		reactions: map[string]map[string]models.BuildReaction{},
 	}
 }
 
@@ -891,11 +959,13 @@ func (s *fakeBuildStore) ListByOwner(ctx context.Context, ownerUserID string, pa
 	return &models.BuildListResponse{Builds: items, TotalCount: len(items)}, nil
 }
 
-func (s *fakeBuildStore) ListPublic(ctx context.Context, params models.BuildListParams) (*models.BuildListResponse, error) {
+func (s *fakeBuildStore) ListPublic(ctx context.Context, params models.BuildListParams, viewerUserID string) (*models.BuildListResponse, error) {
 	items := make([]models.Build, 0)
 	for _, build := range s.byID {
 		if build.Status == models.BuildStatusPublished {
-			items = append(items, *cloneBuild(build))
+			next := cloneBuild(build)
+			s.applyReactionMeta(next, viewerUserID)
+			items = append(items, *next)
 		}
 	}
 	return &models.BuildListResponse{Builds: items, TotalCount: len(items)}, nil
@@ -931,12 +1001,14 @@ func (s *fakeBuildStore) GetForOwner(ctx context.Context, id string, ownerUserID
 	return cloneBuild(build), nil
 }
 
-func (s *fakeBuildStore) GetPublic(ctx context.Context, id string) (*models.Build, error) {
+func (s *fakeBuildStore) GetPublic(ctx context.Context, id string, viewerUserID string) (*models.Build, error) {
 	build := s.byID[id]
 	if build == nil || build.Status != models.BuildStatusPublished {
 		return nil, nil
 	}
-	return cloneBuild(build), nil
+	next := cloneBuild(build)
+	s.applyReactionMeta(next, viewerUserID)
+	return next, nil
 }
 
 func (s *fakeBuildStore) GetForModeration(ctx context.Context, id string) (*models.Build, error) {
@@ -1105,6 +1177,47 @@ func (s *fakeBuildStore) SetStatus(ctx context.Context, id string, ownerUserID s
 	return cloneBuild(build), nil
 }
 
+func (s *fakeBuildStore) SetReaction(ctx context.Context, id string, userID string, reaction models.BuildReaction) (*models.Build, error) {
+	build := s.byID[id]
+	if build == nil || build.Status != models.BuildStatusPublished {
+		return nil, nil
+	}
+
+	reaction = models.NormalizeBuildReaction(reaction)
+	if reaction != models.BuildReactionLike && reaction != models.BuildReactionDislike {
+		return nil, fmt.Errorf("invalid reaction")
+	}
+
+	if _, ok := s.reactions[id]; !ok {
+		s.reactions[id] = map[string]models.BuildReaction{}
+	}
+	s.reactions[id][userID] = reaction
+	build.UpdatedAt = time.Now().UTC()
+
+	next := cloneBuild(build)
+	s.applyReactionMeta(next, userID)
+	return next, nil
+}
+
+func (s *fakeBuildStore) ClearReaction(ctx context.Context, id string, userID string) (*models.Build, error) {
+	build := s.byID[id]
+	if build == nil || build.Status != models.BuildStatusPublished {
+		return nil, nil
+	}
+
+	if reactionsByUser, ok := s.reactions[id]; ok {
+		delete(reactionsByUser, userID)
+		if len(reactionsByUser) == 0 {
+			delete(s.reactions, id)
+		}
+	}
+	build.UpdatedAt = time.Now().UTC()
+
+	next := cloneBuild(build)
+	s.applyReactionMeta(next, userID)
+	return next, nil
+}
+
 func (s *fakeBuildStore) ApproveForModeration(ctx context.Context, id string) (*models.Build, error) {
 	build := s.byID[id]
 	if build == nil || build.Status != models.BuildStatusPendingReview {
@@ -1227,6 +1340,30 @@ func convertParts(parts []models.BuildPartInput) []models.BuildPart {
 		})
 	}
 	return result
+}
+
+func (s *fakeBuildStore) applyReactionMeta(build *models.Build, viewerUserID string) {
+	if build == nil {
+		return
+	}
+
+	build.LikeCount = 0
+	build.DislikeCount = 0
+	build.ViewerReaction = ""
+
+	reactionsByUser := s.reactions[build.ID]
+	for _, reaction := range reactionsByUser {
+		switch reaction {
+		case models.BuildReactionLike:
+			build.LikeCount++
+		case models.BuildReactionDislike:
+			build.DislikeCount++
+		}
+	}
+
+	if viewerUserID != "" {
+		build.ViewerReaction = reactionsByUser[viewerUserID]
+	}
 }
 
 func cloneBuild(build *models.Build) *models.Build {

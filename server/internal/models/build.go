@@ -44,6 +44,26 @@ const (
 	BuildSortNewest BuildSort = "newest"
 )
 
+// BuildReaction represents a user sentiment vote on a build.
+type BuildReaction string
+
+const (
+	BuildReactionLike    BuildReaction = "LIKE"
+	BuildReactionDislike BuildReaction = "DISLIKE"
+)
+
+// NormalizeBuildReaction canonicalizes user-provided reaction values.
+func NormalizeBuildReaction(reaction BuildReaction) BuildReaction {
+	switch strings.ToUpper(strings.TrimSpace(string(reaction))) {
+	case string(BuildReactionLike):
+		return BuildReactionLike
+	case string(BuildReactionDislike):
+		return BuildReactionDislike
+	default:
+		return reaction
+	}
+}
+
 // BuildPartInput is a request payload for setting a build part.
 type BuildPartInput struct {
 	GearType      GearType `json:"gearType"`
@@ -143,22 +163,25 @@ func (p *BuildPilot) DisplayNameOrDefault() string {
 
 // Build is a curated or temporary parts list.
 type Build struct {
-	ID               string      `json:"id"`
-	OwnerUserID      string      `json:"ownerUserId,omitempty"`
-	ImageAssetID     string      `json:"-"`
-	Status           BuildStatus `json:"status"`
-	Token            string      `json:"-"`
-	ExpiresAt        *time.Time  `json:"expiresAt,omitempty"`
-	Title            string      `json:"title"`
-	Description      string      `json:"description,omitempty"`
-	SourceAircraftID string      `json:"sourceAircraftId,omitempty"`
-	CreatedAt        time.Time   `json:"createdAt"`
-	UpdatedAt        time.Time   `json:"updatedAt"`
-	PublishedAt      *time.Time  `json:"publishedAt,omitempty"`
-	Parts            []BuildPart `json:"parts,omitempty"`
-	Verified         bool        `json:"verified"`
-	MainImageURL     string      `json:"mainImageUrl,omitempty"`
-	Pilot            *BuildPilot `json:"pilot,omitempty"`
+	ID               string        `json:"id"`
+	OwnerUserID      string        `json:"ownerUserId,omitempty"`
+	ImageAssetID     string        `json:"-"`
+	Status           BuildStatus   `json:"status"`
+	Token            string        `json:"-"`
+	ExpiresAt        *time.Time    `json:"expiresAt,omitempty"`
+	Title            string        `json:"title"`
+	Description      string        `json:"description,omitempty"`
+	SourceAircraftID string        `json:"sourceAircraftId,omitempty"`
+	CreatedAt        time.Time     `json:"createdAt"`
+	UpdatedAt        time.Time     `json:"updatedAt"`
+	PublishedAt      *time.Time    `json:"publishedAt,omitempty"`
+	Parts            []BuildPart   `json:"parts,omitempty"`
+	Verified         bool          `json:"verified"`
+	MainImageURL     string        `json:"mainImageUrl,omitempty"`
+	Pilot            *BuildPilot   `json:"pilot,omitempty"`
+	LikeCount        int           `json:"likeCount"`
+	DislikeCount     int           `json:"dislikeCount"`
+	ViewerReaction   BuildReaction `json:"viewerReaction,omitempty"`
 }
 
 // CreateBuildParams defines payload for new authenticated builds.
@@ -182,6 +205,11 @@ type SetBuildImageParams struct {
 	ImageType string // "image/jpeg" or "image/png"
 	ImageData []byte
 	UploadID  string // approved token from /api/images/upload
+}
+
+// SetBuildReactionParams defines request payload for setting a build reaction.
+type SetBuildReactionParams struct {
+	Reaction BuildReaction `json:"reaction"`
 }
 
 // BuildListParams describes list query options.

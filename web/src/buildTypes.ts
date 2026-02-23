@@ -2,6 +2,7 @@ import type { GearType, CatalogItemStatus } from './gearCatalogTypes';
 
 export type BuildStatus = 'TEMP' | 'SHARED' | 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' | 'UNPUBLISHED';
 export type BuildSort = 'newest';
+export type BuildReaction = 'LIKE' | 'DISLIKE';
 
 export interface BuildCatalogItem {
   id: string;
@@ -48,6 +49,9 @@ export interface Build {
   verified: boolean;
   mainImageUrl?: string;
   pilot?: BuildPilot;
+  likeCount?: number;
+  dislikeCount?: number;
+  viewerReaction?: BuildReaction;
 }
 
 export interface BuildPartInput {

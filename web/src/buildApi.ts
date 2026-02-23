@@ -3,6 +3,7 @@ import type {
   BuildListParams,
   BuildListResponse,
   BuildPublishResponse,
+  BuildReaction,
   CreateBuildParams,
   TempBuildCreateResponse,
   UpdateBuildParams,
@@ -59,11 +60,11 @@ function buildQuery(params?: BuildListParams): string {
 
 // Public endpoints
 export async function listPublicBuilds(params?: BuildListParams): Promise<BuildListResponse> {
-  return fetchJSON<BuildListResponse>(`/api/public/builds${buildQuery(params)}`, undefined, false);
+  return fetchJSON<BuildListResponse>(`/api/public/builds${buildQuery(params)}`);
 }
 
 export async function getPublicBuild(id: string): Promise<Build> {
-  return fetchJSON<Build>(`/api/public/builds/${id}`, undefined, false);
+  return fetchJSON<Build>(`/api/public/builds/${id}`);
 }
 
 // Temporary build endpoints
@@ -138,6 +139,19 @@ export async function updateMyBuild(id: string, params: UpdateBuildParams): Prom
 
 export async function deleteMyBuild(id: string): Promise<void> {
   await fetchJSON<void>(`/api/builds/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function setBuildReaction(id: string, reaction: BuildReaction): Promise<Build> {
+  return fetchJSON<Build>(`/api/builds/${id}/reaction`, {
+    method: 'POST',
+    body: JSON.stringify({ reaction }),
+  });
+}
+
+export async function clearBuildReaction(id: string): Promise<Build> {
+  return fetchJSON<Build>(`/api/builds/${id}/reaction`, {
     method: 'DELETE',
   });
 }

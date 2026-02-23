@@ -122,6 +122,7 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationGearCatalogPublishedStatus,                // Normalizes catalog status to published/pending/removed
 		migrationGearCatalogPublishAutoApproveScannedImage, // Aligns published items to approved image status
 		migrationBuilds,                                    // Adds user/public/temp builds with part mappings
+		migrationBuildReactions,                            // Adds likes/dislikes for published builds
 		migrationFeedItems,                                 // Adds persistent storage for aggregated feed/news items
 		migrationDropLegacyImageURLs,                       // Drops legacy image_url columns in favor of image_assets
 		migrationGearItemImageURLOverrides,                 // Adds back optional external image_url overrides for gear items
@@ -933,6 +934,37 @@ BEGIN
         FOREIGN KEY (image_asset_id) REFERENCES image_assets(id) ON DELETE SET NULL;
     END IF;
 END $$;
+`
+
+// Migration to add per-user build likes/dislikes for published builds.
+const migrationBuildReactions = `
+CREATE TABLE IF NOT EXISTS build_reactions (
+    build_id UUID NOT NULL REFERENCES builds(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    reaction VARCHAR(10) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (build_id, user_id)
+);
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'chk_build_reactions_reaction'
+    ) THEN
+        ALTER TABLE build_reactions DROP CONSTRAINT chk_build_reactions_reaction;
+    END IF;
+END $$;
+
+ALTER TABLE build_reactions
+ADD CONSTRAINT chk_build_reactions_reaction
+CHECK (reaction IN ('LIKE', 'DISLIKE'));
+
+CREATE INDEX IF NOT EXISTS idx_build_reactions_build ON build_reactions(build_id);
+CREATE INDEX IF NOT EXISTS idx_build_reactions_build_reaction ON build_reactions(build_id, reaction);
+CREATE INDEX IF NOT EXISTS idx_build_reactions_user ON build_reactions(user_id);
 `
 
 // Migration to persist aggregated feed items (RSS articles, YouTube videos, etc).

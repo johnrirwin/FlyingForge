@@ -37,8 +37,8 @@ func NewBuildAPI(service *builds.Service, authMiddleware *auth.Middleware, tempR
 
 // RegisterRoutes registers build routes.
 func (api *BuildAPI) RegisterRoutes(mux *http.ServeMux, corsMiddleware func(http.HandlerFunc) http.HandlerFunc) {
-	mux.HandleFunc("/api/public/builds", corsMiddleware(api.handlePublicBuilds))
-	mux.HandleFunc("/api/public/builds/", corsMiddleware(api.handlePublicBuildItem))
+	mux.HandleFunc("/api/public/builds", corsMiddleware(api.authMiddleware.OptionalAuth(api.handlePublicBuilds)))
+	mux.HandleFunc("/api/public/builds/", corsMiddleware(api.authMiddleware.OptionalAuth(api.handlePublicBuildItem)))
 
 	mux.HandleFunc("/api/builds/temp", corsMiddleware(api.authMiddleware.OptionalAuth(api.handleTempCollection)))
 	mux.HandleFunc("/api/builds/temp/", corsMiddleware(api.handleTempItem))
@@ -55,7 +55,8 @@ func (api *BuildAPI) handlePublicBuilds(w http.ResponseWriter, r *http.Request) 
 	}
 
 	params := api.parseListParams(r)
-	response, err := api.service.ListPublic(r.Context(), params)
+	viewerUserID := auth.GetUserID(r.Context())
+	response, err := api.service.ListPublic(r.Context(), viewerUserID, params)
 	if err != nil {
 		api.logger.Error("List public builds failed", logging.WithField("error", err.Error()))
 		api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to load builds")
@@ -94,7 +95,8 @@ func (api *BuildAPI) handlePublicBuildItem(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	build, err := api.service.GetPublic(r.Context(), buildID)
+	viewerUserID := auth.GetUserID(r.Context())
+	build, err := api.service.GetPublic(r.Context(), buildID, viewerUserID)
 	if err != nil {
 		api.logger.Error("Get public build failed", logging.WithField("error", err.Error()))
 		api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to load build")
@@ -291,6 +293,60 @@ func (api *BuildAPI) handleBuildItem(w http.ResponseWriter, r *http.Request) {
 				api.uploadBuildImage(w, r, buildID, userID)
 			case http.MethodDelete:
 				api.deleteBuildImage(w, r, buildID, userID)
+			default:
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			}
+			return
+		case "reaction":
+			switch r.Method {
+			case http.MethodPost, http.MethodPut:
+				var params models.SetBuildReactionParams
+				if err := decodeJSONAllowEmpty(r, &params); err != nil {
+					api.writeError(w, http.StatusBadRequest, "invalid_body", "invalid request body")
+					return
+				}
+
+				build, err := api.service.SetReaction(r.Context(), buildID, userID, params.Reaction)
+				if err != nil {
+					var svcErr *builds.ServiceError
+					if errors.As(err, &svcErr) {
+						api.writeError(w, http.StatusBadRequest, "invalid_reaction", svcErr.Message)
+						return
+					}
+					api.logger.Error("Set build reaction failed", logging.WithFields(map[string]interface{}{
+						"build_id": buildID,
+						"user_id":  userID,
+						"error":    err.Error(),
+					}))
+					api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to set build reaction")
+					return
+				}
+				if build == nil {
+					api.writeError(w, http.StatusNotFound, "not_found", "build not found")
+					return
+				}
+				api.writeJSON(w, http.StatusOK, build)
+			case http.MethodDelete:
+				build, err := api.service.ClearReaction(r.Context(), buildID, userID)
+				if err != nil {
+					var svcErr *builds.ServiceError
+					if errors.As(err, &svcErr) {
+						api.writeError(w, http.StatusBadRequest, "invalid_reaction", svcErr.Message)
+						return
+					}
+					api.logger.Error("Clear build reaction failed", logging.WithFields(map[string]interface{}{
+						"build_id": buildID,
+						"user_id":  userID,
+						"error":    err.Error(),
+					}))
+					api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to clear build reaction")
+					return
+				}
+				if build == nil {
+					api.writeError(w, http.StatusNotFound, "not_found", "build not found")
+					return
+				}
+				api.writeJSON(w, http.StatusOK, build)
 			default:
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			}
