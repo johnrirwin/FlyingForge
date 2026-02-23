@@ -330,7 +330,7 @@ export function PublicBuildDetailsPage({ onAddToInventory }: PublicBuildDetailsP
                 label={entry.label}
                 part={entry.part}
                 onOpenPartDetails={handleOpenPartDetails}
-                isLoading={loadingCatalogItemId === entry.part?.catalogItemId}
+                isLoading={loadingCatalogItemId !== null && loadingCatalogItemId === entry.part?.catalogItemId?.trim()}
               />
             ))}
           </div>
@@ -345,7 +345,7 @@ export function PublicBuildDetailsPage({ onAddToInventory }: PublicBuildDetailsP
                 label={entry.label}
                 part={entry.part}
                 onOpenPartDetails={handleOpenPartDetails}
-                isLoading={loadingCatalogItemId === entry.part?.catalogItemId}
+                isLoading={loadingCatalogItemId !== null && loadingCatalogItemId === entry.part?.catalogItemId?.trim()}
               />
             ))}
           </div>

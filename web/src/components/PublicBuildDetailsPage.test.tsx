@@ -27,6 +27,16 @@ const mockedGetPublicBuild = vi.mocked(getPublicBuild);
 const mockedGetGearCatalogItem = vi.mocked(getGearCatalogItem);
 const mockedUseAuth = vi.mocked(useAuth);
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 function mockAuth(isAuthenticated: boolean) {
   mockedUseAuth.mockReturnValue({
     isAuthenticated,
@@ -182,5 +192,56 @@ describe('PublicBuildDetailsPage', () => {
     await user.click(screen.getByRole('button', { name: /add to my inventory/i }));
     expect(onAddToInventory).toHaveBeenCalledTimes(1);
     expect(onAddToInventory).toHaveBeenCalledWith(expect.objectContaining({ id: 'frame-1' }));
+  });
+
+  it('shows loading state for whitespace-padded catalog ids', async () => {
+    const user = userEvent.setup();
+    const deferred = createDeferred<GearCatalogItem>();
+
+    mockedGetPublicBuild.mockResolvedValue({
+      ...buildFixture(),
+      parts: [
+        {
+          id: 'part-1',
+          buildId: 'build-1',
+          gearType: 'frame',
+          catalogItemId: ' frame-1 ',
+          catalogItem: {
+            id: 'frame-1',
+            gearType: 'frame',
+            brand: 'Kayou',
+            model: 'Kayoumini',
+            variant: '2.5 inch',
+            status: 'published',
+          },
+        },
+      ],
+    });
+
+    mockedGetGearCatalogItem.mockImplementation((id: string) => {
+      if (id === 'frame-1') {
+        return deferred.promise;
+      }
+      throw new Error(`Unexpected catalog id: ${id}`);
+    });
+
+    renderPage();
+
+    const frameButton = await screen.findByRole('button', {
+      name: /view details for kayou kayoumini 2\.5 inch/i,
+    });
+
+    await user.click(frameButton);
+
+    expect(mockedGetGearCatalogItem).toHaveBeenCalledWith('frame-1');
+    expect(screen.getByText('Loading details...')).toBeInTheDocument();
+
+    deferred.resolve(buildCatalogItem({
+      id: 'frame-1',
+      gearType: 'frame',
+      msrp: 89.99,
+    }));
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
   });
 });
