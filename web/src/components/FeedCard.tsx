@@ -1,4 +1,5 @@
 import type { FeedItem, SourceInfo } from '../types';
+import { stripHtmlToText } from '../textUtils';
 
 /**
  * Props for the FeedCard component
@@ -15,6 +16,7 @@ interface FeedCardProps {
 export function FeedCard({ item, source, onClick }: FeedCardProps) {
   const publishedAt = item.publishedAt ? new Date(item.publishedAt) : null;
   const timeAgo = publishedAt ? formatTimeAgo(publishedAt) : null;
+  const summaryText = stripHtmlToText(item.summary);
 
   return (
     <article
@@ -73,9 +75,9 @@ export function FeedCard({ item, source, onClick }: FeedCardProps) {
           </h3>
 
           {/* Summary */}
-          {item.summary && (
+          {summaryText && (
             <p className="text-slate-400 text-sm line-clamp-2 mb-3">
-              {item.summary}
+              {summaryText}
             </p>
           )}
 

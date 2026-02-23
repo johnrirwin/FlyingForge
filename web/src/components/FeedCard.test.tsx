@@ -77,6 +77,16 @@ describe('FeedCard', () => {
     expect(screen.getByText('This is a test summary for the article.')).toBeInTheDocument()
   })
 
+  it('strips html from summary', () => {
+    const item = createFeedItem({ summary: '<p>News <strong>summary</strong> &amp; details</p>' })
+    const onClick = vi.fn()
+
+    render(<FeedCard item={item} onClick={onClick} />)
+
+    expect(screen.getByText('News summary & details')).toBeInTheDocument()
+    expect(screen.queryByText(/<strong>/)).not.toBeInTheDocument()
+  })
+
   it('renders score when provided', () => {
     const item = createFeedItem({ score: 42 })
     const onClick = vi.fn()
