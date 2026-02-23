@@ -6,6 +6,11 @@ import { findPart, getBuildPartDisplayName } from '../buildTypes';
 import { useAuth } from '../hooks/useAuth';
 import { MobileFloatingControls } from './MobileFloatingControls';
 
+const currencyFormatter = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+});
+
 export function PublicBuildsPage() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
@@ -207,6 +212,36 @@ export function PublicBuildsPage() {
                 const likeCount = build.likeCount ?? 0;
                 const dislikeCount = build.dislikeCount ?? 0;
                 const isReactionPending = !!reactionPendingById[build.id];
+                const msrpSummary = (build.parts || []).reduce(
+                  (summary, part) => {
+                    const msrp = part.catalogItem?.msrp;
+                    if (typeof msrp === 'number' && msrp > 0) {
+                      return {
+                        total: summary.total + msrp,
+                        hasAtLeastOnePrice: true,
+                        hasMissingPrices: summary.hasMissingPrices,
+                      };
+                    }
+
+                    if (part.catalogItem) {
+                      return {
+                        total: summary.total,
+                        hasAtLeastOnePrice: summary.hasAtLeastOnePrice,
+                        hasMissingPrices: true,
+                      };
+                    }
+
+                    return summary;
+                  },
+                  {
+                    total: 0,
+                    hasAtLeastOnePrice: false,
+                    hasMissingPrices: false,
+                  },
+                );
+                const estimatedMsrpLabel = msrpSummary.hasAtLeastOnePrice
+                  ? `${currencyFormatter.format(msrpSummary.total)}${msrpSummary.hasMissingPrices ? '+' : ''}`
+                  : 'N/A';
 
                 return (
                   <div
@@ -225,6 +260,7 @@ export function PublicBuildsPage() {
                         <div>
                           <h2 className="line-clamp-2 text-lg font-semibold text-white">{build.title}</h2>
                           <p className="text-sm text-slate-400">by {pilotName}</p>
+                          <p className="mt-1 text-sm font-medium text-primary-300">Est. MSRP: {estimatedMsrpLabel}</p>
                         </div>
                         <ul className="space-y-1 text-sm text-slate-300">
                           <li>Frame: {frame ? getBuildPartDisplayName(frame) : '—'}</li>

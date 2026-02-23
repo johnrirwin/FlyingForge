@@ -82,6 +82,95 @@ describe('PublicBuildsPage', () => {
     expect(screen.getByText(/No public builds/i)).toBeInTheDocument();
   });
 
+  it('shows estimated MSRP on build cards', async () => {
+    mockedListPublicBuilds.mockResolvedValue({
+      builds: [
+        makeBuild({
+          parts: [
+            {
+              gearType: 'frame',
+              catalogItemId: 'frame-1',
+              catalogItem: {
+                id: 'frame-1',
+                gearType: 'frame',
+                brand: 'Kayou',
+                model: 'Kayoumini',
+                status: 'published',
+                msrp: 89.99,
+              },
+            },
+            {
+              gearType: 'motor',
+              catalogItemId: 'motor-1',
+              catalogItem: {
+                id: 'motor-1',
+                gearType: 'motor',
+                brand: 'BetaFPV',
+                model: '1103',
+                status: 'published',
+                msrp: 25,
+              },
+            },
+          ],
+        }),
+      ],
+      totalCount: 1,
+      sort: 'newest',
+    });
+
+    render(
+      <MemoryRouter>
+        <PublicBuildsPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Est. MSRP: $114.99')).toBeInTheDocument();
+  });
+
+  it('shows a plus suffix when some listed part prices are missing', async () => {
+    mockedListPublicBuilds.mockResolvedValue({
+      builds: [
+        makeBuild({
+          parts: [
+            {
+              gearType: 'frame',
+              catalogItemId: 'frame-1',
+              catalogItem: {
+                id: 'frame-1',
+                gearType: 'frame',
+                brand: 'Kayou',
+                model: 'Kayoumini',
+                status: 'published',
+                msrp: 89.99,
+              },
+            },
+            {
+              gearType: 'vtx',
+              catalogItemId: 'vtx-1',
+              catalogItem: {
+                id: 'vtx-1',
+                gearType: 'vtx',
+                brand: 'DJI',
+                model: 'O4',
+                status: 'published',
+              },
+            },
+          ],
+        }),
+      ],
+      totalCount: 1,
+      sort: 'newest',
+    });
+
+    render(
+      <MemoryRouter>
+        <PublicBuildsPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Est. MSRP: $89.99+')).toBeInTheDocument();
+  });
+
   it('allows authenticated users to like a build card', async () => {
     mockAuth(true);
 

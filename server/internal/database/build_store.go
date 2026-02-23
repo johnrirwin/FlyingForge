@@ -1050,6 +1050,7 @@ func (s *BuildStore) attachParts(ctx context.Context, builds []*models.Build) er
 			gc.brand,
 			gc.model,
 			gc.variant,
+			gc.msrp,
 			gc.status,
 			COALESCE(
 				NULLIF(TRIM(gc.image_url), ''),
@@ -1080,6 +1081,7 @@ func (s *BuildStore) attachParts(ctx context.Context, builds []*models.Build) er
 		var catalogBrand sql.NullString
 		var catalogModel sql.NullString
 		var catalogVariant sql.NullString
+		var catalogMSRP sql.NullFloat64
 		var catalogStatus sql.NullString
 		var catalogImageURL sql.NullString
 
@@ -1097,6 +1099,7 @@ func (s *BuildStore) attachParts(ctx context.Context, builds []*models.Build) er
 			&catalogBrand,
 			&catalogModel,
 			&catalogVariant,
+			&catalogMSRP,
 			&catalogStatus,
 			&catalogImageURL,
 		); err != nil {
@@ -1115,6 +1118,10 @@ func (s *BuildStore) attachParts(ctx context.Context, builds []*models.Build) er
 				Variant:  catalogVariant.String,
 				Status:   models.NormalizeCatalogStatus(models.CatalogItemStatus(catalogStatus.String)),
 				ImageURL: catalogImageURL.String,
+			}
+			if catalogMSRP.Valid {
+				msrp := catalogMSRP.Float64
+				part.CatalogItem.MSRP = &msrp
 			}
 		}
 
