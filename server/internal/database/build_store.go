@@ -143,6 +143,9 @@ func (s *BuildStore) ListByOwner(ctx context.Context, ownerUserID string, params
 		return nil, err
 	}
 	s.setMainImageURLs(buildPtrs, false)
+	if err := s.attachReactionSummary(ctx, buildPtrs, ownerUserID); err != nil {
+		return nil, err
+	}
 
 	return &models.BuildListResponse{
 		Builds:     builds,
@@ -152,7 +155,7 @@ func (s *BuildStore) ListByOwner(ctx context.Context, ownerUserID string, params
 }
 
 // ListPublic returns published builds for browsing.
-func (s *BuildStore) ListPublic(ctx context.Context, params models.BuildListParams) (*models.BuildListResponse, error) {
+func (s *BuildStore) ListPublic(ctx context.Context, params models.BuildListParams, viewerUserID string) (*models.BuildListResponse, error) {
 	if params.Sort == "" {
 		params.Sort = models.BuildSortNewest
 	}
@@ -243,6 +246,9 @@ func (s *BuildStore) ListPublic(ctx context.Context, params models.BuildListPara
 		return nil, err
 	}
 	s.setMainImageURLs(buildPtrs, true)
+	if err := s.attachReactionSummary(ctx, buildPtrs, viewerUserID); err != nil {
+		return nil, err
+	}
 
 	return &models.BuildListResponse{
 		Builds:      builds,
@@ -263,6 +269,9 @@ func (s *BuildStore) GetByID(ctx context.Context, id string) (*models.Build, err
 		return nil, err
 	}
 	s.setMainImageURLs([]*models.Build{build}, false)
+	if err := s.attachReactionSummary(ctx, []*models.Build{build}, ""); err != nil {
+		return nil, err
+	}
 	return build, nil
 }
 
@@ -277,11 +286,14 @@ func (s *BuildStore) GetForOwner(ctx context.Context, id string, ownerUserID str
 		return nil, err
 	}
 	s.setMainImageURLs([]*models.Build{build}, false)
+	if err := s.attachReactionSummary(ctx, []*models.Build{build}, ownerUserID); err != nil {
+		return nil, err
+	}
 	return build, nil
 }
 
 // GetPublic returns a published build.
-func (s *BuildStore) GetPublic(ctx context.Context, id string) (*models.Build, error) {
+func (s *BuildStore) GetPublic(ctx context.Context, id string, viewerUserID string) (*models.Build, error) {
 	query := baseBuildSelect + ` WHERE b.id = $1 AND b.status = 'PUBLISHED'`
 	build, err := s.scanBuild(ctx, query, id)
 	if err != nil || build == nil {
@@ -291,6 +303,9 @@ func (s *BuildStore) GetPublic(ctx context.Context, id string) (*models.Build, e
 		return nil, err
 	}
 	s.setMainImageURLs([]*models.Build{build}, true)
+	if err := s.attachReactionSummary(ctx, []*models.Build{build}, viewerUserID); err != nil {
+		return nil, err
+	}
 	return build, nil
 }
 
@@ -310,6 +325,9 @@ func (s *BuildStore) GetTempByToken(ctx context.Context, token string) (*models.
 		return nil, err
 	}
 	s.setMainImageURLs([]*models.Build{build}, false)
+	if err := s.attachReactionSummary(ctx, []*models.Build{build}, ""); err != nil {
+		return nil, err
+	}
 	return build, nil
 }
 
@@ -468,6 +486,61 @@ func (s *BuildStore) SetStatus(ctx context.Context, id string, ownerUserID strin
 	}
 
 	return s.GetForOwner(ctx, id, ownerUserID)
+}
+
+// SetReaction upserts a user's reaction on a published build.
+func (s *BuildStore) SetReaction(ctx context.Context, id string, userID string, reaction models.BuildReaction) (*models.Build, error) {
+	result, err := s.db.ExecContext(
+		ctx,
+		`
+		INSERT INTO build_reactions (build_id, user_id, reaction)
+		SELECT b.id, $2, $3
+		FROM builds b
+		WHERE b.id = $1
+		  AND b.status = 'PUBLISHED'
+		ON CONFLICT (build_id, user_id)
+		DO UPDATE SET reaction = EXCLUDED.reaction, updated_at = NOW()
+		`,
+		id,
+		userID,
+		reaction,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set build reaction: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return nil, nil
+	}
+
+	return s.GetPublic(ctx, id, userID)
+}
+
+// ClearReaction removes a user's reaction from a published build.
+func (s *BuildStore) ClearReaction(ctx context.Context, id string, userID string) (*models.Build, error) {
+	var exists bool
+	if err := s.db.QueryRowContext(
+		ctx,
+		`SELECT EXISTS(SELECT 1 FROM builds WHERE id = $1 AND status = 'PUBLISHED')`,
+		id,
+	).Scan(&exists); err != nil {
+		return nil, fmt.Errorf("failed to verify build before clearing reaction: %w", err)
+	}
+	if !exists {
+		return nil, nil
+	}
+
+	if _, err := s.db.ExecContext(
+		ctx,
+		`DELETE FROM build_reactions WHERE build_id = $1 AND user_id = $2`,
+		id,
+		userID,
+	); err != nil {
+		return nil, fmt.Errorf("failed to clear build reaction: %w", err)
+	}
+
+	return s.GetPublic(ctx, id, userID)
 }
 
 // SetImage stores a new approved image asset reference for a build.
@@ -711,6 +784,9 @@ func (s *BuildStore) ListForModeration(ctx context.Context, params models.BuildM
 		return nil, err
 	}
 	s.setAdminMainImageURLs(buildPtrs)
+	if err := s.attachReactionSummary(ctx, buildPtrs, ""); err != nil {
+		return nil, err
+	}
 
 	return &models.BuildListResponse{
 		Builds:     builds,
@@ -730,6 +806,9 @@ func (s *BuildStore) GetForModeration(ctx context.Context, id string) (*models.B
 		return nil, err
 	}
 	s.setAdminMainImageURLs([]*models.Build{build})
+	if err := s.attachReactionSummary(ctx, []*models.Build{build}, ""); err != nil {
+		return nil, err
+	}
 	return build, nil
 }
 
@@ -1053,6 +1132,109 @@ func (s *BuildStore) attachParts(ctx context.Context, builds []*models.Build) er
 				break
 			}
 		}
+	}
+
+	return nil
+}
+
+func (s *BuildStore) attachReactionSummary(ctx context.Context, builds []*models.Build, viewerUserID string) error {
+	if len(builds) == 0 {
+		return nil
+	}
+
+	ids := make([]string, 0, len(builds))
+	byID := make(map[string]*models.Build, len(builds))
+	for _, build := range builds {
+		if build == nil {
+			continue
+		}
+		build.LikeCount = 0
+		build.DislikeCount = 0
+		build.ViewerReaction = ""
+		ids = append(ids, build.ID)
+		byID[build.ID] = build
+	}
+
+	if len(ids) == 0 {
+		return nil
+	}
+
+	countRows, err := s.db.QueryContext(
+		ctx,
+		`
+		SELECT
+			build_id,
+			COUNT(*) FILTER (WHERE reaction = 'LIKE') AS like_count,
+			COUNT(*) FILTER (WHERE reaction = 'DISLIKE') AS dislike_count
+		FROM build_reactions
+		WHERE build_id = ANY($1::uuid[])
+		GROUP BY build_id
+		`,
+		pq.Array(ids),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to load build reaction counts: %w", err)
+	}
+	defer countRows.Close()
+
+	for countRows.Next() {
+		var (
+			buildID      string
+			likeCount    int
+			dislikeCount int
+		)
+		if err := countRows.Scan(&buildID, &likeCount, &dislikeCount); err != nil {
+			return fmt.Errorf("failed to scan build reaction counts: %w", err)
+		}
+		build := byID[buildID]
+		if build == nil {
+			continue
+		}
+		build.LikeCount = likeCount
+		build.DislikeCount = dislikeCount
+	}
+
+	if err := countRows.Err(); err != nil {
+		return fmt.Errorf("failed to iterate build reaction counts: %w", err)
+	}
+
+	if strings.TrimSpace(viewerUserID) == "" {
+		return nil
+	}
+
+	reactionRows, err := s.db.QueryContext(
+		ctx,
+		`
+		SELECT build_id, reaction
+		FROM build_reactions
+		WHERE build_id = ANY($1::uuid[])
+		  AND user_id = $2
+		`,
+		pq.Array(ids),
+		viewerUserID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to load viewer build reactions: %w", err)
+	}
+	defer reactionRows.Close()
+
+	for reactionRows.Next() {
+		var (
+			buildID  string
+			reaction string
+		)
+		if err := reactionRows.Scan(&buildID, &reaction); err != nil {
+			return fmt.Errorf("failed to scan viewer build reaction: %w", err)
+		}
+		build := byID[buildID]
+		if build == nil {
+			continue
+		}
+		build.ViewerReaction = models.NormalizeBuildReaction(models.BuildReaction(reaction))
+	}
+
+	if err := reactionRows.Err(); err != nil {
+		return fmt.Errorf("failed to iterate viewer build reactions: %w", err)
 	}
 
 	return nil

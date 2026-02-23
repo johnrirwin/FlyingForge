@@ -44,11 +44,11 @@ func (e *ValidationError) Error() string {
 type buildStore interface {
 	Create(ctx context.Context, ownerUserID string, status models.BuildStatus, title string, description string, sourceAircraftID string, token string, expiresAt *time.Time, parts []models.BuildPartInput) (*models.Build, error)
 	ListByOwner(ctx context.Context, ownerUserID string, params models.BuildListParams) (*models.BuildListResponse, error)
-	ListPublic(ctx context.Context, params models.BuildListParams) (*models.BuildListResponse, error)
+	ListPublic(ctx context.Context, params models.BuildListParams, viewerUserID string) (*models.BuildListResponse, error)
 	ListForModeration(ctx context.Context, params models.BuildModerationListParams) (*models.BuildListResponse, error)
 	GetByID(ctx context.Context, id string) (*models.Build, error)
 	GetForOwner(ctx context.Context, id string, ownerUserID string) (*models.Build, error)
-	GetPublic(ctx context.Context, id string) (*models.Build, error)
+	GetPublic(ctx context.Context, id string, viewerUserID string) (*models.Build, error)
 	GetTempByToken(ctx context.Context, token string) (*models.Build, error)
 	GetForModeration(ctx context.Context, id string) (*models.Build, error)
 	Update(ctx context.Context, id string, ownerUserID string, params models.UpdateBuildParams) (*models.Build, error)
@@ -59,6 +59,8 @@ type buildStore interface {
 	SetImageForModeration(ctx context.Context, id string, imageAssetID string) (string, error)
 	GetImageForOwner(ctx context.Context, id string, ownerUserID string) ([]byte, error)
 	GetPublicImage(ctx context.Context, id string) ([]byte, error)
+	SetReaction(ctx context.Context, id string, userID string, reaction models.BuildReaction) (*models.Build, error)
+	ClearReaction(ctx context.Context, id string, userID string) (*models.Build, error)
 	GetImageForModeration(ctx context.Context, id string) ([]byte, error)
 	DeleteImage(ctx context.Context, id string, ownerUserID string) (string, error)
 	DeleteImageForModeration(ctx context.Context, id string) (string, error)
@@ -119,8 +121,8 @@ func NewServiceWithDeps(store buildStore, aircraftStore aircraftDetailsReader, g
 }
 
 // ListPublic returns published builds.
-func (s *Service) ListPublic(ctx context.Context, params models.BuildListParams) (*models.BuildListResponse, error) {
-	resp, err := s.store.ListPublic(ctx, params)
+func (s *Service) ListPublic(ctx context.Context, viewerUserID string, params models.BuildListParams) (*models.BuildListResponse, error) {
+	resp, err := s.store.ListPublic(ctx, params, strings.TrimSpace(viewerUserID))
 	if err != nil {
 		return nil, err
 	}
@@ -143,8 +145,58 @@ func (s *Service) ListForModeration(ctx context.Context, params models.BuildMode
 }
 
 // GetPublic fetches one published build.
-func (s *Service) GetPublic(ctx context.Context, id string) (*models.Build, error) {
-	build, err := s.store.GetPublic(ctx, id)
+func (s *Service) GetPublic(ctx context.Context, id string, viewerUserID string) (*models.Build, error) {
+	build, err := s.store.GetPublic(ctx, id, strings.TrimSpace(viewerUserID))
+	if err != nil {
+		return nil, err
+	}
+	if build == nil {
+		return nil, nil
+	}
+	build.Verified = isBuildVerified(build)
+	return build, nil
+}
+
+// SetReaction applies a like/dislike reaction from an authenticated user.
+func (s *Service) SetReaction(ctx context.Context, id string, userID string, reaction models.BuildReaction) (*models.Build, error) {
+	id = strings.TrimSpace(id)
+	userID = strings.TrimSpace(userID)
+	reaction = models.NormalizeBuildReaction(reaction)
+
+	if id == "" {
+		return nil, &ServiceError{Message: "build id is required"}
+	}
+	if userID == "" {
+		return nil, &ServiceError{Message: "user id is required"}
+	}
+	if reaction != models.BuildReactionLike && reaction != models.BuildReactionDislike {
+		return nil, &ServiceError{Message: "reaction must be LIKE or DISLIKE"}
+	}
+
+	build, err := s.store.SetReaction(ctx, id, userID, reaction)
+	if err != nil {
+		return nil, err
+	}
+	if build == nil {
+		return nil, nil
+	}
+	build.Verified = isBuildVerified(build)
+	return build, nil
+}
+
+// ClearReaction removes an authenticated user's build reaction.
+func (s *Service) ClearReaction(ctx context.Context, id string, userID string) (*models.Build, error) {
+	id = strings.TrimSpace(id)
+	userID = strings.TrimSpace(userID)
+
+	if id == "" {
+		return nil, &ServiceError{Message: "build id is required"}
+	}
+	if userID == "" {
+		return nil, &ServiceError{Message: "user id is required"}
+	}
+
+	build, err := s.store.ClearReaction(ctx, id, userID)
 	if err != nil {
 		return nil, err
 	}
