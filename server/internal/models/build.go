@@ -122,6 +122,7 @@ type BuildCatalogItem struct {
 	Brand    string            `json:"brand"`
 	Model    string            `json:"model"`
 	Variant  string            `json:"variant,omitempty"`
+	MSRP     *float64          `json:"msrp,omitempty"`
 	Status   CatalogItemStatus `json:"status"`
 	ImageURL string            `json:"imageUrl,omitempty"`
 }

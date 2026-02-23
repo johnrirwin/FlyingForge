@@ -10,6 +10,7 @@ export interface BuildCatalogItem {
   brand: string;
   model: string;
   variant?: string;
+  msrp?: number;
   status: CatalogItemStatus;
   imageUrl?: string;
 }

@@ -101,6 +101,7 @@ export function BuildBuilder({
           brand: item.brand,
           model: item.model,
           variant: item.variant,
+          msrp: item.msrp,
           status: item.status,
           imageUrl: item.imageUrl,
         },
