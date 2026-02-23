@@ -231,6 +231,14 @@ export function PublicBuildsPage() {
                       };
                     }
 
+                    if (part.catalogItemId?.trim()) {
+                      return {
+                        total: summary.total,
+                        hasAtLeastOnePrice: summary.hasAtLeastOnePrice,
+                        hasMissingPrices: true,
+                      };
+                    }
+
                     return summary;
                   },
                   {

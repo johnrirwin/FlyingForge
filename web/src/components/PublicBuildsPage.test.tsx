@@ -171,6 +171,43 @@ describe('PublicBuildsPage', () => {
     expect(await screen.findByText('Est. MSRP: $89.99+')).toBeInTheDocument();
   });
 
+  it('shows a plus suffix when a part has a catalogItemId without catalogItem payload', async () => {
+    mockedListPublicBuilds.mockResolvedValue({
+      builds: [
+        makeBuild({
+          parts: [
+            {
+              gearType: 'frame',
+              catalogItemId: 'frame-1',
+              catalogItem: {
+                id: 'frame-1',
+                gearType: 'frame',
+                brand: 'Kayou',
+                model: 'Kayoumini',
+                status: 'published',
+                msrp: 89.99,
+              },
+            },
+            {
+              gearType: 'receiver',
+              catalogItemId: 'receiver-1',
+            },
+          ],
+        }),
+      ],
+      totalCount: 1,
+      sort: 'newest',
+    });
+
+    render(
+      <MemoryRouter>
+        <PublicBuildsPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Est. MSRP: $89.99+')).toBeInTheDocument();
+  });
+
   it('allows authenticated users to like a build card', async () => {
     mockAuth(true);
 
