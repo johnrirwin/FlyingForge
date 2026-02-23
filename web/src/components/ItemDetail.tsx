@@ -1,4 +1,5 @@
 import type { FeedItem, SourceInfo } from '../types';
+import { stripHtmlToText } from '../textUtils';
 
 interface ItemDetailProps {
   item: FeedItem;
@@ -8,6 +9,13 @@ interface ItemDetailProps {
 
 export function ItemDetail({ item, source, onClose }: ItemDetailProps) {
   const publishedAt = item.publishedAt ? new Date(item.publishedAt) : null;
+  const summaryText = stripHtmlToText(item.summary);
+  const contentText = stripHtmlToText(item.contentText);
+  const isVideoItem =
+    item.media?.type?.toLowerCase() === 'video' ||
+    Boolean(item.media?.videoUrl) ||
+    item.sourceType === 'youtube' ||
+    item.tags.some(tag => tag.toLowerCase() === 'video');
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
@@ -105,19 +113,19 @@ export function ItemDetail({ item, source, onClose }: ItemDetailProps) {
           )}
 
           {/* Summary */}
-          {item.summary && (
+          {summaryText && (
             <div className="mb-6">
               <h3 className="text-sm font-medium text-slate-300 mb-2">Summary</h3>
-              <p className="text-slate-400 leading-relaxed">{item.summary}</p>
+              <p className="text-slate-400 leading-relaxed">{summaryText}</p>
             </div>
           )}
 
           {/* Content */}
-          {item.contentText && item.contentText !== item.summary && (
+          {contentText && contentText !== summaryText && (
             <div className="mb-6">
               <h3 className="text-sm font-medium text-slate-300 mb-2">Content</h3>
               <div className="text-slate-400 leading-relaxed whitespace-pre-wrap">
-                {item.contentText}
+                {contentText}
               </div>
             </div>
           )}
@@ -142,7 +150,7 @@ export function ItemDetail({ item, source, onClose }: ItemDetailProps) {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
             </svg>
-            Read Original
+            {isVideoItem ? 'View Video' : 'Read Original'}
           </a>
           {item.commentsUrl && item.commentsUrl !== item.url && (
             <a
