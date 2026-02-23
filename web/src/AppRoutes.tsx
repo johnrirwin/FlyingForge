@@ -285,7 +285,14 @@ export function AppRoutes({
       />
       <Route path="/shop" element={<ShopSection />} />
       <Route path="/builds" element={<PublicBuildsPage />} />
-      <Route path="/builds/:id" element={<PublicBuildDetailsPage />} />
+      <Route
+        path="/builds/:id"
+        element={
+          <PublicBuildDetailsPage
+            onAddToInventory={onAddToInventoryFromCatalog}
+          />
+        }
+      />
       <Route path="/builds/temp/:token" element={<TempBuildPage />} />
       <Route
         path="/gear-catalog"

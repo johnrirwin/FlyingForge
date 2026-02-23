@@ -1,24 +1,43 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { createTempBuild, getPublicBuild } from '../buildApi';
 import type { Build, BuildPart } from '../buildTypes';
 import { getBuildPartDisplayName } from '../buildTypes';
+import { getGearCatalogItem } from '../gearCatalogApi';
+import type { GearCatalogItem } from '../gearCatalogTypes';
 import { useAuth } from '../hooks/useAuth';
+import { GearDetailModal } from './GearDetailModal';
 
 interface SectionPart {
   label: string;
   part?: BuildPart;
 }
 
-export function PublicBuildDetailsPage() {
+interface PublicBuildDetailsPageProps {
+  onAddToInventory?: (item: GearCatalogItem) => void;
+}
+
+const currencyFormatter = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+});
+
+export function PublicBuildDetailsPage({ onAddToInventory }: PublicBuildDetailsPageProps) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
 
   const [build, setBuild] = useState<Build | null>(null);
+  const [catalogItemsById, setCatalogItemsById] = useState<Record<string, GearCatalogItem>>({});
+  const [selectedCatalogItem, setSelectedCatalogItem] = useState<GearCatalogItem | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [loadingCatalogItemId, setLoadingCatalogItemId] = useState<string | null>(null);
+  const [partDetailError, setPartDetailError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreatingTemp, setIsCreatingTemp] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const catalogItemsRef = useRef<Record<string, GearCatalogItem>>({});
+  const pendingCatalogRequestsRef = useRef<Map<string, Promise<GearCatalogItem>>>(new Map());
 
   useEffect(() => {
     if (!id) return;
@@ -30,6 +49,68 @@ export function PublicBuildDetailsPage() {
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load build'))
       .finally(() => setIsLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    setCatalogItemsById({});
+    catalogItemsRef.current = {};
+    pendingCatalogRequestsRef.current.clear();
+    setSelectedCatalogItem(null);
+    setIsDetailModalOpen(false);
+    setLoadingCatalogItemId(null);
+    setPartDetailError(null);
+  }, [build?.id]);
+
+  const loadCatalogItemDetails = useCallback(async (catalogItemId: string): Promise<GearCatalogItem> => {
+    const catalogId = catalogItemId.trim();
+    if (!catalogId) {
+      throw new Error('Missing catalog item ID');
+    }
+
+    const cached = catalogItemsRef.current[catalogId];
+    if (cached) {
+      return cached;
+    }
+
+    const pending = pendingCatalogRequestsRef.current.get(catalogId);
+    if (pending) {
+      return pending;
+    }
+
+    const request = getGearCatalogItem(catalogId)
+      .then((item) => {
+        setCatalogItemsById((previous) => {
+          if (previous[catalogId]) {
+            return previous;
+          }
+          const next = { ...previous, [catalogId]: item };
+          catalogItemsRef.current = next;
+          return next;
+        });
+        return item;
+      })
+      .finally(() => {
+        pendingCatalogRequestsRef.current.delete(catalogId);
+      });
+
+    pendingCatalogRequestsRef.current.set(catalogId, request);
+    return request;
+  }, []);
+
+  useEffect(() => {
+    const catalogItemIds = Array.from(new Set((build?.parts ?? [])
+      .map((part) => part.catalogItemId?.trim())
+      .filter((catalogItemId): catalogItemId is string => Boolean(catalogItemId))));
+
+    if (catalogItemIds.length === 0) {
+      return;
+    }
+
+    for (const catalogItemId of catalogItemIds) {
+      void loadCatalogItemDetails(catalogItemId).catch(() => {
+        // Keep rendering build rows even if catalog detail hydration fails.
+      });
+    }
+  }, [build?.parts, loadCatalogItemDetails]);
 
   const partsByType = useMemo(() => {
     const map = new Map<string, BuildPart>();
@@ -59,6 +140,63 @@ export function PublicBuildDetailsPage() {
     { label: 'GPS', part: partsByType.get('gps') },
     { label: 'Other', part: partsByType.get('other') },
   ];
+
+  const msrpSummary = useMemo(() => {
+    const catalogItemIds = Array.from(new Set((build?.parts ?? [])
+      .map((part) => part.catalogItemId?.trim())
+      .filter((catalogItemId): catalogItemId is string => Boolean(catalogItemId))));
+
+    let total = 0;
+    let unresolvedCount = 0;
+    let missingMsrpCount = 0;
+
+    for (const catalogItemId of catalogItemIds) {
+      const item = catalogItemsById[catalogItemId];
+      if (!item) {
+        unresolvedCount += 1;
+        continue;
+      }
+      if (typeof item.msrp === 'number' && item.msrp > 0) {
+        total += item.msrp;
+        continue;
+      }
+      missingMsrpCount += 1;
+    }
+
+    return {
+      total,
+      totalComponents: catalogItemIds.length,
+      unresolvedCount,
+      missingMsrpCount,
+    };
+  }, [build?.parts, catalogItemsById]);
+
+  const formattedMsrp = useMemo(() => currencyFormatter.format(msrpSummary.total), [msrpSummary.total]);
+
+  const handleOpenPartDetails = useCallback(async (part?: BuildPart) => {
+    const catalogItemId = part?.catalogItemId?.trim();
+    if (!catalogItemId) {
+      return;
+    }
+
+    setPartDetailError(null);
+    setLoadingCatalogItemId(catalogItemId);
+
+    try {
+      const detail = await loadCatalogItemDetails(catalogItemId);
+      setSelectedCatalogItem(detail);
+      setIsDetailModalOpen(true);
+    } catch (err) {
+      setPartDetailError(err instanceof Error ? err.message : 'Failed to load component details');
+    } finally {
+      setLoadingCatalogItemId((current) => (current === catalogItemId ? null : current));
+    }
+  }, [loadCatalogItemDetails]);
+
+  const handleClosePartDetails = useCallback(() => {
+    setIsDetailModalOpen(false);
+    setSelectedCatalogItem(null);
+  }, []);
 
   const handleBuildYourOwn = useCallback(async () => {
     if (!build) return;
@@ -160,10 +298,40 @@ export function PublicBuildDetailsPage() {
         )}
 
         <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-white">Estimated MSRP</h2>
+              <p className="mt-2 text-xs text-slate-400">
+                {msrpSummary.totalComponents === 0
+                  ? 'No catalog components listed yet.'
+                  : msrpSummary.unresolvedCount > 0
+                    ? `Loading prices for ${msrpSummary.unresolvedCount} component${msrpSummary.unresolvedCount === 1 ? '' : 's'}.`
+                    : msrpSummary.missingMsrpCount > 0
+                      ? `${msrpSummary.missingMsrpCount} component${msrpSummary.missingMsrpCount === 1 ? '' : 's'} missing MSRP data.`
+                      : `Includes all ${msrpSummary.totalComponents} listed component${msrpSummary.totalComponents === 1 ? '' : 's'}.`}
+              </p>
+            </div>
+            <p className="text-2xl font-semibold text-primary-300">{formattedMsrp}</p>
+          </div>
+        </section>
+
+        {partDetailError && (
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
+            {partDetailError}
+          </div>
+        )}
+
+        <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-5">
           <h2 className="text-lg font-semibold text-white">Core Components</h2>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             {coreParts.map((entry) => (
-              <PartRow key={entry.label} label={entry.label} part={entry.part} />
+              <PartRow
+                key={entry.label}
+                label={entry.label}
+                part={entry.part}
+                onOpenPartDetails={handleOpenPartDetails}
+                isLoading={loadingCatalogItemId === entry.part?.catalogItemId}
+              />
             ))}
           </div>
         </section>
@@ -172,20 +340,64 @@ export function PublicBuildDetailsPage() {
           <h2 className="text-lg font-semibold text-white">Optional Components</h2>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             {optionalParts.map((entry) => (
-              <PartRow key={entry.label} label={entry.label} part={entry.part} />
+              <PartRow
+                key={entry.label}
+                label={entry.label}
+                part={entry.part}
+                onOpenPartDetails={handleOpenPartDetails}
+                isLoading={loadingCatalogItemId === entry.part?.catalogItemId}
+              />
             ))}
           </div>
         </section>
       </div>
+      {selectedCatalogItem && (
+        <GearDetailModal
+          item={selectedCatalogItem}
+          isOpen={isDetailModalOpen}
+          onClose={handleClosePartDetails}
+          onAddToInventory={onAddToInventory}
+          isAuthenticated={isAuthenticated}
+        />
+      )}
     </div>
   );
 }
 
-function PartRow({ label, part }: { label: string; part?: BuildPart }) {
+function PartRow({
+  label,
+  part,
+  onOpenPartDetails,
+  isLoading,
+}: {
+  label: string;
+  part?: BuildPart;
+  onOpenPartDetails: (part?: BuildPart) => void;
+  isLoading: boolean;
+}) {
+  const isInteractive = Boolean(part?.catalogItemId?.trim());
+  const description = part ? getBuildPartDisplayName(part) : 'Not specified';
+
+  if (!isInteractive) {
+    return (
+      <div className="rounded-lg border border-slate-700 bg-slate-800/80 p-3">
+        <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
+        <p className="mt-1 text-sm text-slate-200">{description}</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="rounded-lg border border-slate-700 bg-slate-800/80 p-3">
+    <button
+      type="button"
+      onClick={() => onOpenPartDetails(part)}
+      disabled={isLoading}
+      className="w-full rounded-lg border border-slate-700 bg-slate-800/80 p-3 text-left transition hover:border-primary-500/50 hover:bg-slate-700/40 disabled:cursor-wait disabled:opacity-70"
+      aria-label={`View details for ${description}`}
+    >
       <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-sm text-slate-200">{part ? getBuildPartDisplayName(part) : 'Not specified'}</p>
-    </div>
+      <p className="mt-1 text-sm text-slate-200">{description}</p>
+      <p className="mt-2 text-xs text-primary-300">{isLoading ? 'Loading details...' : 'View details'}</p>
+    </button>
   );
 }
