@@ -164,27 +164,29 @@ func (p *BuildPilot) DisplayNameOrDefault() string {
 
 // Build is a curated or temporary parts list.
 type Build struct {
-	ID               string        `json:"id"`
-	OwnerUserID      string        `json:"ownerUserId,omitempty"`
-	ImageAssetID     string        `json:"-"`
-	Status           BuildStatus   `json:"status"`
-	Token            string        `json:"-"`
-	ExpiresAt        *time.Time    `json:"expiresAt,omitempty"`
-	Title            string        `json:"title"`
-	Description      string        `json:"description,omitempty"`
-	YouTubeURL       string        `json:"youtubeUrl,omitempty"`
-	FlightYouTubeURL string        `json:"flightYoutubeUrl,omitempty"`
-	SourceAircraftID string        `json:"sourceAircraftId,omitempty"`
-	CreatedAt        time.Time     `json:"createdAt"`
-	UpdatedAt        time.Time     `json:"updatedAt"`
-	PublishedAt      *time.Time    `json:"publishedAt,omitempty"`
-	Parts            []BuildPart   `json:"parts,omitempty"`
-	Verified         bool          `json:"verified"`
-	MainImageURL     string        `json:"mainImageUrl,omitempty"`
-	Pilot            *BuildPilot   `json:"pilot,omitempty"`
-	LikeCount        int           `json:"likeCount"`
-	DislikeCount     int           `json:"dislikeCount"`
-	ViewerReaction   BuildReaction `json:"viewerReaction,omitempty"`
+	ID                   string        `json:"id"`
+	OwnerUserID          string        `json:"ownerUserId,omitempty"`
+	ImageAssetID         string        `json:"-"`
+	Status               BuildStatus   `json:"status"`
+	StagedRevisionID     string        `json:"stagedRevisionId,omitempty"`
+	StagedRevisionStatus BuildStatus   `json:"stagedRevisionStatus,omitempty"`
+	Token                string        `json:"-"`
+	ExpiresAt            *time.Time    `json:"expiresAt,omitempty"`
+	Title                string        `json:"title"`
+	Description          string        `json:"description,omitempty"`
+	YouTubeURL           string        `json:"youtubeUrl,omitempty"`
+	FlightYouTubeURL     string        `json:"flightYoutubeUrl,omitempty"`
+	SourceAircraftID     string        `json:"sourceAircraftId,omitempty"`
+	CreatedAt            time.Time     `json:"createdAt"`
+	UpdatedAt            time.Time     `json:"updatedAt"`
+	PublishedAt          *time.Time    `json:"publishedAt,omitempty"`
+	Parts                []BuildPart   `json:"parts,omitempty"`
+	Verified             bool          `json:"verified"`
+	MainImageURL         string        `json:"mainImageUrl,omitempty"`
+	Pilot                *BuildPilot   `json:"pilot,omitempty"`
+	LikeCount            int           `json:"likeCount"`
+	DislikeCount         int           `json:"dislikeCount"`
+	ViewerReaction       BuildReaction `json:"viewerReaction,omitempty"`
 }
 
 // CreateBuildParams defines payload for new authenticated builds.

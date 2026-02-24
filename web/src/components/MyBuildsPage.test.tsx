@@ -359,4 +359,32 @@ describe('MyBuildsPage share URL behavior', () => {
       expect(mockedPublishMyBuild).toHaveBeenCalledWith('build-2');
     });
   });
+
+  it('shows submit changes action for published builds with staged revisions', async () => {
+    const publishedWithStagedChanges = draftBuildFixture({
+      id: 'build-published',
+      status: 'PUBLISHED',
+      stagedRevisionStatus: 'DRAFT',
+      parts: [
+        { gearType: 'frame', catalogItemId: 'frame-1' },
+        { gearType: 'aio', catalogItemId: 'aio-1' },
+      ],
+    });
+
+    mockedListMyBuilds.mockResolvedValue({
+      builds: [publishedWithStagedChanges],
+      totalCount: 1,
+      sort: 'newest',
+    });
+    mockedGetMyBuild.mockResolvedValue(publishedWithStagedChanges);
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(mockedGetMyBuild).toHaveBeenCalledWith('build-published');
+    });
+
+    expect(await screen.findByRole('button', { name: /submit changes for approval/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^unpublish$/i })).not.toBeInTheDocument();
+  });
 });

@@ -39,6 +39,8 @@ export interface Build {
   id: string;
   ownerUserId?: string;
   status: BuildStatus;
+  stagedRevisionId?: string;
+  stagedRevisionStatus?: BuildStatus;
   expiresAt?: string;
   title: string;
   description?: string;
