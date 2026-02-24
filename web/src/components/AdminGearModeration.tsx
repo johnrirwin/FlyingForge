@@ -14,6 +14,7 @@ import {
   adminGetBuild,
   adminUpdateBuild,
   adminPublishBuild,
+  adminUnpublishBuild,
   adminUploadBuildImage,
   adminDeleteBuildImage,
   getAdminGearImageUrl,
@@ -1324,6 +1325,7 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isUnpublishing, setIsUnpublishing] = useState(false);
   const [isDeletingImage, setIsDeletingImage] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<BuildValidationError[]>([]);
@@ -1439,8 +1441,11 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
     setShowImageModal(false);
   };
 
-  const saveChanges = useCallback(async (publishAfterSave: boolean) => {
+  const saveChanges = useCallback(async (action: 'save' | 'publish' | 'unpublish') => {
     if (!build) return;
+
+    const publishAfterSave = action === 'publish';
+    const unpublishAfterSave = action === 'unpublish';
 
     const updatePayload = {
       title: title.trim(),
@@ -1451,6 +1456,8 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
 
     if (publishAfterSave) {
       setIsPublishing(true);
+    } else if (unpublishAfterSave) {
+      setIsUnpublishing(true);
     } else {
       setIsSaving(true);
     }
@@ -1480,6 +1487,10 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
         return;
       }
 
+      if (unpublishAfterSave) {
+        updated = await adminUnpublishBuild(build.id);
+      }
+
       setBuild(updated);
       setImageFile(null);
       if (imagePreview?.startsWith('blob:')) {
@@ -1493,6 +1504,7 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
     } finally {
       setIsSaving(false);
       setIsPublishing(false);
+      setIsUnpublishing(false);
     }
   }, [build, description, flightYoutubeUrl, imageFile, imagePreview, onPublished, onSave, title, youtubeUrl]);
 
@@ -1662,20 +1674,32 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
             </button>
             <button
               type="button"
-              disabled={isSaving || isPublishing}
-              onClick={() => void saveChanges(false)}
+              disabled={isSaving || isPublishing || isUnpublishing}
+              onClick={() => void saveChanges('save')}
               className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-medium text-slate-200 hover:border-slate-500 hover:text-white disabled:opacity-60"
             >
               {isSaving ? 'Saving...' : 'Save Changes'}
             </button>
-            <button
-              type="button"
-              disabled={isSaving || isPublishing}
-              onClick={() => void saveChanges(true)}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-60"
-            >
-              {isPublishing ? 'Publishing...' : 'Publish Build'}
-            </button>
+            {(build.status === 'PENDING_REVIEW' || build.status === 'PUBLISHED') && (
+              <button
+                type="button"
+                disabled={isSaving || isPublishing || isUnpublishing}
+                onClick={() => void saveChanges('unpublish')}
+                className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-60"
+              >
+                {isUnpublishing ? 'Unpublishing...' : 'Unpublish Build'}
+              </button>
+            )}
+            {(build.status === 'PENDING_REVIEW' || build.status === 'DRAFT' || build.status === 'UNPUBLISHED') && (
+              <button
+                type="button"
+                disabled={isSaving || isPublishing || isUnpublishing}
+                onClick={() => void saveChanges('publish')}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-60"
+              >
+                {isPublishing ? 'Publishing...' : 'Publish Build'}
+              </button>
+            )}
           </div>
         </div>
       </div>

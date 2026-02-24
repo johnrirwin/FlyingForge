@@ -429,6 +429,11 @@ func (api *BuildAPI) handleBuildItem(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		deleted, err := api.service.DeleteByOwner(r.Context(), buildID, userID)
 		if err != nil {
+			var svcErr *builds.ServiceError
+			if errors.As(err, &svcErr) {
+				api.writeError(w, http.StatusBadRequest, "invalid_request", svcErr.Message)
+				return
+			}
 			api.logger.Error("Delete build failed", logging.WithField("error", err.Error()))
 			api.writeError(w, http.StatusInternalServerError, "internal_error", "failed to delete build")
 			return

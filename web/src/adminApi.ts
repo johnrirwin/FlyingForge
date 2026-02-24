@@ -527,6 +527,33 @@ export async function adminPublishBuild(id: string): Promise<BuildPublishRespons
   return response.json();
 }
 
+export async function adminUnpublishBuild(id: string): Promise<Build> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const response = await fetch(`${API_BASE}/builds/${id}/unpublish`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Request failed' }));
+    if (response.status === 403) {
+      throw new Error('Admin or content-admin access required');
+    }
+    if (response.status === 404) {
+      throw new Error('Build not found');
+    }
+    throw new Error(data.error || 'Failed to unpublish build');
+  }
+
+  return response.json();
+}
+
 export async function adminUploadBuildImage(id: string, imageFile: File): Promise<void> {
   const token = getAuthToken();
   if (!token) {

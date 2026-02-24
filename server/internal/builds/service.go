@@ -637,6 +637,33 @@ func (s *Service) Unpublish(ctx context.Context, id string, ownerUserID string) 
 	return updated, nil
 }
 
+// UnpublishForModeration removes a build from public listings via content moderation tools.
+func (s *Service) UnpublishForModeration(ctx context.Context, id string) (*models.Build, error) {
+	build, err := s.store.GetForModeration(ctx, strings.TrimSpace(id))
+	if err != nil {
+		return nil, err
+	}
+	if build == nil {
+		return nil, nil
+	}
+	if build.Status != models.BuildStatusPublished && build.Status != models.BuildStatusPendingReview {
+		return nil, &ServiceError{Message: "build cannot be unpublished"}
+	}
+	if strings.TrimSpace(build.OwnerUserID) == "" {
+		return nil, &ServiceError{Message: "build owner missing"}
+	}
+
+	updated, err := s.store.SetStatus(ctx, build.ID, build.OwnerUserID, models.BuildStatusUnpublished)
+	if err != nil {
+		return nil, err
+	}
+	if updated == nil {
+		return nil, nil
+	}
+	updated.Verified = isBuildVerified(updated)
+	return updated, nil
+}
+
 // ApproveForModeration publishes a pending build from the moderation queue.
 func (s *Service) ApproveForModeration(ctx context.Context, id string) (*models.Build, models.BuildValidationResult, error) {
 	build, err := s.store.GetForModeration(ctx, strings.TrimSpace(id))
@@ -666,8 +693,19 @@ func (s *Service) ApproveForModeration(ctx context.Context, id string) (*models.
 	return updated, validation, nil
 }
 
-// DeleteByOwner deletes an owned non-temp build regardless of draft/publication status.
+// DeleteByOwner deletes an owned non-temp build that is not currently published or pending review.
 func (s *Service) DeleteByOwner(ctx context.Context, id string, ownerUserID string) (bool, error) {
+	build, err := s.store.GetForOwner(ctx, strings.TrimSpace(id), ownerUserID)
+	if err != nil {
+		return false, err
+	}
+	if build == nil {
+		return false, nil
+	}
+	if build.Status == models.BuildStatusPublished || build.Status == models.BuildStatusPendingReview {
+		return false, &ServiceError{Message: "published builds must be unpublished before deletion"}
+	}
+
 	return s.store.Delete(ctx, strings.TrimSpace(id), ownerUserID)
 }
 
