@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -1182,20 +1183,7 @@ func (s *BuildStore) ApproveForModeration(ctx context.Context, id string) (*mode
 
 func (s *BuildStore) ensurePublishedRevisionDraftTx(ctx context.Context, tx *sql.Tx, publishedBuildID string, ownerUserID string) (string, error) {
 	var revisionBuildID string
-	if err := tx.QueryRowContext(
-		ctx,
-		`
-			SELECT id
-			FROM builds
-			WHERE owner_user_id = $1
-			  AND revision_of_build_id = $2
-			  AND status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED')
-			ORDER BY updated_at DESC
-			LIMIT 1
-		`,
-		ownerUserID,
-		publishedBuildID,
-	).Scan(&revisionBuildID); err == nil {
+	if err := s.selectExistingRevisionDraftTx(ctx, tx, ownerUserID, publishedBuildID, &revisionBuildID); err == nil {
 		return revisionBuildID, nil
 	} else if err != sql.ErrNoRows {
 		return "", fmt.Errorf("failed to check existing published build revision: %w", err)
@@ -1237,6 +1225,14 @@ func (s *BuildStore) ensurePublishedRevisionDraftTx(ctx context.Context, tx *sql
 		if err == sql.ErrNoRows {
 			return "", nil
 		}
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && string(pqErr.Code) == "23505" {
+			if retryErr := s.selectExistingRevisionDraftTx(ctx, tx, ownerUserID, publishedBuildID, &revisionBuildID); retryErr == nil {
+				return revisionBuildID, nil
+			} else if retryErr != sql.ErrNoRows {
+				return "", fmt.Errorf("failed to recover existing revision draft after concurrent insert: %w", retryErr)
+			}
+		}
 		return "", fmt.Errorf("failed to create published build revision draft: %w", err)
 	}
 
@@ -1255,6 +1251,29 @@ func (s *BuildStore) ensurePublishedRevisionDraftTx(ctx context.Context, tx *sql
 	}
 
 	return revisionBuildID, nil
+}
+
+func (s *BuildStore) selectExistingRevisionDraftTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	ownerUserID string,
+	publishedBuildID string,
+	revisionBuildID *string,
+) error {
+	return tx.QueryRowContext(
+		ctx,
+		`
+			SELECT id
+			FROM builds
+			WHERE owner_user_id = $1
+			  AND revision_of_build_id = $2
+			  AND status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED')
+			ORDER BY updated_at DESC
+			LIMIT 1
+		`,
+		ownerUserID,
+		publishedBuildID,
+	).Scan(revisionBuildID)
 }
 
 func (s *BuildStore) replacePartsTx(ctx context.Context, tx *sql.Tx, buildID string, parts []models.BuildPartInput) error {
