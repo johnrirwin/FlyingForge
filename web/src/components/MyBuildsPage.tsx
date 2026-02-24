@@ -409,18 +409,19 @@ export function MyBuildsPage() {
     }
   };
 
-  const handleCopyBuildURL = async () => {
+  const handleCopyBuildURL = useCallback(async () => {
     if (!editorBuild || isCopyingShareURL) return;
 
     setIsCopyingShareURL(true);
     setShareStatusMessage(null);
     setShareURLError(null);
     try {
+      const currentLiveShare = liveShareByBuildID[editorBuild.id];
       let shareURL = '';
       if (editorBuild.status === 'PUBLISHED') {
         shareURL = getBuildURLContext(editorBuild).url;
-      } else if (liveShareForSelectedBuild?.url) {
-        shareURL = liveShareForSelectedBuild.url;
+      } else if (currentLiveShare?.url) {
+        shareURL = currentLiveShare.url;
       } else {
         const created = await createTempBuild(toBuildSharePayload(editorBuild));
         const createdToken = created.token;
@@ -450,7 +451,7 @@ export function MyBuildsPage() {
     } finally {
       setIsCopyingShareURL(false);
     }
-  };
+  }, [editorBuild, isCopyingShareURL, liveShareByBuildID]);
 
   const handleOpenDeleteConfirm = () => {
     if (!editorBuild || isSaving) return;
@@ -500,13 +501,15 @@ export function MyBuildsPage() {
     return liveShareByBuildID[editorBuild.id];
   }, [editorBuild, liveShareByBuildID]);
 
+  const liveShareToken = liveShareForSelectedBuild?.token ?? '';
+  const liveSharePayloadKey = liveShareForSelectedBuild?.payloadKey ?? '';
+
   useEffect(() => {
     if (!editorBuild) return;
     if (editorBuild.status === 'PUBLISHED') return;
     if (!editorBuildPayloadKey) return;
 
-    const existingShare = liveShareForSelectedBuild;
-    if (existingShare?.payloadKey === editorBuildPayloadKey) return;
+    if (liveSharePayloadKey === editorBuildPayloadKey) return;
 
     let cancelled = false;
     const timeout = window.setTimeout(async () => {
@@ -517,10 +520,11 @@ export function MyBuildsPage() {
 
       try {
         let response;
-        if (existingShare?.token) {
+        if (liveShareToken) {
           try {
-            response = await updateTempBuild(existingShare.token, payload);
-          } catch {
+            response = await updateTempBuild(liveShareToken, payload);
+          } catch (updateErr) {
+            console.warn('Failed to update temp build, falling back to createTempBuild', updateErr);
             response = await createTempBuild(payload);
           }
         } else {
@@ -529,7 +533,7 @@ export function MyBuildsPage() {
 
         if (cancelled) return;
 
-        const nextToken = response.token || existingShare?.token || '';
+        const nextToken = response.token || liveShareToken;
         const nextURL = toAbsoluteBuildUrl(response.url || (nextToken ? `/builds/temp/${nextToken}` : ''));
         setLiveShareByBuildID((prev) => ({
           ...prev,
@@ -553,7 +557,7 @@ export function MyBuildsPage() {
       cancelled = true;
       window.clearTimeout(timeout);
     };
-  }, [editorBuild, editorBuildPayloadKey, liveShareForSelectedBuild]);
+  }, [editorBuild, editorBuildPayloadKey, liveSharePayloadKey, liveShareToken]);
 
   const selectedStatusLabel = useMemo(() => {
     if (!editorBuild) return '';
