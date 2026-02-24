@@ -67,6 +67,7 @@ export function MyBuildsPage() {
   const [builds, setBuilds] = useState<Build[]>([]);
   const [selectedBuildId, setSelectedBuildId] = useState<string | null>(null);
   const [editorBuild, setEditorBuild] = useState<Build | null>(null);
+  const [persistedBuildKey, setPersistedBuildKey] = useState('');
   const [aircraft, setAircraft] = useState<Aircraft[]>([]);
   const [selectedAircraftId, setSelectedAircraftId] = useState<string>('');
 
@@ -122,6 +123,7 @@ export function MyBuildsPage() {
       .then((created) => {
         setSelectedBuildId(created.id);
         setEditorBuild(created);
+        setPersistedBuildKey(buildSharePayloadKey(created));
         setBuilds((prev) => [created, ...prev.filter((item) => item.id !== created.id)]);
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to create draft'))
@@ -133,6 +135,7 @@ export function MyBuildsPage() {
   useEffect(() => {
     if (!selectedBuildId) {
       setEditorBuild(null);
+      setPersistedBuildKey('');
       return;
     }
 
@@ -141,7 +144,10 @@ export function MyBuildsPage() {
     setValidationErrors([]);
 
     getMyBuild(selectedBuildId)
-      .then((build) => setEditorBuild(build))
+      .then((build) => {
+        setEditorBuild(build);
+        setPersistedBuildKey(buildSharePayloadKey(build));
+      })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load build'))
       .finally(() => setIsLoadingBuild(false));
   }, [selectedBuildId]);
@@ -175,6 +181,7 @@ export function MyBuildsPage() {
       setBuilds((prev) => [created, ...prev.filter((item) => item.id !== created.id)]);
       setSelectedBuildId(created.id);
       setEditorBuild(created);
+      setPersistedBuildKey(buildSharePayloadKey(created));
       setValidationErrors([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create draft build');
@@ -190,6 +197,7 @@ export function MyBuildsPage() {
       setBuilds((prev) => [created, ...prev.filter((item) => item.id !== created.id)]);
       setSelectedBuildId(created.id);
       setEditorBuild(created);
+      setPersistedBuildKey(buildSharePayloadKey(created));
       setValidationErrors([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create build from aircraft');
@@ -218,6 +226,7 @@ export function MyBuildsPage() {
         parts: toPartInputs(editorBuild.parts),
       });
       setEditorBuild(updated);
+      setPersistedBuildKey(buildSharePayloadKey(updated));
       setBuilds((prev) => [updated, ...prev.filter((item) => item.id !== updated.id)]);
       setSelectedBuildId(updated.id);
       setValidationErrors([]);
@@ -244,6 +253,7 @@ export function MyBuildsPage() {
         parts: toPartInputs(editorBuild.parts),
       });
       setEditorBuild(saved);
+      setPersistedBuildKey(buildSharePayloadKey(saved));
       setBuilds((prev) => [saved, ...prev.filter((item) => item.id !== saved.id)]);
       setSelectedBuildId(saved.id);
 
@@ -254,6 +264,7 @@ export function MyBuildsPage() {
       }
       if (response.build) {
         setEditorBuild(response.build);
+        setPersistedBuildKey(buildSharePayloadKey(response.build));
         setBuilds((prev) => [response.build!, ...prev.filter((item) => item.id !== response.build!.id)]);
         setSelectedBuildId(response.build.id);
       }
@@ -273,6 +284,7 @@ export function MyBuildsPage() {
     try {
       const updated = await unpublishMyBuild(editorBuild.id);
       setEditorBuild(updated);
+      setPersistedBuildKey(buildSharePayloadKey(updated));
       setBuilds((prev) => [updated, ...prev.filter((item) => item.id !== updated.id)]);
       setValidationErrors([]);
     } catch (err) {
@@ -371,6 +383,7 @@ export function MyBuildsPage() {
   const refreshBuildAfterImageChange = async (buildId: string) => {
     const refreshed = await getMyBuild(buildId);
     setEditorBuild(refreshed);
+    setPersistedBuildKey(buildSharePayloadKey(refreshed));
     setBuilds((prev) => [refreshed, ...prev.filter((item) => item.id !== refreshed.id)]);
   };
 
@@ -401,6 +414,7 @@ export function MyBuildsPage() {
       setBuilds(remaining);
       setSelectedBuildId(remaining[0]?.id ?? null);
       setEditorBuild(null);
+      setPersistedBuildKey('');
       setLiveShareByBuildID((prev) => {
         const next = { ...prev };
         delete next[buildId];
@@ -600,6 +614,18 @@ export function MyBuildsPage() {
     return editorBuild.mainImageUrl;
   }, [editorBuild?.id, editorBuild?.mainImageUrl]);
 
+  const hasUnsavedEditorChanges = useMemo(() => {
+    if (!editorBuild || !persistedBuildKey) return false;
+    return buildSharePayloadKey(editorBuild) !== persistedBuildKey;
+  }, [editorBuild, persistedBuildKey]);
+
+  const hasPublishedStagedChanges = editorBuild?.status === 'PUBLISHED'
+    && (editorBuild.stagedRevisionStatus === 'DRAFT' || editorBuild.stagedRevisionStatus === 'UNPUBLISHED');
+
+  const canSubmitPublishedChanges = hasPublishedStagedChanges || hasUnsavedEditorChanges;
+  const canDeleteBuild = editorBuild?.status !== 'PUBLISHED' && editorBuild?.status !== 'PENDING_REVIEW';
+  const canUnpublishBuild = editorBuild?.status === 'PUBLISHED';
+
   const buildURLContext = useMemo(() => {
     if (!editorBuild) return null;
     const context = getBuildURLContext(editorBuild, liveShareByBuildID[editorBuild.id]?.url);
@@ -708,14 +734,25 @@ export function MyBuildsPage() {
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      disabled={isSaving}
-                      onClick={handleOpenDeleteConfirm}
-                      className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      Delete
-                    </button>
+                    {canDeleteBuild ? (
+                      <button
+                        type="button"
+                        disabled={isSaving}
+                        onClick={handleOpenDeleteConfirm}
+                        className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Delete
+                      </button>
+                    ) : canUnpublishBuild ? (
+                      <button
+                        type="button"
+                        disabled={isSaving}
+                        onClick={handleUnpublish}
+                        className="rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Unpublish
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       disabled={isSaving || isCopyingShareURL}
@@ -745,14 +782,22 @@ export function MyBuildsPage() {
                         >
                           Changes Pending Approval
                         </button>
-                      ) : (
+                      ) : canSubmitPublishedChanges ? (
                         <button
                           type="button"
                           disabled={isSaving}
                           onClick={handlePublish}
                           className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          Submit Changes for Approval
+                          Submit Changes for Review
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled
+                          className="rounded-lg bg-slate-700 px-3 py-2 text-sm font-medium text-slate-300"
+                        >
+                          Published
                         </button>
                       )
                     ) : editorBuild.status === 'PENDING_REVIEW' ? (

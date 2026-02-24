@@ -3,11 +3,13 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { render } from '../test/test-utils';
 import { AdminGearModeration } from './AdminGearModeration';
 import type { GearCatalogItem } from '../gearCatalogTypes';
+import type { Build } from '../buildTypes';
 import {
   adminSearchBuilds,
   adminGetBuild,
   adminUpdateBuild,
   adminPublishBuild,
+  adminUnpublishBuild,
   adminUploadBuildImage,
   adminDeleteBuildImage,
   adminDeleteGear,
@@ -27,6 +29,7 @@ vi.mock('../adminApi', () => ({
   adminGetBuild: vi.fn(),
   adminUpdateBuild: vi.fn(),
   adminPublishBuild: vi.fn(),
+  adminUnpublishBuild: vi.fn(),
   adminUploadBuildImage: vi.fn(),
   adminDeleteBuildImage: vi.fn(),
   adminSearchGear: vi.fn(),
@@ -68,6 +71,7 @@ const mockAdminSearchBuilds = vi.mocked(adminSearchBuilds);
 const mockAdminGetBuild = vi.mocked(adminGetBuild);
 const mockAdminUpdateBuild = vi.mocked(adminUpdateBuild);
 const mockAdminPublishBuild = vi.mocked(adminPublishBuild);
+const mockAdminUnpublishBuild = vi.mocked(adminUnpublishBuild);
 const mockAdminUploadBuildImage = vi.mocked(adminUploadBuildImage);
 const mockAdminDeleteBuildImage = vi.mocked(adminDeleteBuildImage);
 const mockAdminSearchGear = vi.mocked(adminSearchGear);
@@ -112,6 +116,25 @@ const mockItem: GearCatalogItem = {
   descriptionCuratedAt: undefined,
 };
 
+const mockBuild: Build = {
+  id: 'build-1',
+  ownerUserId: 'pilot-1',
+  status: 'PUBLISHED',
+  title: 'Blue Beast Build',
+  description: 'Fast freestyle build',
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-05T00:00:00Z',
+  publishedAt: '2026-01-04T00:00:00Z',
+  verified: true,
+  parts: [],
+  pilot: {
+    userId: 'pilot-1',
+    callSign: 'BlueBeast',
+    displayName: 'BlueBeast',
+    isProfilePublic: true,
+  },
+};
+
 describe('AdminGearModeration', () => {
   let hadCreateObjectURL = false;
   let hadRevokeObjectURL = false;
@@ -149,6 +172,7 @@ describe('AdminGearModeration', () => {
     mockAdminGetBuild.mockRejectedValue(new Error('Build not mocked'));
     mockAdminUpdateBuild.mockRejectedValue(new Error('Build not mocked'));
     mockAdminPublishBuild.mockRejectedValue(new Error('Build not mocked'));
+    mockAdminUnpublishBuild.mockRejectedValue(new Error('Build not mocked'));
     mockAdminUploadBuildImage.mockResolvedValue();
     mockAdminDeleteBuildImage.mockResolvedValue();
     mockGetAdminBuildImageUrl.mockReturnValue('/mock-build-image.png');
@@ -270,6 +294,37 @@ describe('AdminGearModeration', () => {
           specs: { kv: '1950' },
         })
       );
+    });
+  });
+
+  it('allows moderators to unpublish a published build', async () => {
+    const unpublishedBuild: Build = {
+      ...mockBuild,
+      status: 'UNPUBLISHED',
+    };
+
+    mockAdminSearchBuilds.mockResolvedValue({
+      builds: [mockBuild],
+      totalCount: 1,
+      sort: 'newest',
+    });
+    mockAdminGetBuild.mockResolvedValue(mockBuild);
+    mockAdminUpdateBuild.mockResolvedValue(mockBuild);
+    mockAdminUnpublishBuild.mockResolvedValue(unpublishedBuild);
+
+    render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Builds$/i }));
+
+    const row = await screen.findByRole('button', { name: /open editor for blue beast build/i });
+    fireEvent.click(row);
+
+    expect(await screen.findByText('Review Build')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Unpublish Build' }));
+
+    await waitFor(() => {
+      expect(mockAdminUnpublishBuild).toHaveBeenCalledWith('build-1');
     });
   });
 

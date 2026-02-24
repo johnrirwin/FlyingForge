@@ -384,7 +384,68 @@ describe('MyBuildsPage share URL behavior', () => {
       expect(mockedGetMyBuild).toHaveBeenCalledWith('build-published');
     });
 
-    expect(await screen.findByRole('button', { name: /submit changes for approval/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^unpublish$/i })).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /submit changes for review/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^unpublish$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^delete$/i })).not.toBeInTheDocument();
+  });
+
+  it('shows a disabled published button when published build has no staged or unsaved changes', async () => {
+    const publishedBuild = draftBuildFixture({
+      id: 'build-published',
+      status: 'PUBLISHED',
+      title: 'Published Build',
+      parts: [
+        { gearType: 'frame', catalogItemId: 'frame-1' },
+      ],
+    });
+
+    mockedListMyBuilds.mockResolvedValue({
+      builds: [publishedBuild],
+      totalCount: 1,
+      sort: 'newest',
+    });
+    mockedGetMyBuild.mockResolvedValue(publishedBuild);
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(mockedGetMyBuild).toHaveBeenCalledWith('build-published');
+    });
+
+    expect(await screen.findByRole('button', { name: /^published$/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^unpublish$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^delete$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /submit changes for review/i })).not.toBeInTheDocument();
+  });
+
+  it('enables submit changes action after editing a published build', async () => {
+    const publishedBuild = draftBuildFixture({
+      id: 'build-published',
+      status: 'PUBLISHED',
+      title: 'Published Build',
+      parts: [
+        { gearType: 'frame', catalogItemId: 'frame-1' },
+      ],
+    });
+
+    mockedListMyBuilds.mockResolvedValue({
+      builds: [publishedBuild],
+      totalCount: 1,
+      sort: 'newest',
+    });
+    mockedGetMyBuild.mockResolvedValue(publishedBuild);
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(mockedGetMyBuild).toHaveBeenCalledWith('build-published');
+    });
+
+    expect(await screen.findByRole('button', { name: /^published$/i })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: /change title/i }));
+
+    const submitChangesButton = await screen.findByRole('button', { name: /submit changes for review/i });
+    expect(submitChangesButton).toBeEnabled();
   });
 });

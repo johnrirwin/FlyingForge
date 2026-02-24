@@ -602,6 +602,13 @@ func (api *AdminAPI) handleAdminBuildByID(w http.ResponseWriter, r *http.Request
 			}
 			api.handlePublishAdminBuild(w, r, buildID)
 			return
+		case "unpublish":
+			if r.Method != http.MethodPost {
+				api.writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+				return
+			}
+			api.handleUnpublishAdminBuild(w, r, buildID)
+			return
 		default:
 			api.writeJSON(w, http.StatusNotFound, map[string]string{"error": "unknown build action"})
 			return
@@ -689,6 +696,29 @@ func (api *AdminAPI) handlePublishAdminBuild(w http.ResponseWriter, r *http.Requ
 		Build:      updated,
 		Validation: validation,
 	})
+}
+
+func (api *AdminAPI) handleUnpublishAdminBuild(w http.ResponseWriter, r *http.Request, buildID string) {
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	updated, err := api.buildSvc.UnpublishForModeration(ctx, buildID)
+	if err != nil {
+		var svcErr *builds.ServiceError
+		if errors.As(err, &svcErr) {
+			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": svcErr.Message})
+			return
+		}
+		api.logger.Error("Failed to unpublish moderation build", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to unpublish build"})
+		return
+	}
+	if updated == nil {
+		api.writeJSON(w, http.StatusNotFound, map[string]string{"error": "build not found"})
+		return
+	}
+
+	api.writeJSON(w, http.StatusOK, updated)
 }
 
 func (api *AdminAPI) handleAdminBuildImage(w http.ResponseWriter, r *http.Request, buildID string) {
