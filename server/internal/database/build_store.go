@@ -1645,19 +1645,46 @@ func (s *BuildStore) attachParts(ctx context.Context, builds []*models.Build) er
 }
 
 func (s *BuildStore) attachStagedRevisionParts(ctx context.Context, builds []*models.Build) error {
+	stagedIDs := make([]string, 0, len(builds))
+	for _, build := range builds {
+		if build == nil || strings.TrimSpace(build.StagedRevisionID) == "" {
+			continue
+		}
+		stagedIDs = append(stagedIDs, build.StagedRevisionID)
+	}
+	if len(stagedIDs) == 0 {
+		return nil
+	}
+
+	stagedBuildPtrs := make([]*models.Build, 0, len(stagedIDs))
+	for _, stagedID := range stagedIDs {
+		stagedBuildPtrs = append(stagedBuildPtrs, &models.Build{ID: stagedID})
+	}
+	if err := s.attachParts(ctx, stagedBuildPtrs); err != nil {
+		return fmt.Errorf("failed to load staged revision parts: %w", err)
+	}
+
+	stagedByID := make(map[string]*models.Build, len(stagedBuildPtrs))
+	for _, stagedBuild := range stagedBuildPtrs {
+		if stagedBuild == nil || strings.TrimSpace(stagedBuild.ID) == "" {
+			continue
+		}
+		stagedByID[stagedBuild.ID] = stagedBuild
+	}
+
 	for _, build := range builds {
 		if build == nil || strings.TrimSpace(build.StagedRevisionID) == "" {
 			continue
 		}
 
-		staged, err := s.GetByID(ctx, build.StagedRevisionID)
-		if err != nil {
-			return fmt.Errorf("failed to load staged revision parts for build %s: %w", build.ID, err)
-		}
+		staged := stagedByID[build.StagedRevisionID]
 		if staged == nil {
 			continue
 		}
 		build.Parts = staged.Parts
+		if strings.TrimSpace(build.ImageAssetID) == "" {
+			build.MainImageURL = staged.MainImageURL
+		}
 	}
 	return nil
 }
