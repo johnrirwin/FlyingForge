@@ -592,6 +592,31 @@ func TestDeleteByOwner_RejectsPublishedBuild(t *testing.T) {
 	}
 }
 
+func TestDeleteByOwner_RejectsPendingReviewBuild(t *testing.T) {
+	ctx := context.Background()
+	store := newFakeBuildStore()
+	svc := NewServiceWithDeps(store, nil, nil, logging.New(logging.LevelError))
+
+	pending, err := svc.CreateDraft(ctx, "user-1", models.CreateBuildParams{Title: "Pending Review Build"})
+	if err != nil {
+		t.Fatalf("CreateDraft error: %v", err)
+	}
+	if _, err := store.SetStatus(ctx, pending.ID, "user-1", models.BuildStatusPendingReview); err != nil {
+		t.Fatalf("SetStatus setup error: %v", err)
+	}
+
+	deleted, err := svc.DeleteByOwner(ctx, pending.ID, "user-1")
+	if err == nil {
+		t.Fatalf("expected delete to fail for pending review build")
+	}
+	if deleted {
+		t.Fatalf("expected pending review build not to be deleted")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "unpublished before deletion") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestUnpublishForModeration_UnpublishesPublishedBuild(t *testing.T) {
 	ctx := context.Background()
 	store := newFakeBuildStore()
@@ -606,6 +631,31 @@ func TestUnpublishForModeration_UnpublishesPublishedBuild(t *testing.T) {
 	}
 
 	updated, err := svc.UnpublishForModeration(ctx, published.ID)
+	if err != nil {
+		t.Fatalf("UnpublishForModeration error: %v", err)
+	}
+	if updated == nil {
+		t.Fatalf("expected updated build")
+	}
+	if updated.Status != models.BuildStatusUnpublished {
+		t.Fatalf("status=%s want UNPUBLISHED", updated.Status)
+	}
+}
+
+func TestUnpublishForModeration_UnpublishesPendingReviewBuild(t *testing.T) {
+	ctx := context.Background()
+	store := newFakeBuildStore()
+	svc := NewServiceWithDeps(store, nil, nil, logging.New(logging.LevelError))
+
+	pending, err := svc.CreateDraft(ctx, "user-1", models.CreateBuildParams{Title: "Pending Review Build"})
+	if err != nil {
+		t.Fatalf("CreateDraft error: %v", err)
+	}
+	if _, err := store.SetStatus(ctx, pending.ID, "user-1", models.BuildStatusPendingReview); err != nil {
+		t.Fatalf("SetStatus setup error: %v", err)
+	}
+
+	updated, err := svc.UnpublishForModeration(ctx, pending.ID)
 	if err != nil {
 		t.Fatalf("UnpublishForModeration error: %v", err)
 	}

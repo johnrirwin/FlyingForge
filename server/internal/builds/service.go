@@ -647,7 +647,7 @@ func (s *Service) UnpublishForModeration(ctx context.Context, id string) (*model
 		return nil, nil
 	}
 	if build.Status != models.BuildStatusPublished && build.Status != models.BuildStatusPendingReview {
-		return nil, &ServiceError{Message: "build is not published"}
+		return nil, &ServiceError{Message: "build cannot be unpublished"}
 	}
 	if strings.TrimSpace(build.OwnerUserID) == "" {
 		return nil, &ServiceError{Message: "build owner missing"}
