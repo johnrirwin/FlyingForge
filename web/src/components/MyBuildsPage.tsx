@@ -570,6 +570,12 @@ export function MyBuildsPage() {
     if (!editorBuild) return '';
     switch (editorBuild.status) {
       case 'PUBLISHED':
+        if (editorBuild.stagedRevisionStatus === 'PENDING_REVIEW') {
+          return 'Published • Changes pending moderation';
+        }
+        if (editorBuild.stagedRevisionStatus === 'DRAFT' || editorBuild.stagedRevisionStatus === 'UNPUBLISHED') {
+          return 'Published • Changes staged';
+        }
         return 'Published';
       case 'PENDING_REVIEW':
         return 'Pending Moderation';
@@ -731,14 +737,24 @@ export function MyBuildsPage() {
                       {isSaving ? 'Saving...' : 'Save Draft'}
                     </button>
                     {editorBuild.status === 'PUBLISHED' ? (
-                      <button
-                        type="button"
-                        disabled={isSaving}
-                        onClick={handleUnpublish}
-                        className="rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        Unpublish
-                      </button>
+                      editorBuild.stagedRevisionStatus === 'PENDING_REVIEW' ? (
+                        <button
+                          type="button"
+                          disabled
+                          className="rounded-lg bg-amber-600/70 px-3 py-2 text-sm font-medium text-white/90"
+                        >
+                          Changes Pending Approval
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={isSaving}
+                          onClick={handlePublish}
+                          className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Submit Changes for Approval
+                        </button>
+                      )
                     ) : editorBuild.status === 'PENDING_REVIEW' ? (
                       <button
                         type="button"

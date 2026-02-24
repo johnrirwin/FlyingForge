@@ -98,7 +98,9 @@ func (s *BuildStore) ListByOwner(ctx context.Context, ownerUserID string, params
 	countQuery := `
 		SELECT COUNT(*)
 		FROM builds b
-		WHERE b.owner_user_id = $1 AND b.status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')
+		WHERE b.owner_user_id = $1
+		  AND b.revision_of_build_id IS NULL
+		  AND b.status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')
 	`
 	var totalCount int
 	if err := s.db.QueryRowContext(ctx, countQuery, ownerUserID).Scan(&totalCount); err != nil {
@@ -109,26 +111,82 @@ func (s *BuildStore) ListByOwner(ctx context.Context, ownerUserID string, params
 		SELECT
 			b.id,
 			b.owner_user_id,
-			b.image_asset_id,
+			COALESCE(
+				CASE
+					WHEN b.status = 'PUBLISHED' THEN r.image_asset_id
+					ELSE NULL
+				END,
+				b.image_asset_id
+			) AS image_asset_id,
 			b.status,
 			b.token,
 			b.expires_at,
-			b.title,
-			b.description,
-			b.build_video_url,
-			b.flight_video_url,
-			b.source_aircraft_id,
+			COALESCE(
+				CASE
+					WHEN b.status = 'PUBLISHED' THEN r.title
+					ELSE NULL
+				END,
+				b.title
+			) AS title,
+			COALESCE(
+				CASE
+					WHEN b.status = 'PUBLISHED' THEN r.description
+					ELSE NULL
+				END,
+				b.description
+			) AS description,
+			COALESCE(
+				CASE
+					WHEN b.status = 'PUBLISHED' THEN r.build_video_url
+					ELSE NULL
+				END,
+				b.build_video_url
+			) AS build_video_url,
+			COALESCE(
+				CASE
+					WHEN b.status = 'PUBLISHED' THEN r.flight_video_url
+					ELSE NULL
+				END,
+				b.flight_video_url
+			) AS flight_video_url,
+			COALESCE(
+				CASE
+					WHEN b.status = 'PUBLISHED' THEN r.source_aircraft_id
+					ELSE NULL
+				END,
+				b.source_aircraft_id
+			) AS source_aircraft_id,
 			b.created_at,
-			b.updated_at,
+			COALESCE(
+				CASE
+					WHEN b.status = 'PUBLISHED' THEN r.updated_at
+					ELSE NULL
+				END,
+				b.updated_at
+			) AS updated_at,
 			b.published_at,
 			u.id,
 			u.call_sign,
 			COALESCE(NULLIF(u.display_name, ''), NULLIF(u.google_name, ''), NULLIF(u.call_sign, ''), 'Pilot'),
-			COALESCE(u.profile_visibility, 'public') = 'public'
+			COALESCE(u.profile_visibility, 'public') = 'public',
+			CASE
+				WHEN b.status = 'PUBLISHED' THEN r.id
+				ELSE NULL
+			END AS staged_revision_id,
+			CASE
+				WHEN b.status = 'PUBLISHED' THEN r.status
+				ELSE NULL
+			END AS staged_revision_status
 		FROM builds b
+		LEFT JOIN builds r
+		  ON r.revision_of_build_id = b.id
+		 AND r.owner_user_id = b.owner_user_id
+		 AND r.status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED')
 		LEFT JOIN users u ON b.owner_user_id = u.id
-		WHERE b.owner_user_id = $1 AND b.status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')
-		ORDER BY b.updated_at DESC
+		WHERE b.owner_user_id = $1
+		  AND b.revision_of_build_id IS NULL
+		  AND b.status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')
+		ORDER BY updated_at DESC
 		LIMIT $2 OFFSET $3
 	`
 	rows, err := s.db.QueryContext(ctx, query, ownerUserID, params.Limit, params.Offset)
@@ -137,7 +195,7 @@ func (s *BuildStore) ListByOwner(ctx context.Context, ownerUserID string, params
 	}
 	defer rows.Close()
 
-	builds, err := scanBuildRows(rows)
+	builds, err := scanOwnerBuildRows(rows)
 	if err != nil {
 		return nil, err
 	}
@@ -147,6 +205,9 @@ func (s *BuildStore) ListByOwner(ctx context.Context, ownerUserID string, params
 		buildPtrs = append(buildPtrs, &builds[i])
 	}
 	if err := s.attachParts(ctx, buildPtrs); err != nil {
+		return nil, err
+	}
+	if err := s.attachStagedRevisionParts(ctx, buildPtrs); err != nil {
 		return nil, err
 	}
 	s.setMainImageURLs(buildPtrs, false)
@@ -354,12 +415,15 @@ func (s *BuildStore) GetByID(ctx context.Context, id string) (*models.Build, err
 
 // GetForOwner returns a build that belongs to the supplied owner.
 func (s *BuildStore) GetForOwner(ctx context.Context, id string, ownerUserID string) (*models.Build, error) {
-	query := baseBuildSelect + ` WHERE b.id = $1 AND b.owner_user_id = $2`
-	build, err := s.scanBuild(ctx, query, id, ownerUserID)
+	query := ownerBuildSelect + ` WHERE b.id = $1 AND b.owner_user_id = $2`
+	build, err := s.scanOwnerBuild(ctx, query, id, ownerUserID)
 	if err != nil || build == nil {
 		return build, err
 	}
 	if err := s.attachParts(ctx, []*models.Build{build}); err != nil {
+		return nil, err
+	}
+	if err := s.attachStagedRevisionParts(ctx, []*models.Build{build}); err != nil {
 		return nil, err
 	}
 	s.setMainImageURLs([]*models.Build{build}, false)
@@ -491,7 +555,11 @@ func (s *BuildStore) Update(ctx context.Context, id string, ownerUserID string, 
 		return nil, fmt.Errorf("failed to commit build update: %w", err)
 	}
 
-	return s.GetForOwner(ctx, targetBuildID, ownerUserID)
+	responseBuildID := targetBuildID
+	if currentStatus == models.BuildStatusPublished {
+		responseBuildID = id
+	}
+	return s.GetForOwner(ctx, responseBuildID, ownerUserID)
 }
 
 // UpdateTempByToken creates a new temp build revision with a rotated token.
@@ -573,6 +641,7 @@ func (s *BuildStore) ShareTempByToken(ctx context.Context, token string) (*model
 func (s *BuildStore) SetStatus(ctx context.Context, id string, ownerUserID string, status models.BuildStatus) (*models.Build, error) {
 	status = models.NormalizeBuildStatus(status)
 	var query string
+	updateBuildID := id
 
 	switch status {
 	case models.BuildStatusPendingReview:
@@ -602,11 +671,36 @@ func (s *BuildStore) SetStatus(ctx context.Context, id string, ownerUserID strin
 		return nil, fmt.Errorf("failed to update build status: %w", err)
 	}
 	rows, _ := result.RowsAffected()
+
+	if status == models.BuildStatusPendingReview && rows == 0 {
+		revisionResult, revisionErr := s.db.ExecContext(
+			ctx,
+			`
+				UPDATE builds AS revision
+				SET status = 'PENDING_REVIEW', published_at = NULL, updated_at = NOW()
+				FROM builds AS published
+				WHERE published.id = $1
+				  AND published.owner_user_id = $2
+				  AND published.status = 'PUBLISHED'
+				  AND revision.revision_of_build_id = published.id
+				  AND revision.owner_user_id = published.owner_user_id
+				  AND revision.status IN ('DRAFT', 'UNPUBLISHED')
+			`,
+			id,
+			ownerUserID,
+		)
+		if revisionErr != nil {
+			return nil, fmt.Errorf("failed to update staged revision status: %w", revisionErr)
+		}
+		rows, _ = revisionResult.RowsAffected()
+		updateBuildID = id
+	}
+
 	if rows == 0 {
 		return nil, nil
 	}
 
-	return s.GetForOwner(ctx, id, ownerUserID)
+	return s.GetForOwner(ctx, updateBuildID, ownerUserID)
 }
 
 // SetReaction upserts a user's reaction on a published build.
@@ -667,11 +761,42 @@ func (s *BuildStore) ClearReaction(ctx context.Context, id string, userID string
 // SetImage stores a new approved image asset reference for a build.
 // Returns any previous image asset ID so callers can clean up orphaned assets.
 func (s *BuildStore) SetImage(ctx context.Context, id string, ownerUserID string, imageAssetID string) (string, error) {
-	var previousAssetID sql.NullString
-	if err := s.db.QueryRowContext(
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to start image transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	targetBuildID := id
+	var currentStatus models.BuildStatus
+	if err := tx.QueryRowContext(
 		ctx,
-		`SELECT image_asset_id FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')`,
+		`SELECT status FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')`,
 		id,
+		ownerUserID,
+	).Scan(&currentStatus); err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("build not found")
+		}
+		return "", fmt.Errorf("failed to load build before setting image: %w", err)
+	}
+
+	if currentStatus == models.BuildStatusPublished {
+		var createErr error
+		targetBuildID, createErr = s.ensurePublishedRevisionDraftTx(ctx, tx, id, ownerUserID)
+		if createErr != nil {
+			return "", createErr
+		}
+		if strings.TrimSpace(targetBuildID) == "" {
+			return "", fmt.Errorf("build not found")
+		}
+	}
+
+	var previousAssetID sql.NullString
+	if err := tx.QueryRowContext(
+		ctx,
+		`SELECT image_asset_id FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED')`,
+		targetBuildID,
 		ownerUserID,
 	).Scan(&previousAssetID); err != nil {
 		if err == sql.ErrNoRows {
@@ -684,15 +809,19 @@ func (s *BuildStore) SetImage(ctx context.Context, id string, ownerUserID string
 		UPDATE builds
 		SET image_asset_id = $1,
 		    updated_at = NOW()
-		WHERE id = $2 AND owner_user_id = $3 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')
+		WHERE id = $2 AND owner_user_id = $3 AND status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED')
 	`
-	result, err := s.db.ExecContext(ctx, query, imageAssetID, id, ownerUserID)
+	result, err := tx.ExecContext(ctx, query, imageAssetID, targetBuildID, ownerUserID)
 	if err != nil {
 		return "", fmt.Errorf("failed to set build image: %w", err)
 	}
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
 		return "", fmt.Errorf("build not found")
+	}
+
+	if err := tx.Commit(); err != nil {
+		return "", fmt.Errorf("failed to commit build image update: %w", err)
 	}
 
 	if previousAssetID.Valid {
@@ -706,11 +835,29 @@ func (s *BuildStore) GetImageForOwner(ctx context.Context, id string, ownerUserI
 	query := `
 		SELECT ia.image_bytes
 		FROM builds b
-		JOIN image_assets ia ON ia.id = b.image_asset_id AND ia.status = 'APPROVED'
+		LEFT JOIN builds r
+		  ON r.revision_of_build_id = b.id
+		 AND r.owner_user_id = b.owner_user_id
+		 AND r.status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED')
+		JOIN image_assets ia
+		  ON ia.id = COALESCE(
+			CASE
+				WHEN b.status = 'PUBLISHED' THEN r.image_asset_id
+				ELSE NULL
+			END,
+			b.image_asset_id
+		  )
+		 AND ia.status = 'APPROVED'
 		WHERE b.id = $1
 		  AND b.owner_user_id = $2
 		  AND b.status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')
-		  AND b.image_asset_id IS NOT NULL
+		  AND COALESCE(
+			CASE
+				WHEN b.status = 'PUBLISHED' THEN r.image_asset_id
+				ELSE NULL
+			END,
+			b.image_asset_id
+		  ) IS NOT NULL
 	`
 
 	var imageData []byte
@@ -748,11 +895,42 @@ func (s *BuildStore) GetPublicImage(ctx context.Context, id string) ([]byte, err
 
 // DeleteImage removes a build image and returns any previous image asset ID.
 func (s *BuildStore) DeleteImage(ctx context.Context, id string, ownerUserID string) (string, error) {
-	var previousAssetID sql.NullString
-	if err := s.db.QueryRowContext(
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to start image delete transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	targetBuildID := id
+	var currentStatus models.BuildStatus
+	if err := tx.QueryRowContext(
 		ctx,
-		`SELECT image_asset_id FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')`,
+		`SELECT status FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')`,
 		id,
+		ownerUserID,
+	).Scan(&currentStatus); err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("build not found")
+		}
+		return "", fmt.Errorf("failed to load build before deleting image: %w", err)
+	}
+
+	if currentStatus == models.BuildStatusPublished {
+		var createErr error
+		targetBuildID, createErr = s.ensurePublishedRevisionDraftTx(ctx, tx, id, ownerUserID)
+		if createErr != nil {
+			return "", createErr
+		}
+		if strings.TrimSpace(targetBuildID) == "" {
+			return "", fmt.Errorf("build not found")
+		}
+	}
+
+	var previousAssetID sql.NullString
+	if err := tx.QueryRowContext(
+		ctx,
+		`SELECT image_asset_id FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED')`,
+		targetBuildID,
 		ownerUserID,
 	).Scan(&previousAssetID); err != nil {
 		if err == sql.ErrNoRows {
@@ -765,15 +943,19 @@ func (s *BuildStore) DeleteImage(ctx context.Context, id string, ownerUserID str
 		UPDATE builds
 		SET image_asset_id = NULL,
 		    updated_at = NOW()
-		WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')
+		WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED')
 	`
-	result, err := s.db.ExecContext(ctx, query, id, ownerUserID)
+	result, err := tx.ExecContext(ctx, query, targetBuildID, ownerUserID)
 	if err != nil {
 		return "", fmt.Errorf("failed to delete build image: %w", err)
 	}
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
 		return "", fmt.Errorf("build not found")
+	}
+
+	if err := tx.Commit(); err != nil {
+		return "", fmt.Errorf("failed to commit build image delete: %w", err)
 	}
 	if previousAssetID.Valid {
 		return previousAssetID.String, nil
@@ -1329,6 +1511,18 @@ func (s *BuildStore) scanBuild(ctx context.Context, query string, args ...interf
 	return build, nil
 }
 
+func (s *BuildStore) scanOwnerBuild(ctx context.Context, query string, args ...interface{}) (*models.Build, error) {
+	row := s.db.QueryRowContext(ctx, query, args...)
+	build, err := scanOwnerBuildRow(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan owner build: %w", err)
+	}
+	return build, nil
+}
+
 func (s *BuildStore) attachParts(ctx context.Context, builds []*models.Build) error {
 	if len(builds) == 0 {
 		return nil
@@ -1447,6 +1641,24 @@ func (s *BuildStore) attachParts(ctx context.Context, builds []*models.Build) er
 		}
 	}
 
+	return nil
+}
+
+func (s *BuildStore) attachStagedRevisionParts(ctx context.Context, builds []*models.Build) error {
+	for _, build := range builds {
+		if build == nil || strings.TrimSpace(build.StagedRevisionID) == "" {
+			continue
+		}
+
+		staged, err := s.GetByID(ctx, build.StagedRevisionID)
+		if err != nil {
+			return fmt.Errorf("failed to load staged revision parts for build %s: %w", build.ID, err)
+		}
+		if staged == nil {
+			continue
+		}
+		build.Parts = staged.Parts
+	}
 	return nil
 }
 
@@ -1605,12 +1817,102 @@ var baseBuildSelect = `
 	LEFT JOIN users u ON b.owner_user_id = u.id
 `
 
+var ownerBuildSelect = `
+	SELECT
+		b.id,
+		b.owner_user_id,
+		COALESCE(
+			CASE
+				WHEN b.status = 'PUBLISHED' THEN r.image_asset_id
+				ELSE NULL
+			END,
+			b.image_asset_id
+		) AS image_asset_id,
+		b.status,
+		b.token,
+		b.expires_at,
+		COALESCE(
+			CASE
+				WHEN b.status = 'PUBLISHED' THEN r.title
+				ELSE NULL
+			END,
+			b.title
+		) AS title,
+		COALESCE(
+			CASE
+				WHEN b.status = 'PUBLISHED' THEN r.description
+				ELSE NULL
+			END,
+			b.description
+		) AS description,
+		COALESCE(
+			CASE
+				WHEN b.status = 'PUBLISHED' THEN r.build_video_url
+				ELSE NULL
+			END,
+			b.build_video_url
+		) AS build_video_url,
+		COALESCE(
+			CASE
+				WHEN b.status = 'PUBLISHED' THEN r.flight_video_url
+				ELSE NULL
+			END,
+			b.flight_video_url
+		) AS flight_video_url,
+		COALESCE(
+			CASE
+				WHEN b.status = 'PUBLISHED' THEN r.source_aircraft_id
+				ELSE NULL
+			END,
+			b.source_aircraft_id
+		) AS source_aircraft_id,
+		b.created_at,
+		COALESCE(
+			CASE
+				WHEN b.status = 'PUBLISHED' THEN r.updated_at
+				ELSE NULL
+			END,
+			b.updated_at
+		) AS updated_at,
+		b.published_at,
+		u.id,
+		u.call_sign,
+		COALESCE(NULLIF(u.display_name, ''), NULLIF(u.google_name, ''), NULLIF(u.call_sign, ''), 'Pilot'),
+		COALESCE(u.profile_visibility, 'public') = 'public',
+		CASE
+			WHEN b.status = 'PUBLISHED' THEN r.id
+			ELSE NULL
+		END AS staged_revision_id,
+		CASE
+			WHEN b.status = 'PUBLISHED' THEN r.status
+			ELSE NULL
+		END AS staged_revision_status
+	FROM builds b
+	LEFT JOIN builds r
+	  ON r.revision_of_build_id = b.id
+	 AND r.owner_user_id = b.owner_user_id
+	 AND r.status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED')
+	LEFT JOIN users u ON b.owner_user_id = u.id
+`
+
 func scanBuildRows(rows *sql.Rows) ([]models.Build, error) {
 	items := make([]models.Build, 0)
 	for rows.Next() {
 		item, err := scanBuildRow(rows)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan build row: %w", err)
+		}
+		items = append(items, *item)
+	}
+	return items, nil
+}
+
+func scanOwnerBuildRows(rows *sql.Rows) ([]models.Build, error) {
+	items := make([]models.Build, 0)
+	for rows.Next() {
+		item, err := scanOwnerBuildRow(rows)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan owner build row: %w", err)
 		}
 		items = append(items, *item)
 	}
@@ -1667,6 +1969,85 @@ func scanBuildRow(scanner interface {
 	item.YouTubeURL = youtubeURL.String
 	item.FlightYouTubeURL = flightYouTubeURL.String
 	item.SourceAircraftID = sourceAircraftID.String
+	if expiresAt.Valid {
+		item.ExpiresAt = &expiresAt.Time
+	}
+	if publishedAt.Valid {
+		item.PublishedAt = &publishedAt.Time
+	}
+
+	if pilotUserID.Valid {
+		pilot := &models.BuildPilot{
+			UserID:          pilotUserID.String,
+			CallSign:        pilotCallSign.String,
+			DisplayName:     pilotDisplayName.String,
+			IsProfilePublic: pilotIsPublic.Bool,
+		}
+		if pilot.IsProfilePublic && pilot.UserID != "" {
+			pilot.ProfileURL = "/social/pilots/" + pilot.UserID
+		}
+		item.Pilot = pilot
+	}
+
+	return &item, nil
+}
+
+func scanOwnerBuildRow(scanner interface {
+	Scan(dest ...interface{}) error
+}) (*models.Build, error) {
+	var item models.Build
+	var ownerUserID sql.NullString
+	var imageAssetID sql.NullString
+	var token sql.NullString
+	var expiresAt sql.NullTime
+	var description sql.NullString
+	var youtubeURL sql.NullString
+	var flightYouTubeURL sql.NullString
+	var sourceAircraftID sql.NullString
+	var publishedAt sql.NullTime
+	var stagedRevisionID sql.NullString
+	var stagedRevisionStatus sql.NullString
+
+	var pilotUserID sql.NullString
+	var pilotCallSign sql.NullString
+	var pilotDisplayName sql.NullString
+	var pilotIsPublic sql.NullBool
+
+	err := scanner.Scan(
+		&item.ID,
+		&ownerUserID,
+		&imageAssetID,
+		&item.Status,
+		&token,
+		&expiresAt,
+		&item.Title,
+		&description,
+		&youtubeURL,
+		&flightYouTubeURL,
+		&sourceAircraftID,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+		&publishedAt,
+		&pilotUserID,
+		&pilotCallSign,
+		&pilotDisplayName,
+		&pilotIsPublic,
+		&stagedRevisionID,
+		&stagedRevisionStatus,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	item.OwnerUserID = ownerUserID.String
+	item.ImageAssetID = imageAssetID.String
+	item.Token = token.String
+	item.Description = description.String
+	item.YouTubeURL = youtubeURL.String
+	item.FlightYouTubeURL = flightYouTubeURL.String
+	item.SourceAircraftID = sourceAircraftID.String
+	item.StagedRevisionID = stagedRevisionID.String
+	item.StagedRevisionStatus = models.NormalizeBuildStatus(models.BuildStatus(stagedRevisionStatus.String))
 	if expiresAt.Valid {
 		item.ExpiresAt = &expiresAt.Time
 	}

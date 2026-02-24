@@ -582,7 +582,26 @@ function PublishedBuildPreviewModal({
   const stack = findPart(parts, 'stack');
   const fc = findPart(parts, 'fc');
   const esc = findPart(parts, 'esc');
-  const msrpTotal = parts.reduce((sum, part) => {
+  const uniqueCatalogParts = new Map<string, Build['parts'][number]>();
+  for (const part of parts) {
+    const catalogItemID = part.catalogItemId?.trim() || part.catalogItem?.id?.trim();
+    if (!catalogItemID) continue;
+
+    const existingPart = uniqueCatalogParts.get(catalogItemID);
+    const existingMsrp = existingPart?.catalogItem?.msrp;
+    const currentMsrp = part.catalogItem?.msrp;
+
+    if (
+      !existingPart
+      || (typeof existingMsrp !== 'number' || existingMsrp <= 0)
+        && typeof currentMsrp === 'number'
+        && currentMsrp > 0
+    ) {
+      uniqueCatalogParts.set(catalogItemID, part);
+    }
+  }
+
+  const msrpTotal = Array.from(uniqueCatalogParts.values()).reduce((sum, part) => {
     const msrp = part.catalogItem?.msrp;
     return typeof msrp === 'number' && msrp > 0 ? sum + msrp : sum;
   }, 0);

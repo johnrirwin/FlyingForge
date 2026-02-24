@@ -198,4 +198,67 @@ describe('PilotProfile', () => {
     expect(await screen.findByText('No published builds yet')).toBeInTheDocument();
     expect(screen.getByText('0 builds')).toBeInTheDocument();
   });
+
+  it('deduplicates reused catalog items when calculating MSRP in build preview', async () => {
+    mockedGetPilotProfile.mockResolvedValue(profileFixture());
+    mockedGetPublicBuild.mockResolvedValue({
+      id: 'build-1',
+      status: 'PUBLISHED',
+      title: 'Kayou Mini Build',
+      description: 'Compact freestyle setup.',
+      createdAt: '2026-02-01T00:00:00Z',
+      updatedAt: '2026-02-01T00:00:00Z',
+      publishedAt: '2026-02-02T00:00:00Z',
+      verified: true,
+      parts: [
+        {
+          gearType: 'aio',
+          catalogItemId: 'aio-1',
+          catalogItem: {
+            id: 'aio-1',
+            gearType: 'aio',
+            brand: 'SpeedyBee',
+            model: 'F405 AIO',
+            status: 'published',
+            msrp: 79.99,
+          },
+        },
+        {
+          gearType: 'receiver',
+          catalogItemId: 'aio-1',
+          catalogItem: {
+            id: 'aio-1',
+            gearType: 'aio',
+            brand: 'SpeedyBee',
+            model: 'F405 AIO',
+            status: 'published',
+            msrp: 79.99,
+          },
+        },
+        {
+          gearType: 'frame',
+          catalogItemId: 'frame-1',
+          catalogItem: {
+            id: 'frame-1',
+            gearType: 'frame',
+            brand: 'Kayou',
+            model: 'Kayoumini',
+            status: 'published',
+            msrp: 89.99,
+          },
+        },
+      ],
+    });
+
+    renderProfile();
+
+    await waitFor(() => {
+      expect(mockedGetPilotProfile).toHaveBeenCalledWith('pilot-1');
+    });
+
+    await userEvent.click(await screen.findByRole('button', { name: /Kayou Mini Build/i }));
+
+    expect(await screen.findByText('Estimated MSRP')).toBeInTheDocument();
+    expect(screen.getByText('$169.98')).toBeInTheDocument();
+  });
 });
