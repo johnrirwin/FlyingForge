@@ -250,7 +250,7 @@ export function AircraftDetail({
         }
       }}
     >
-      <div className="bg-slate-800 rounded-xl w-full max-w-4xl h-[90vh] max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-slate-800 rounded-xl w-full max-w-4xl h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-700">
           <div className="flex items-center gap-4">
