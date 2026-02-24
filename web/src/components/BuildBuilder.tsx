@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { GearCatalogItem, GearType } from '../gearCatalogTypes';
 import { getCatalogItemDisplayName } from '../gearCatalogTypes';
 import type { BuildPart, BuildValidationError } from '../buildTypes';
+import { useAuth } from '../hooks/useAuth';
 import { CatalogSearchModal } from './CatalogSearchModal';
 
 interface BuildBuilderProps {
@@ -62,6 +63,7 @@ export function BuildBuilder({
   imageActionLabel,
   imageHelperText,
 }: BuildBuilderProps) {
+  const { isAuthenticated } = useAuth();
   const [pickerGearType, setPickerGearType] = useState<GearType | null>(null);
 
   const partsByType = useMemo(() => {
@@ -252,6 +254,7 @@ export function BuildBuilder({
           isOpen
           onClose={() => setPickerGearType(null)}
           initialGearType={pickerGearType}
+          showInventoryMatches={isAuthenticated}
           onSelectItem={(item) => {
             upsertPart(pickerGearType, item);
             setPickerGearType(null);

@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { GearCatalogItem, GearType, CreateGearCatalogParams, DroneType, NearMatch } from '../gearCatalogTypes';
-import { GEAR_TYPES, DRONE_TYPES, getCatalogItemDisplayName } from '../gearCatalogTypes';
-import { searchGearCatalog, createGearCatalogItem, findNearMatches, getPopularGear } from '../gearCatalogApi';
+import { GEAR_TYPES, DRONE_TYPES, getCatalogItemDisplayName, gearTypeToEquipmentCategory } from '../gearCatalogTypes';
+import { searchGearCatalog, createGearCatalogItem, findNearMatches, getPopularGear, getGearCatalogItem } from '../gearCatalogApi';
+import { getInventory } from '../equipmentApi';
+import type { InventoryItem } from '../equipmentTypes';
 import { adminBulkDeleteGear, adminFindNearMatches } from '../adminApi';
+import { useAuth } from '../hooks/useAuth';
 import { ImageUploadModal } from './ImageUploadModal';
 
 type ModerationStatus = 'APPROVED' | 'REJECTED' | 'PENDING_REVIEW';
@@ -20,6 +23,7 @@ interface CatalogSearchModalProps {
   initialGearType?: GearType;
   startInCreateMode?: boolean;
   enableJsonImport?: boolean;
+  showInventoryMatches?: boolean;
   onUploadCatalogImage?: (itemId: string, imageFile: File) => Promise<void>;
   onModerateCatalogImage?: (imageFile: File) => Promise<ModerationResult>;
   onSaveCatalogImageUpload?: (itemId: string, uploadId: string) => Promise<void>;
@@ -32,17 +36,23 @@ export function CatalogSearchModal({
   initialGearType,
   startInCreateMode = false,
   enableJsonImport = false,
+  showInventoryMatches = false,
   onUploadCatalogImage,
   onModerateCatalogImage,
   onSaveCatalogImageUpload,
 }: CatalogSearchModalProps) {
+  const { isAuthenticated } = useAuth();
   const [query, setQuery] = useState('');
   const [gearType, setGearType] = useState<GearType | ''>(initialGearType || '');
   const [results, setResults] = useState<GearCatalogItem[]>([]);
   const [popularItems, setPopularItems] = useState<GearCatalogItem[]>([]);
+  const [inventoryMatches, setInventoryMatches] = useState<InventoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInventoryLoading, setIsInventoryLoading] = useState(false);
+  const [inventoryError, setInventoryError] = useState<string | null>(null);
+  const [isSelectingInventoryID, setIsSelectingInventoryID] = useState<string | null>(null);
   type CatalogModalMode = 'search' | 'create' | 'import-json';
-  const [mode, setMode] = useState<CatalogModalMode>(startInCreateMode ? 'create' : 'search');
+  const [mode, setMode] = useState<CatalogModalMode>(isAuthenticated && startInCreateMode ? 'create' : 'search');
   const [error, setError] = useState<string | null>(null);
   
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -58,9 +68,9 @@ export function CatalogSearchModal({
   // Reset the starting mode each time the modal opens.
   useEffect(() => {
     if (isOpen) {
-      setMode(startInCreateMode ? 'create' : 'search');
+      setMode(isAuthenticated && startInCreateMode ? 'create' : 'search');
     }
-  }, [isOpen, startInCreateMode]);
+  }, [isOpen, isAuthenticated, startInCreateMode]);
 
   // Load popular items
   const loadPopularItems = useCallback(async () => {
@@ -78,6 +88,37 @@ export function CatalogSearchModal({
       loadPopularItems();
     }
   }, [isOpen, query, loadPopularItems]);
+
+  const loadInventoryMatches = useCallback(async () => {
+    if (!isOpen || mode !== 'search' || !showInventoryMatches || !isAuthenticated) {
+      setInventoryMatches([]);
+      setInventoryError(null);
+      setIsInventoryLoading(false);
+      return;
+    }
+
+    try {
+      setIsInventoryLoading(true);
+      setInventoryError(null);
+      const response = await getInventory({
+        category: gearType ? gearTypeToEquipmentCategory(gearType) : undefined,
+        query: query.trim() || undefined,
+        limit: 50,
+      });
+      const linkedItems = (response.items || [])
+        .filter((item) => Boolean(item.catalogId?.trim()));
+      setInventoryMatches(linkedItems);
+    } catch (err) {
+      setInventoryMatches([]);
+      setInventoryError(err instanceof Error ? err.message : 'Failed to load inventory matches');
+    } finally {
+      setIsInventoryLoading(false);
+    }
+  }, [gearType, isAuthenticated, isOpen, mode, query, showInventoryMatches]);
+
+  useEffect(() => {
+    loadInventoryMatches();
+  }, [loadInventoryMatches]);
 
   // Debounced search
   const handleSearch = useCallback((searchQuery: string) => {
@@ -124,18 +165,37 @@ export function CatalogSearchModal({
     onSelectItem(item);
   };
 
+  const handleSelectInventoryItem = useCallback(async (item: InventoryItem) => {
+    const catalogID = item.catalogId?.trim();
+    if (!catalogID) {
+      return;
+    }
+
+    setError(null);
+    setIsSelectingInventoryID(item.id);
+    try {
+      const catalogItem = await getGearCatalogItem(catalogID);
+      handleSelectItem(catalogItem);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load inventory item details');
+    } finally {
+      setIsSelectingInventoryID((current) => (current === item.id ? null : current));
+    }
+  }, [handleSelectItem]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50">
       {/* Backdrop */}
-      <div 
+      <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
       />
 
       {/* Modal */}
-      <div className="relative bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-2xl max-h-[calc(100vh-2rem)] sm:max-h-[85vh] overflow-hidden flex flex-col">
+      <div className="relative flex h-full w-full items-center justify-center p-4">
+        <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-2xl h-[calc(100vh-2rem)] sm:h-[85vh] sm:max-h-[760px] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700">
           <div>
@@ -164,7 +224,7 @@ export function CatalogSearchModal({
           </button>
         </div>
 
-        {(mode === 'create' || mode === 'import-json') && enableJsonImport && (
+        {(mode === 'create' || mode === 'import-json') && enableJsonImport && isAuthenticated && (
           <div className="px-6 py-3 border-b border-slate-700 bg-slate-800/40">
             <div className="inline-flex rounded-lg border border-slate-700 bg-slate-900/60 p-1">
               <button
@@ -205,7 +265,7 @@ export function CatalogSearchModal({
         ) : mode === 'import-json' ? (
           <ImportCatalogItemsForm
             onSuccess={handleSelectItem}
-            onCancel={() => setMode(startInCreateMode ? 'create' : 'search')}
+            onCancel={() => setMode(isAuthenticated && startInCreateMode ? 'create' : 'search')}
           />
         ) : (
           <>
@@ -260,6 +320,32 @@ export function CatalogSearchModal({
                 </div>
               )}
 
+              {showInventoryMatches && isAuthenticated && (isInventoryLoading || inventoryMatches.length > 0 || query.trim().length >= 2) && (
+                <div className="p-4">
+                  <h3 className="text-sm font-medium text-slate-400 mb-3">
+                    My Inventory
+                  </h3>
+                  {isInventoryLoading ? (
+                    <p className="text-sm text-slate-500">Loading inventory matches...</p>
+                  ) : inventoryError ? (
+                    <p className="text-sm text-red-400">{inventoryError}</p>
+                  ) : inventoryMatches.length === 0 ? (
+                    <p className="text-sm text-slate-500">No inventory matches with catalog links.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {inventoryMatches.map((item) => (
+                        <InventoryItemRow
+                          key={item.id}
+                          item={item}
+                          isSelecting={isSelectingInventoryID === item.id}
+                          onSelect={handleSelectInventoryItem}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {query.length >= 2 && results.length > 0 && (
                 <div className="p-4">
                   <h3 className="text-sm font-medium text-slate-400 mb-3">
@@ -285,12 +371,16 @@ export function CatalogSearchModal({
                     </svg>
                   </div>
                   <p className="text-slate-400 mb-4">No gear found matching "{query}"</p>
-                  <button
-                    onClick={() => setMode('create')}
-                    className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors"
-                  >
-                    Add "{query}" to Catalog
-                  </button>
+                  {isAuthenticated ? (
+                    <button
+                      onClick={() => setMode('create')}
+                      className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-colors"
+                    >
+                      Add "{query}" to Catalog
+                    </button>
+                  ) : (
+                    <p className="text-slate-500 text-sm">Sign in to add new gear to the catalog.</p>
+                  )}
                 </div>
               )}
 
@@ -319,19 +409,22 @@ export function CatalogSearchModal({
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-start px-6 py-4 border-t border-slate-700 bg-slate-800/50">
-              <button
-                onClick={() => setMode('create')}
-                className="text-primary-400 hover:text-primary-300 text-sm font-medium transition-colors flex items-center gap-1"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Can't find it? Add new gear
-              </button>
-            </div>
+            {isAuthenticated && (
+              <div className="flex items-center justify-start px-6 py-4 border-t border-slate-700 bg-slate-800/50">
+                <button
+                  onClick={() => setMode('create')}
+                  className="text-primary-400 hover:text-primary-300 text-sm font-medium transition-colors flex items-center gap-1"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Can't find it? Add new gear
+                </button>
+              </div>
+            )}
           </>
         )}
+        </div>
       </div>
     </div>
   );
@@ -392,6 +485,37 @@ function CatalogItemRow({ item, onSelect }: CatalogItemRowProps) {
         >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>
+      </div>
+    </button>
+  );
+}
+
+interface InventoryItemRowProps {
+  item: InventoryItem;
+  isSelecting: boolean;
+  onSelect: (item: InventoryItem) => void;
+}
+
+function InventoryItemRow({ item, isSelecting, onSelect }: InventoryItemRowProps) {
+  const title = [item.manufacturer, item.name].filter(Boolean).join(' ').trim() || item.name || 'Inventory item';
+
+  return (
+    <button
+      onClick={() => onSelect(item)}
+      disabled={isSelecting}
+      className="w-full text-left p-3 bg-slate-700/50 hover:bg-slate-700 border border-slate-600 hover:border-primary-500/50 rounded-lg transition-all disabled:cursor-wait disabled:opacity-70"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-medium text-white truncate">{title}</p>
+          <p className="text-sm text-slate-400 mt-0.5">
+            In inventory • Qty {item.quantity}
+            {typeof item.purchasePrice === 'number' && item.purchasePrice > 0
+              ? ` • ${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(item.purchasePrice)}`
+              : ''}
+          </p>
+        </div>
+        <span className="text-xs text-primary-300">{isSelecting ? 'Loading...' : 'Use in build'}</span>
       </div>
     </button>
   );

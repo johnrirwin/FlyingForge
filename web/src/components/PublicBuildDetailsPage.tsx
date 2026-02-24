@@ -278,6 +278,9 @@ export function PublicBuildDetailsPage({ onAddToInventory }: PublicBuildDetailsP
   }
 
   const pilotName = build.pilot?.callSign || build.pilot?.displayName || 'Pilot';
+  const pilotUserID = build.pilot?.userId?.trim() ?? '';
+  const isPilotProfileVisible = Boolean(build.pilot?.isProfilePublic && pilotUserID);
+  const canOpenPilotProfile = Boolean(isAuthenticated && isPilotProfileVisible);
   const buildURL = getPublishedBuildUrl(build.id);
 
   return (
@@ -293,14 +296,20 @@ export function PublicBuildDetailsPage({ onAddToInventory }: PublicBuildDetailsP
               <div className="flex flex-wrap items-center gap-2 text-sm text-slate-400">
                 <span>
                   Pilot:{' '}
-                  {build.pilot?.isProfilePublic && build.pilot?.userId ? (
-                    <Link className="text-primary-400 hover:text-primary-300" to={`/social/pilots/${build.pilot.userId}`}>
+                  {canOpenPilotProfile ? (
+                    <Link className="text-primary-400 hover:text-primary-300" to={`/social/pilots/${pilotUserID}`}>
                       {pilotName}
                     </Link>
                   ) : (
                     <span>{pilotName}</span>
                   )}
                 </span>
+                {!isAuthenticated && isPilotProfileVisible && (
+                  <>
+                    <span>•</span>
+                    <span>Login to view pilot profiles</span>
+                  </>
+                )}
                 <span>•</span>
                 <span>{build.verified ? 'Verified' : 'Unverified'}</span>
               </div>

@@ -1,6 +1,7 @@
 // Social/Pilot Directory types
 
 import type { AircraftType } from './aircraftTypes';
+import type { Build } from './buildTypes';
 
 // Profile visibility settings
 export type ProfileVisibility = 'public' | 'private';
@@ -59,6 +60,7 @@ export interface AircraftComponentPublic {
   name?: string;
   manufacturer?: string;
   imageUrl?: string;
+  catalogId?: string;
 }
 
 // Public aircraft info shown on pilot profiles
@@ -134,6 +136,7 @@ export interface PilotProfile {
   effectiveAvatarUrl: string;
   createdAt: string;
   aircraft: AircraftPublic[];
+  publishedBuilds: Build[];
   isFollowing: boolean;
   followerCount: number;
   followingCount: number;

@@ -247,6 +247,7 @@ type PilotProfile struct {
 	EffectiveAvatarURL string           `json:"effectiveAvatarUrl"`
 	CreatedAt          time.Time        `json:"createdAt"`
 	Aircraft           []AircraftPublic `json:"aircraft"`
+	PublishedBuilds    []Build          `json:"publishedBuilds"`
 	IsFollowing        bool             `json:"isFollowing"`    // Whether current user follows this pilot
 	FollowerCount      int              `json:"followerCount"`  // Number of followers
 	FollowingCount     int              `json:"followingCount"` // Number of users this pilot follows
@@ -311,6 +312,7 @@ type AircraftComponentPublic struct {
 	Name         string            `json:"name,omitempty"`
 	Manufacturer string            `json:"manufacturer,omitempty"`
 	ImageURL     string            `json:"imageUrl,omitempty"`
+	CatalogID    string            `json:"catalogId,omitempty"`
 }
 
 // ReceiverSanitizedSettings contains only safe-to-share receiver configuration

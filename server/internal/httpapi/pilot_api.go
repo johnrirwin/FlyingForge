@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/johnrirwin/flyingforge/internal/auth"
+	"github.com/johnrirwin/flyingforge/internal/builds"
 	"github.com/johnrirwin/flyingforge/internal/database"
 	"github.com/johnrirwin/flyingforge/internal/logging"
 	"github.com/johnrirwin/flyingforge/internal/models"
@@ -17,16 +18,18 @@ type PilotAPI struct {
 	userStore      *database.UserStore
 	aircraftStore  *database.AircraftStore
 	fcConfigStore  *database.FCConfigStore
+	buildSvc       *builds.Service
 	authMiddleware *auth.Middleware
 	logger         *logging.Logger
 }
 
 // NewPilotAPI creates a new pilot API handler
-func NewPilotAPI(userStore *database.UserStore, aircraftStore *database.AircraftStore, fcConfigStore *database.FCConfigStore, authMiddleware *auth.Middleware, logger *logging.Logger) *PilotAPI {
+func NewPilotAPI(userStore *database.UserStore, aircraftStore *database.AircraftStore, fcConfigStore *database.FCConfigStore, buildSvc *builds.Service, authMiddleware *auth.Middleware, logger *logging.Logger) *PilotAPI {
 	return &PilotAPI{
 		userStore:      userStore,
 		aircraftStore:  aircraftStore,
 		fcConfigStore:  fcConfigStore,
+		buildSvc:       buildSvc,
 		authMiddleware: authMiddleware,
 		logger:         logger,
 	}
@@ -215,6 +218,7 @@ func (api *PilotAPI) handlePilotProfile(w http.ResponseWriter, r *http.Request) 
 						pc.Name = c.InventoryItem.Name
 						pc.Manufacturer = c.InventoryItem.Manufacturer
 						pc.ImageURL = c.InventoryItem.ImageURL
+						pc.CatalogID = c.InventoryItem.CatalogID
 					}
 					publicComponents = append(publicComponents, pc)
 				}
@@ -258,6 +262,17 @@ func (api *PilotAPI) handlePilotProfile(w http.ResponseWriter, r *http.Request) 
 		publicAircraft = []models.AircraftPublic{}
 	}
 
+	// Get pilot's published builds for profile context.
+	publishedBuilds := []models.Build{}
+	if api.buildSvc != nil {
+		pilotBuilds, err := api.buildSvc.ListPublishedByOwner(ctx, pilotID, currentUserID, 100)
+		if err != nil {
+			api.logger.Error("Failed to get pilot published builds", logging.WithField("error", err.Error()))
+		} else {
+			publishedBuilds = pilotBuilds
+		}
+	}
+
 	// Build pilot profile response
 	profile := models.PilotProfile{
 		ID:                 user.ID,
@@ -267,6 +282,7 @@ func (api *PilotAPI) handlePilotProfile(w http.ResponseWriter, r *http.Request) 
 		EffectiveAvatarURL: user.EffectiveAvatarURL(),
 		CreatedAt:          user.CreatedAt,
 		Aircraft:           publicAircraft,
+		PublishedBuilds:    publishedBuilds,
 		IsFollowing:        isFollowing,
 		FollowerCount:      followerCount,
 		FollowingCount:     followingCount,
