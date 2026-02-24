@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { getPilotProfile } from '../pilotApi';
+import { getPublicBuild } from '../buildApi';
 import { followPilot, unfollowPilot, ApiError } from '../socialApi';
 import { updateProfile } from '../profileApi';
 import type { PilotProfile as PilotProfileType, AircraftPublic } from '../socialTypes';
 import type { GearCatalogItem } from '../gearCatalogTypes';
+import type { Build } from '../buildTypes';
+import { findPart, getBuildPartDisplayName } from '../buildTypes';
 import { useAuth } from '../hooks/useAuth';
 import { PublicAircraftModal } from './PublicAircraftModal';
 import { FollowListModal } from './FollowListModal';
@@ -30,6 +33,10 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot, isModal = false, 
   const [isFollowing, setIsFollowing] = useState(false);
   const [isFollowLoading, setIsFollowLoading] = useState(false);
   const [selectedAircraft, setSelectedAircraft] = useState<AircraftPublic | null>(null);
+  const [selectedBuildID, setSelectedBuildID] = useState<string | null>(null);
+  const [selectedBuild, setSelectedBuild] = useState<Build | null>(null);
+  const [isBuildPreviewLoading, setIsBuildPreviewLoading] = useState(false);
+  const [buildPreviewError, setBuildPreviewError] = useState<string | null>(null);
   const [showFollowList, setShowFollowList] = useState<FollowListType>(null);
   const [showCallSignPrompt, setShowCallSignPrompt] = useState(false);
 
@@ -119,6 +126,32 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot, isModal = false, 
       setIsFollowLoading(false);
     }
   };
+
+  const handleOpenBuildPreview = useCallback(async (buildID: string) => {
+    const nextBuildID = buildID.trim();
+    if (!nextBuildID) return;
+
+    setSelectedBuildID(nextBuildID);
+    setSelectedBuild(null);
+    setBuildPreviewError(null);
+    setIsBuildPreviewLoading(true);
+
+    try {
+      const build = await getPublicBuild(nextBuildID);
+      setSelectedBuild(build);
+    } catch (err) {
+      setBuildPreviewError(err instanceof Error ? err.message : 'Failed to load build');
+    } finally {
+      setIsBuildPreviewLoading(false);
+    }
+  }, []);
+
+  const handleCloseBuildPreview = useCallback(() => {
+    setSelectedBuildID(null);
+    setSelectedBuild(null);
+    setBuildPreviewError(null);
+    setIsBuildPreviewLoading(false);
+  }, []);
 
   const getDisplayName = () => {
     if (!profile) return 'Unknown Pilot';
@@ -344,10 +377,13 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot, isModal = false, 
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           {publishedBuilds.map((build) => (
-            <Link
+            <button
               key={build.id}
-              to={`/builds/${build.id}`}
-              className="bg-slate-900 rounded-lg overflow-hidden border border-slate-700 transition-all hover:border-primary-500 hover:shadow-lg"
+              type="button"
+              onClick={() => {
+                void handleOpenBuildPreview(build.id);
+              }}
+              className="w-full text-left bg-slate-900 rounded-lg overflow-hidden border border-slate-700 transition-all hover:border-primary-500 hover:shadow-lg"
             >
               <div className="aspect-video bg-slate-800 flex items-center justify-center">
                 {build.mainImageUrl ? (
@@ -364,8 +400,9 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot, isModal = false, 
                 <p className="text-xs text-slate-500 mt-3">
                   Published {new Date(build.publishedAt || build.createdAt).toLocaleDateString()}
                 </p>
+                <p className="text-xs text-primary-300 mt-1">View build details</p>
               </div>
-            </Link>
+            </button>
           ))}
         </div>
       )}
@@ -445,6 +482,15 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot, isModal = false, 
           initialCallSign={user?.callSign || ''}
         />
       )}
+
+      {(selectedBuildID || selectedBuild || buildPreviewError || isBuildPreviewLoading) && (
+        <PublishedBuildPreviewModal
+          build={selectedBuild}
+          isLoading={isBuildPreviewLoading}
+          error={buildPreviewError}
+          onClose={handleCloseBuildPreview}
+        />
+      )}
     </div>
   );
 }
@@ -510,6 +556,123 @@ function AircraftCard({ aircraft, onClick }: { aircraft: AircraftPublic; onClick
         {aircraft.description && (
           <p className="text-sm text-slate-500 mt-2 line-clamp-2">{aircraft.description}</p>
         )}
+      </div>
+    </div>
+  );
+}
+
+function PublishedBuildPreviewModal({
+  build,
+  isLoading,
+  error,
+  onClose,
+}: {
+  build: Build | null;
+  isLoading: boolean;
+  error: string | null;
+  onClose: () => void;
+}) {
+  const parts = build?.parts ?? [];
+  const frame = findPart(parts, 'frame');
+  const motors = findPart(parts, 'motor');
+  const receiver = findPart(parts, 'receiver');
+  const vtx = findPart(parts, 'vtx');
+  const aio = findPart(parts, 'aio');
+  const stack = findPart(parts, 'stack');
+  const fc = findPart(parts, 'fc');
+  const esc = findPart(parts, 'esc');
+  const msrpTotal = parts.reduce((sum, part) => {
+    const msrp = part.catalogItem?.msrp;
+    return typeof msrp === 'number' && msrp > 0 ? sum + msrp : sum;
+  }, 0);
+  const msrpLabel = msrpTotal > 0
+    ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(msrpTotal)
+    : 'N/A';
+
+  return (
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center p-4"
+      onClick={(event) => event.target === event.currentTarget && onClose()}
+    >
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="relative w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700">
+          <h3 className="text-lg font-semibold text-white">Build Details</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close build details modal"
+            className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          {isLoading && (
+            <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-6 text-center text-slate-400">
+              Loading build details...
+            </div>
+          )}
+          {!isLoading && error && (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+              {error}
+            </div>
+          )}
+          {!isLoading && !error && build && (
+            <>
+              <div className="space-y-2">
+                <h4 className="text-xl font-semibold text-white">{build.title}</h4>
+                {build.description && <p className="text-sm text-slate-300">{build.description}</p>}
+              </div>
+
+              {build.mainImageUrl && (
+                <div className="overflow-hidden rounded-xl border border-slate-700 bg-slate-800/60">
+                  <img src={build.mainImageUrl} alt={build.title} className="max-h-[320px] w-full object-cover" />
+                </div>
+              )}
+
+              <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-4">
+                <div className="flex items-center justify-between">
+                  <h5 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Estimated MSRP</h5>
+                  <span className="text-lg font-semibold text-primary-300">{msrpLabel}</span>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-4">
+                <h5 className="text-sm font-semibold uppercase tracking-wide text-slate-400 mb-3">Core Components</h5>
+                <ul className="space-y-2 text-sm text-slate-300">
+                  <li>Frame: {frame ? getBuildPartDisplayName(frame) : '—'}</li>
+                  <li>Motors: {motors ? getBuildPartDisplayName(motors) : '—'}</li>
+                  <li>
+                    Power: {aio?.catalogItem
+                      ? `AIO — ${getBuildPartDisplayName(aio)}`
+                      : stack?.catalogItem
+                        ? `FC/ESC Stack — ${getBuildPartDisplayName(stack)}`
+                      : fc?.catalogItem || esc?.catalogItem
+                        ? `${fc?.catalogItem ? getBuildPartDisplayName(fc) : 'FC'} + ${esc?.catalogItem ? getBuildPartDisplayName(esc) : 'ESC'}`
+                        : '—'}
+                  </li>
+                  <li>Receiver: {receiver ? getBuildPartDisplayName(receiver) : '—'}</li>
+                  <li>VTX: {vtx ? getBuildPartDisplayName(vtx) : '—'}</li>
+                </ul>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="px-5 py-4 border-t border-slate-700 bg-slate-900/80 flex items-center justify-end">
+          {build && (
+            <Link
+              to={`/builds/${build.id}`}
+              className="rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-500 transition-colors"
+            >
+              Open Build Page
+            </Link>
+          )}
+        </div>
       </div>
     </div>
   );

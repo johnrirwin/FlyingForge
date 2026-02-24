@@ -157,4 +157,24 @@ describe('AircraftDetail modal gear assignment flow', () => {
       expect(onSetComponent).not.toHaveBeenCalled();
     });
   });
+
+  it('closes when clicking outside the modal content', async () => {
+    const onClose = vi.fn();
+
+    render(
+      <AircraftDetail
+        details={details}
+        onClose={onClose}
+        onSetComponent={vi.fn().mockResolvedValue(undefined)}
+        onSetReceiverSettings={vi.fn().mockResolvedValue(undefined)}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => expect(mockedGetInventory).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByTestId('aircraft-detail-overlay'));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });
