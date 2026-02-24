@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
 import { fireEvent, render, screen, waitFor, within } from '../test/test-utils';
 import { AircraftDetail } from './AircraftDetail';
 import type { AircraftDetailsResponse } from '../aircraftTypes';
@@ -60,8 +61,10 @@ vi.mock('./AddGearModal', () => ({
 }));
 
 import { getInventory } from '../equipmentApi';
+import { getAircraftTuning } from '../fcConfigApi';
 
 const mockedGetInventory = vi.mocked(getInventory);
+const mockedGetAircraftTuning = vi.mocked(getAircraftTuning);
 
 const details: AircraftDetailsResponse = {
   aircraft: {
@@ -96,6 +99,10 @@ describe('AircraftDetail modal gear assignment flow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockedGetInventory.mockResolvedValue({ items: [], totalCount: 0 });
+    mockedGetAircraftTuning.mockResolvedValue({
+      aircraftId: details.aircraft.id,
+      hasTuning: false,
+    });
   });
 
   it('opens add gear modal with component category context and assigns matching items', async () => {
@@ -176,5 +183,38 @@ describe('AircraftDetail modal gear assignment flow', () => {
     fireEvent.click(screen.getByTestId('aircraft-detail-overlay'));
 
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the same modal height across tabs', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <AircraftDetail
+        details={details}
+        onClose={vi.fn()}
+        onSetComponent={vi.fn().mockResolvedValue(undefined)}
+        onSetReceiverSettings={vi.fn().mockResolvedValue(undefined)}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => expect(mockedGetInventory).toHaveBeenCalledTimes(1));
+
+    const overlay = screen.getByTestId('aircraft-detail-overlay');
+    const modal = overlay.firstElementChild;
+    if (!(modal instanceof HTMLElement)) {
+      throw new Error('Modal container not found');
+    }
+
+    expect(modal).toHaveClass('h-[90vh]');
+
+    await user.click(screen.getByRole('button', { name: 'Receiver Settings' }));
+    expect(modal).toHaveClass('h-[90vh]');
+
+    await user.click(screen.getByRole('button', { name: 'Tuning' }));
+    await waitFor(() => {
+      expect(mockedGetAircraftTuning).toHaveBeenCalledWith(details.aircraft.id);
+    });
+    expect(modal).toHaveClass('h-[90vh]');
   });
 });
