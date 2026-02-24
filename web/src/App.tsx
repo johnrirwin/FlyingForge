@@ -320,6 +320,11 @@ function App() {
     setShowAddInventoryModal(true);
   }, []);
 
+  const handleSelectDashboardGearItem = useCallback((item: InventoryItem) => {
+    navigate('/inventory');
+    handleEditInventoryItem(item);
+  }, [handleEditInventoryItem, navigate]);
+
   // Delete inventory item handler
   const handleDeleteInventoryItem = useCallback(async (item: InventoryItem) => {
     try {
@@ -578,6 +583,7 @@ function App() {
       onViewAllNews={() => navigate('/news')}
       onViewAllAircraft={() => navigate('/aircraft')}
       onViewAllGear={() => navigate('/inventory')}
+      onSelectGearItem={handleSelectDashboardGearItem}
       onSelectAircraft={handleSelectAircraft}
       onSelectNewsItem={setSelectedItem}
       onSelectPilot={(pilotId) => {

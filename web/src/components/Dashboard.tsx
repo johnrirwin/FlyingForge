@@ -20,6 +20,7 @@ interface DashboardProps {
   onViewAllNews: () => void;
   onViewAllAircraft: () => void;
   onViewAllGear: () => void;
+  onSelectGearItem: (item: InventoryItem) => void;
   onSelectAircraft: (aircraft: Aircraft) => void;
   onSelectNewsItem: (item: FeedItem) => void;
   onSelectPilot: (pilotId: string) => void;
@@ -327,6 +328,7 @@ export function Dashboard({
   onViewAllNews,
   onViewAllAircraft,
   onViewAllGear,
+  onSelectGearItem,
   onSelectAircraft,
   onSelectNewsItem,
   onSelectPilot,
@@ -457,7 +459,7 @@ export function Dashboard({
                   <DashboardGearCard 
                     key={item.id} 
                     item={item}
-                    onClick={onViewAllGear}
+                    onClick={() => onSelectGearItem(item)}
                   />
                 ))
               )}
