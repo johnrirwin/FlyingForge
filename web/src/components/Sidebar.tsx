@@ -228,6 +228,17 @@ export const Sidebar = memo(function Sidebar({
           />
 
           <NavItem
+            section="my-builds"
+            label="My Builds"
+            requiresAuth
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18M6 7l1-3h10l1 3M5 7v13h14V7M9 11h6m-6 4h4" />
+              </svg>
+            }
+          />
+
+          <NavItem
             section="radio"
             label="My Radio"
             requiresAuth
@@ -245,17 +256,6 @@ export const Sidebar = memo(function Sidebar({
             icon={
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h14a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4a2 2 0 012-2zm16 3h2m-2 0v2" />
-              </svg>
-            }
-          />
-
-          <NavItem
-            section="my-builds"
-            label="My Builds"
-            requiresAuth
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18M6 7l1-3h10l1 3M5 7v13h14V7M9 11h6m-6 4h4" />
               </svg>
             }
           />
