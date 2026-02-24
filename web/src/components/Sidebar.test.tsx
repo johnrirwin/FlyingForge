@@ -108,19 +108,10 @@ describe('Sidebar', () => {
     it('shows My Builds directly under My Aircraft for authenticated users', () => {
       render(<Sidebar {...createDefaultProps({ isAuthenticated: true, user: mockUser })} />)
 
-      const aircraftButton = screen.getByText('My Aircraft').closest('button')
-      const myBuildsButton = screen.getByText('My Builds').closest('button')
-      const myRadioButton = screen.getByText('My Radio').closest('button')
-      const myBatteriesButton = screen.getByText('My Batteries').closest('button')
-
-      expect(aircraftButton).toBeInTheDocument()
-      expect(myBuildsButton).toBeInTheDocument()
-      expect(myRadioButton).toBeInTheDocument()
-      expect(myBatteriesButton).toBeInTheDocument()
-
-      if (!aircraftButton || !myBuildsButton || !myRadioButton || !myBatteriesButton) {
-        throw new Error('Expected sidebar navigation items to be present')
-      }
+      const aircraftButton = screen.getByRole('button', { name: /My Aircraft/i })
+      const myBuildsButton = screen.getByRole('button', { name: /My Builds/i })
+      const myRadioButton = screen.getByRole('button', { name: /My Radio/i })
+      const myBatteriesButton = screen.getByRole('button', { name: /My Batteries/i })
 
       expect(aircraftButton.compareDocumentPosition(myBuildsButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
       expect(myBuildsButton.compareDocumentPosition(myRadioButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
