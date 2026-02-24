@@ -1,4 +1,4 @@
-import type { ComponentProps, ReactNode } from 'react';
+import { useEffect, type ComponentProps, type ReactNode } from 'react';
 import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import {
   Homepage,
@@ -30,6 +30,7 @@ import type {
 import type { Aircraft } from './aircraftTypes';
 import type { GearCatalogItem } from './gearCatalogTypes';
 import { buildLoginPath, getCurrentPathWithSearchAndHash } from './authRouting';
+import { useParams } from 'react-router-dom';
 
 interface AppRoutesProps {
   isAuthenticated: boolean;
@@ -104,6 +105,22 @@ function RequireAuthRoute({
   }
 
   return <Outlet />;
+}
+
+function SocialPilotRedirect({
+  onSelectPilot,
+}: {
+  onSelectPilot: (pilotId: string) => void;
+}) {
+  const params = useParams<{ pilotId: string }>();
+
+  useEffect(() => {
+    const pilotId = params.pilotId?.trim();
+    if (!pilotId) return;
+    onSelectPilot(pilotId);
+  }, [onSelectPilot, params.pilotId]);
+
+  return <Navigate to="/social" replace />;
 }
 
 export function AppRoutes({
@@ -241,6 +258,14 @@ export function AppRoutes({
           path="/social"
           element={
             <SocialPage
+              onSelectPilot={onSelectPilot}
+            />
+          }
+        />
+        <Route
+          path="/social/pilots/:pilotId"
+          element={
+            <SocialPilotRedirect
               onSelectPilot={onSelectPilot}
             />
           }

@@ -1,13 +1,18 @@
 // Read-only aircraft detail modal for public pilot profiles
 // Shows components, sanitized receiver settings (no sensitive data), and tuning data
 
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { getGearCatalogItem } from '../gearCatalogApi';
+import type { GearCatalogItem } from '../gearCatalogTypes';
 import type { AircraftPublic, ComponentCategory } from '../socialTypes';
+import { useAuth } from '../hooks/useAuth';
 import { AircraftImage } from './AircraftImage';
+import { GearDetailModal } from './GearDetailModal';
 
 interface PublicAircraftModalProps {
   aircraft: AircraftPublic;
   onClose: () => void;
+  onAddToInventory?: (item: GearCatalogItem) => void;
 }
 
 type ViewMode = 'components' | 'receiver' | 'tuning';
@@ -33,8 +38,15 @@ const CATEGORY_ORDER: ComponentCategory[] = [
   'fc', 'esc', 'aio', 'stack', 'receiver', 'vtx', 'motors', 'camera', 'frame', 'propellers', 'antenna', 'gps'
 ];
 
-export function PublicAircraftModal({ aircraft, onClose }: PublicAircraftModalProps) {
+export function PublicAircraftModal({ aircraft, onClose, onAddToInventory }: PublicAircraftModalProps) {
+  const { isAuthenticated } = useAuth();
   const [viewMode, setViewMode] = useState<ViewMode>('components');
+  const [selectedCatalogItem, setSelectedCatalogItem] = useState<GearCatalogItem | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [loadingCatalogItemId, setLoadingCatalogItemId] = useState<string | null>(null);
+  const [componentDetailError, setComponentDetailError] = useState<string | null>(null);
+  const catalogItemsRef = useRef<Record<string, GearCatalogItem>>({});
+  const pendingCatalogRequestsRef = useRef<Map<string, Promise<GearCatalogItem>>>(new Map());
 
   const hasComponents = aircraft.components && aircraft.components.length > 0;
   const hasReceiverSettings = aircraft.receiverSettings && 
@@ -51,6 +63,72 @@ export function PublicAircraftModal({ aircraft, onClose }: PublicAircraftModalPr
     if (!type) return 'Aircraft';
     return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
+
+  useEffect(() => {
+    catalogItemsRef.current = {};
+    pendingCatalogRequestsRef.current.clear();
+    setSelectedCatalogItem(null);
+    setIsDetailModalOpen(false);
+    setLoadingCatalogItemId(null);
+    setComponentDetailError(null);
+  }, [aircraft.id]);
+
+  const loadCatalogItemDetails = useCallback(async (catalogItemId: string): Promise<GearCatalogItem> => {
+    const catalogID = catalogItemId.trim();
+    if (!catalogID) {
+      throw new Error('Missing catalog item ID');
+    }
+
+    const cached = catalogItemsRef.current[catalogID];
+    if (cached) {
+      return cached;
+    }
+
+    const pending = pendingCatalogRequestsRef.current.get(catalogID);
+    if (pending) {
+      return pending;
+    }
+
+    const request = getGearCatalogItem(catalogID)
+      .then((item) => {
+        if (catalogItemsRef.current[catalogID]) {
+          return item;
+        }
+        catalogItemsRef.current = { ...catalogItemsRef.current, [catalogID]: item };
+        return item;
+      })
+      .finally(() => {
+        pendingCatalogRequestsRef.current.delete(catalogID);
+      });
+
+    pendingCatalogRequestsRef.current.set(catalogID, request);
+    return request;
+  }, []);
+
+  const handleOpenComponentDetails = useCallback(async (catalogItemID?: string) => {
+    const catalogID = catalogItemID?.trim();
+    if (!catalogID) {
+      return;
+    }
+
+    setComponentDetailError(null);
+    setLoadingCatalogItemId(catalogID);
+
+    try {
+      const detail = await loadCatalogItemDetails(catalogID);
+      setSelectedCatalogItem(detail);
+      setIsDetailModalOpen(true);
+    } catch (err) {
+      setComponentDetailError(err instanceof Error ? err.message : 'Failed to load component details');
+    } finally {
+      setLoadingCatalogItemId((current) => (current === catalogID ? null : current));
+    }
+  }, [loadCatalogItemDetails]);
+
+  const handleClosePartDetails = useCallback(() => {
+    setIsDetailModalOpen(false);
+    setSelectedCatalogItem(null);
+  }, []);
 
   return (
     <div 
@@ -136,40 +214,77 @@ export function PublicAircraftModal({ aircraft, onClose }: PublicAircraftModalPr
         <div className="flex-1 overflow-y-auto p-4">
           {viewMode === 'components' && (
             <div className="space-y-3">
+              {componentDetailError && (
+                <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
+                  {componentDetailError}
+                </div>
+              )}
               {CATEGORY_ORDER.map((category) => {
                 const component = getComponentByCategory(category);
                 const info = COMPONENT_INFO[category];
-
-                return (
-                  <div
-                    key={category}
-                    className="bg-slate-700/50 border border-slate-700 rounded-lg p-3"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-slate-600 rounded-lg flex items-center justify-center text-xl">
-                        {info.icon}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="text-white font-medium">{info.label}</h4>
-                        {component ? (
+                const catalogID = component?.catalogId?.trim() || '';
+                const isInteractive = Boolean(catalogID);
+                const isLoading = Boolean(loadingCatalogItemId && loadingCatalogItemId === catalogID);
+                const content = (
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-slate-600 rounded-lg flex items-center justify-center text-xl">
+                      {info.icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-white font-medium">{info.label}</h4>
+                      {component ? (
+                        <>
                           <p className="text-slate-300 text-sm truncate">
                             {component.manufacturer && (
                               <span className="text-slate-500">{component.manufacturer} </span>
                             )}
                             {component.name || 'Assigned'}
                           </p>
-                        ) : (
-                          <p className="text-slate-500 text-sm italic">Not assigned</p>
-                        )}
-                      </div>
-                      {component && (
-                        <div className="flex-shrink-0">
-                          <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded">
-                            Installed
-                          </span>
-                        </div>
+                          {isInteractive ? (
+                            <p className="mt-1 text-xs text-primary-300">
+                              {isLoading ? 'Loading details...' : 'View details'}
+                            </p>
+                          ) : (
+                            <p className="mt-1 text-xs text-slate-500">
+                              Details unavailable
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-slate-500 text-sm italic">Not assigned</p>
                       )}
                     </div>
+                    {component && (
+                      <div className="flex-shrink-0">
+                        <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded">
+                          Installed
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+
+                if (isInteractive) {
+                  return (
+                    <button
+                      key={category}
+                      type="button"
+                      onClick={() => handleOpenComponentDetails(catalogID)}
+                      disabled={isLoading}
+                      className="w-full bg-slate-700/50 border border-slate-700 rounded-lg p-3 text-left transition hover:border-primary-500/50 hover:bg-slate-700/70 disabled:cursor-wait disabled:opacity-70"
+                      aria-label={`View details for ${component?.name || info.label}`}
+                    >
+                      {content}
+                    </button>
+                  );
+                }
+
+                return (
+                  <div
+                    key={category}
+                    className="bg-slate-700/50 border border-slate-700 rounded-lg p-3"
+                  >
+                    {content}
                   </div>
                 );
               })}
@@ -409,6 +524,15 @@ export function PublicAircraftModal({ aircraft, onClose }: PublicAircraftModalPr
           Viewing {aircraft.name}'s build details
         </div>
       </div>
+      {selectedCatalogItem && (
+        <GearDetailModal
+          item={selectedCatalogItem}
+          isOpen={isDetailModalOpen}
+          onClose={handleClosePartDetails}
+          onAddToInventory={onAddToInventory}
+          isAuthenticated={isAuthenticated}
+        />
+      )}
     </div>
   );
 }

@@ -45,6 +45,7 @@ type buildStore interface {
 	Create(ctx context.Context, ownerUserID string, status models.BuildStatus, title string, description string, sourceAircraftID string, token string, expiresAt *time.Time, parts []models.BuildPartInput) (*models.Build, error)
 	ListByOwner(ctx context.Context, ownerUserID string, params models.BuildListParams) (*models.BuildListResponse, error)
 	ListPublic(ctx context.Context, params models.BuildListParams, viewerUserID string) (*models.BuildListResponse, error)
+	ListPublishedByOwner(ctx context.Context, ownerUserID string, viewerUserID string, limit int) ([]models.Build, error)
 	ListForModeration(ctx context.Context, params models.BuildModerationListParams) (*models.BuildListResponse, error)
 	GetByID(ctx context.Context, id string) (*models.Build, error)
 	GetForOwner(ctx context.Context, id string, ownerUserID string) (*models.Build, error)
@@ -130,6 +131,18 @@ func (s *Service) ListPublic(ctx context.Context, viewerUserID string, params mo
 		resp.Builds[i].Verified = isBuildVerified(&resp.Builds[i])
 	}
 	return resp, nil
+}
+
+// ListPublishedByOwner returns published builds for a specific pilot.
+func (s *Service) ListPublishedByOwner(ctx context.Context, ownerUserID string, viewerUserID string, limit int) ([]models.Build, error) {
+	builds, err := s.store.ListPublishedByOwner(ctx, strings.TrimSpace(ownerUserID), strings.TrimSpace(viewerUserID), limit)
+	if err != nil {
+		return nil, err
+	}
+	for i := range builds {
+		builds[i].Verified = isBuildVerified(&builds[i])
+	}
+	return builds, nil
 }
 
 // ListForModeration returns builds queued for content moderation.

@@ -258,6 +258,72 @@ func (s *BuildStore) ListPublic(ctx context.Context, params models.BuildListPara
 	}, nil
 }
 
+// ListPublishedByOwner returns published builds for a single pilot profile.
+func (s *BuildStore) ListPublishedByOwner(ctx context.Context, ownerUserID string, viewerUserID string, limit int) ([]models.Build, error) {
+	ownerUserID = strings.TrimSpace(ownerUserID)
+	viewerUserID = strings.TrimSpace(viewerUserID)
+
+	if ownerUserID == "" {
+		return []models.Build{}, nil
+	}
+
+	if limit <= 0 {
+		limit = 24
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	query := `
+		SELECT
+			b.id,
+			b.owner_user_id,
+			b.image_asset_id,
+			b.status,
+			b.token,
+			b.expires_at,
+			b.title,
+			b.description,
+			b.source_aircraft_id,
+			b.created_at,
+			b.updated_at,
+			b.published_at,
+			u.id,
+			u.call_sign,
+			COALESCE(NULLIF(u.display_name, ''), NULLIF(u.google_name, ''), NULLIF(u.call_sign, ''), 'Pilot'),
+			COALESCE(u.profile_visibility, 'public') = 'public'
+		FROM builds b
+		LEFT JOIN users u ON b.owner_user_id = u.id
+		WHERE b.owner_user_id = $1 AND b.status = 'PUBLISHED'
+		ORDER BY b.published_at DESC NULLS LAST, b.created_at DESC
+		LIMIT $2
+	`
+	rows, err := s.db.QueryContext(ctx, query, ownerUserID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list published builds by owner: %w", err)
+	}
+	defer rows.Close()
+
+	builds, err := scanBuildRows(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	buildPtrs := make([]*models.Build, 0, len(builds))
+	for i := range builds {
+		buildPtrs = append(buildPtrs, &builds[i])
+	}
+	if err := s.attachParts(ctx, buildPtrs); err != nil {
+		return nil, err
+	}
+	s.setMainImageURLs(buildPtrs, true)
+	if err := s.attachReactionSummary(ctx, buildPtrs, viewerUserID); err != nil {
+		return nil, err
+	}
+
+	return builds, nil
+}
+
 // GetByID returns a build without owner/public filtering.
 func (s *BuildStore) GetByID(ctx context.Context, id string) (*models.Build, error) {
 	query := baseBuildSelect + ` WHERE b.id = $1`

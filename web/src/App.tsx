@@ -313,6 +313,13 @@ function App() {
     setShowAddInventoryModal(true);
   }, []);
 
+  const handleAddCatalogItemToInventory = useCallback((catalogItem: GearCatalogItem) => {
+    setSelectedEquipmentForInventory(null);
+    setSelectedCatalogItemForInventory(catalogItem);
+    setEditingInventoryItem(null);
+    setShowAddInventoryModal(true);
+  }, []);
+
   // Delete inventory item handler
   const handleDeleteInventoryItem = useCallback(async (item: InventoryItem) => {
     try {
@@ -628,12 +635,7 @@ function App() {
           newsTotalCount={totalCount}
           onSelectNewsItem={setSelectedItem}
           onLoadMoreNews={loadMoreItems}
-          onAddToInventoryFromCatalog={(catalogItem) => {
-            setSelectedEquipmentForInventory(null);
-            setSelectedCatalogItemForInventory(catalogItem);
-            setEditingInventoryItem(null);
-            setShowAddInventoryModal(true);
-          }}
+          onAddToInventoryFromCatalog={handleAddCatalogItemToInventory}
           inventoryCategory={inventoryCategory}
           inventorySummary={inventorySummary}
           inventoryItems={inventoryItems}
@@ -703,6 +705,7 @@ function App() {
                 onBack={() => setSelectedPilotId(null)}
                 onSelectPilot={(pilotId) => setSelectedPilotId(pilotId)}
                 isModal
+                onAddToInventory={handleAddCatalogItemToInventory}
               />
             </div>
           </div>

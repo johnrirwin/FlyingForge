@@ -128,7 +128,7 @@ func (s *Server) Start(addr string) error {
 
 	// Pilot routes (social/pilot directory)
 	if s.userStore != nil && s.aircraftStore != nil && s.authMiddleware != nil {
-		pilotAPI := NewPilotAPI(s.userStore, s.aircraftStore, s.fcConfigStore, s.authMiddleware, s.logger)
+		pilotAPI := NewPilotAPI(s.userStore, s.aircraftStore, s.fcConfigStore, s.buildSvc, s.authMiddleware, s.logger)
 		pilotAPI.RegisterRoutes(mux, s.corsMiddleware)
 	}
 

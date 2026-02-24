@@ -92,6 +92,12 @@ function buildFixture(): Build {
     createdAt: '2026-02-01T00:00:00Z',
     updatedAt: '2026-02-01T00:00:00Z',
     verified: true,
+    pilot: {
+      userId: 'pilot-1',
+      callSign: 'UmbraVenti',
+      displayName: 'UmbraVenti',
+      isProfilePublic: true,
+    },
     parts: [
       {
         id: 'part-1',
@@ -333,5 +339,21 @@ describe('PublicBuildDetailsPage', () => {
     expect(mockedCopyURLToClipboard).toHaveBeenCalledTimes(1);
     expect(mockedCopyURLToClipboard.mock.calls[0][0]).toContain('/builds/build-1');
     expect(await screen.findByText('Build URL copied')).toBeInTheDocument();
+  });
+
+  it('links to social pilot profile when authenticated', async () => {
+    mockAuth(true);
+    renderPage();
+
+    const pilotLink = await screen.findByRole('link', { name: 'UmbraVenti' });
+    expect(pilotLink).toHaveAttribute('href', '/social/pilots/pilot-1');
+  });
+
+  it('shows login hint for pilot profiles when not authenticated', async () => {
+    mockAuth(false);
+    renderPage();
+
+    expect(await screen.findByText('Login to view pilot profiles')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'UmbraVenti' })).not.toBeInTheDocument();
   });
 });

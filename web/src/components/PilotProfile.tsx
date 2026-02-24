@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { getPilotProfile } from '../pilotApi';
 import { followPilot, unfollowPilot, ApiError } from '../socialApi';
 import { updateProfile } from '../profileApi';
 import type { PilotProfile as PilotProfileType, AircraftPublic } from '../socialTypes';
+import type { GearCatalogItem } from '../gearCatalogTypes';
 import { useAuth } from '../hooks/useAuth';
 import { PublicAircraftModal } from './PublicAircraftModal';
 import { FollowListModal } from './FollowListModal';
@@ -17,9 +19,10 @@ interface PilotProfileProps {
   onBack: () => void;
   onSelectPilot?: (pilotId: string) => void;
   isModal?: boolean;
+  onAddToInventory?: (item: GearCatalogItem) => void;
 }
 
-export function PilotProfile({ pilotId, onBack, onSelectPilot, isModal = false }: PilotProfileProps) {
+export function PilotProfile({ pilotId, onBack, onSelectPilot, isModal = false, onAddToInventory }: PilotProfileProps) {
   const { user, updateUser } = useAuth();
   const [profile, setProfile] = useState<PilotProfileType | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -290,6 +293,8 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot, isModal = false }
     </div>
   );
 
+  const publishedBuilds = profile.publishedBuilds ?? [];
+
   const aircraftSection = (
     <div className="bg-slate-800 rounded-lg p-6">
       <div className="flex items-center justify-between mb-4">
@@ -320,6 +325,53 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot, isModal = false }
     </div>
   );
 
+  const publishedBuildsSection = (
+    <div className="bg-slate-800 rounded-lg p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-white">Published Builds</h2>
+        <span className="text-sm text-slate-400">
+          {publishedBuilds.length} build{publishedBuilds.length === 1 ? '' : 's'}
+        </span>
+      </div>
+
+      {publishedBuilds.length === 0 ? (
+        <div className="text-center py-8 text-slate-500">
+          <svg className="w-12 h-12 mx-auto mb-3 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18M7 12h10M9 17h6" />
+          </svg>
+          <p>No published builds yet</p>
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {publishedBuilds.map((build) => (
+            <Link
+              key={build.id}
+              to={`/builds/${build.id}`}
+              className="bg-slate-900 rounded-lg overflow-hidden border border-slate-700 transition-all hover:border-primary-500 hover:shadow-lg"
+            >
+              <div className="aspect-video bg-slate-800 flex items-center justify-center">
+                {build.mainImageUrl ? (
+                  <img src={build.mainImageUrl} alt={build.title} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-sm text-slate-500">No build image</span>
+                )}
+              </div>
+              <div className="p-4">
+                <h3 className="font-medium text-white line-clamp-2">{build.title}</h3>
+                {build.description && (
+                  <p className="text-sm text-slate-400 mt-2 line-clamp-2">{build.description}</p>
+                )}
+                <p className="text-xs text-slate-500 mt-3">
+                  Published {new Date(build.publishedAt || build.createdAt).toLocaleDateString()}
+                </p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className={`${isModal ? 'h-full flex flex-col' : 'flex-1 overflow-y-auto'}`}>
       {isModal ? (
@@ -328,36 +380,9 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot, isModal = false }
             <div>
               {profileCard}
             </div>
-            <div className="mt-4 bg-slate-800 rounded-lg p-6 flex-1 min-h-0 flex flex-col">
-              <div className="flex items-center justify-between mb-4 flex-shrink-0">
-                <h2 className="text-lg font-semibold text-white">Aircraft</h2>
-                <span className="text-sm text-slate-400">
-                  {profile.aircraft.length} aircraft
-                </span>
-              </div>
-
-              {profile.aircraft.length === 0 ? (
-                <div className="flex-1 flex items-center justify-center text-center py-8 text-slate-500">
-                  <div>
-                    <svg className="w-12 h-12 mx-auto mb-3 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                    </svg>
-                    <p>No aircraft to display</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain pr-1">
-                  <div className="grid gap-4 sm:grid-cols-2 pb-1">
-                    {profile.aircraft.map((aircraft) => (
-                      <AircraftCard
-                        key={aircraft.id}
-                        aircraft={aircraft}
-                        onClick={() => setSelectedAircraft(aircraft)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
+            <div className="mt-4 flex-1 min-h-0 overflow-y-auto overscroll-y-contain pr-1 space-y-4">
+              {publishedBuildsSection}
+              {aircraftSection}
             </div>
           </div>
         </div>
@@ -375,6 +400,9 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot, isModal = false }
           <div className="max-w-2xl mb-6">
             {profileCard}
           </div>
+          <div className="max-w-2xl mb-6">
+            {publishedBuildsSection}
+          </div>
           <div className="max-w-2xl">
             {aircraftSection}
           </div>
@@ -385,7 +413,8 @@ export function PilotProfile({ pilotId, onBack, onSelectPilot, isModal = false }
       {selectedAircraft && (
         <PublicAircraftModal 
           aircraft={selectedAircraft} 
-          onClose={() => setSelectedAircraft(null)} 
+          onClose={() => setSelectedAircraft(null)}
+          onAddToInventory={onAddToInventory}
         />
       )}
 

@@ -971,6 +971,21 @@ func (s *fakeBuildStore) ListPublic(ctx context.Context, params models.BuildList
 	return &models.BuildListResponse{Builds: items, TotalCount: len(items)}, nil
 }
 
+func (s *fakeBuildStore) ListPublishedByOwner(ctx context.Context, ownerUserID string, viewerUserID string, limit int) ([]models.Build, error) {
+	items := make([]models.Build, 0)
+	for _, build := range s.byID {
+		if build.OwnerUserID == ownerUserID && build.Status == models.BuildStatusPublished {
+			next := cloneBuild(build)
+			s.applyReactionMeta(next, viewerUserID)
+			items = append(items, *next)
+		}
+	}
+	if limit > 0 && len(items) > limit {
+		items = items[:limit]
+	}
+	return items, nil
+}
+
 func (s *fakeBuildStore) ListForModeration(ctx context.Context, params models.BuildModerationListParams) (*models.BuildListResponse, error) {
 	status := models.NormalizeBuildStatus(params.Status)
 	if status == "" {
