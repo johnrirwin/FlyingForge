@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { render, screen, waitFor } from '../test/test-utils';
 import { PilotProfile } from './PilotProfile';
@@ -6,6 +7,10 @@ import type { PilotProfile as PilotProfileType } from '../socialTypes';
 
 vi.mock('../pilotApi', () => ({
   getPilotProfile: vi.fn(),
+}));
+
+vi.mock('../buildApi', () => ({
+  getPublicBuild: vi.fn(),
 }));
 
 vi.mock('../socialApi', () => {
@@ -41,9 +46,11 @@ vi.mock('./SocialPage', () => ({
 }));
 
 import { getPilotProfile } from '../pilotApi';
+import { getPublicBuild } from '../buildApi';
 import { useAuth } from '../hooks/useAuth';
 
 const mockedGetPilotProfile = vi.mocked(getPilotProfile);
+const mockedGetPublicBuild = vi.mocked(getPublicBuild);
 const mockedUseAuth = vi.mocked(useAuth);
 
 function mockAuth() {
@@ -113,9 +120,21 @@ describe('PilotProfile', () => {
   beforeEach(() => {
     mockAuth();
     mockedGetPilotProfile.mockReset();
+    mockedGetPublicBuild.mockReset();
+    mockedGetPublicBuild.mockResolvedValue({
+      id: 'build-1',
+      status: 'PUBLISHED',
+      title: 'Kayou Mini Build',
+      description: 'Compact freestyle setup.',
+      createdAt: '2026-02-01T00:00:00Z',
+      updatedAt: '2026-02-01T00:00:00Z',
+      publishedAt: '2026-02-02T00:00:00Z',
+      verified: true,
+      parts: [],
+    });
   });
 
-  it('shows published builds with links to build pages', async () => {
+  it('opens published build details in a modal and links to build page', async () => {
     mockedGetPilotProfile.mockResolvedValue(profileFixture());
 
     renderProfile();
@@ -126,7 +145,14 @@ describe('PilotProfile', () => {
 
     expect(await screen.findByText('Published Builds')).toBeInTheDocument();
     expect(screen.getByText('Kayou Mini Build')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Kayou Mini Build/i })).toHaveAttribute('href', '/builds/build-1');
+    await userEvent.click(screen.getByRole('button', { name: /Kayou Mini Build/i }));
+
+    await waitFor(() => {
+      expect(mockedGetPublicBuild).toHaveBeenCalledWith('build-1');
+    });
+
+    expect(await screen.findByRole('heading', { name: 'Build Details' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Build Page' })).toHaveAttribute('href', '/builds/build-1');
   });
 
   it('shows an empty published builds state when none exist', async () => {
