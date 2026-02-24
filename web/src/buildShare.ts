@@ -59,7 +59,7 @@ export async function copyURLToClipboard(url: string): Promise<void> {
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
     try {
       await navigator.clipboard.writeText(normalizedURL);
-      return
+      return;
     } catch {
       // Fall back to a legacy copy path for browsers/contexts that deny
       // async clipboard writes (for example embedded webviews).
