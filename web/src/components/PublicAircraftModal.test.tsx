@@ -130,4 +130,27 @@ describe('PublicAircraftModal', () => {
     expect(screen.queryByRole('button', { name: /View details for Receiver 123/i })).not.toBeInTheDocument();
     expect(screen.getByText('Details unavailable')).toBeInTheDocument();
   });
+
+  it('keeps a fixed modal height across tabs', async () => {
+    render(
+      <PublicAircraftModal
+        aircraft={aircraftFixture()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const footer = screen.getByText("Viewing Kayou's build details");
+    const modal = footer.parentElement;
+    if (!(modal instanceof HTMLElement)) {
+      throw new Error('Modal container not found');
+    }
+
+    expect(modal).toHaveClass('h-[90vh]');
+
+    await userEvent.click(screen.getByRole('button', { name: /^Tuning/i }));
+    expect(modal).toHaveClass('h-[90vh]');
+
+    await userEvent.click(screen.getByRole('button', { name: /^Receiver/i }));
+    expect(modal).toHaveClass('h-[90vh]');
+  });
 });
