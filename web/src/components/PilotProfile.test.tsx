@@ -155,6 +155,41 @@ describe('PilotProfile', () => {
     expect(screen.getByRole('link', { name: 'Open Build Page' })).toHaveAttribute('href', '/builds/build-1');
   });
 
+  it('embeds build and flight YouTube players in build details when video URLs exist', async () => {
+    mockedGetPilotProfile.mockResolvedValue(profileFixture());
+    mockedGetPublicBuild.mockResolvedValue({
+      id: 'build-1',
+      status: 'PUBLISHED',
+      title: 'Kayou Mini Build',
+      description: 'Compact freestyle setup.',
+      youtubeUrl: 'https://youtu.be/demo123',
+      flightYoutubeUrl: 'https://www.youtube.com/watch?v=flightxyz',
+      createdAt: '2026-02-01T00:00:00Z',
+      updatedAt: '2026-02-01T00:00:00Z',
+      publishedAt: '2026-02-02T00:00:00Z',
+      verified: true,
+      parts: [],
+    });
+
+    renderProfile();
+
+    await waitFor(() => {
+      expect(mockedGetPilotProfile).toHaveBeenCalledWith('pilot-1');
+    });
+
+    await userEvent.click(await screen.findByRole('button', { name: /Kayou Mini Build/i }));
+
+    await waitFor(() => {
+      expect(mockedGetPublicBuild).toHaveBeenCalledWith('build-1');
+    });
+
+    const buildIframe = await screen.findByTitle(/kayou mini build.*build video/i);
+    expect(buildIframe).toHaveAttribute('src', 'https://www.youtube.com/embed/demo123?rel=0');
+
+    const flightIframe = await screen.findByTitle(/kayou mini build.*flight video/i);
+    expect(flightIframe).toHaveAttribute('src', 'https://www.youtube.com/embed/flightxyz?rel=0');
+  });
+
   it('shows an empty published builds state when none exist', async () => {
     mockedGetPilotProfile.mockResolvedValue(profileFixture({ publishedBuilds: [] }));
 

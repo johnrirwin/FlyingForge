@@ -42,7 +42,7 @@ func (e *ValidationError) Error() string {
 }
 
 type buildStore interface {
-	Create(ctx context.Context, ownerUserID string, status models.BuildStatus, title string, description string, sourceAircraftID string, token string, expiresAt *time.Time, parts []models.BuildPartInput) (*models.Build, error)
+	Create(ctx context.Context, ownerUserID string, status models.BuildStatus, title string, description string, youtubeURL string, flightYouTubeURL string, sourceAircraftID string, token string, expiresAt *time.Time, parts []models.BuildPartInput) (*models.Build, error)
 	ListByOwner(ctx context.Context, ownerUserID string, params models.BuildListParams) (*models.BuildListResponse, error)
 	ListPublic(ctx context.Context, params models.BuildListParams, viewerUserID string) (*models.BuildListResponse, error)
 	ListPublishedByOwner(ctx context.Context, ownerUserID string, viewerUserID string, limit int) ([]models.Build, error)
@@ -228,6 +228,8 @@ func (s *Service) CreateTemp(ctx context.Context, ownerUserID string, params mod
 		title = defaultTempBuildName
 	}
 	description := strings.TrimSpace(params.Description)
+	youtubeURL := strings.TrimSpace(params.YouTubeURL)
+	flightYouTubeURL := strings.TrimSpace(params.FlightYouTubeURL)
 
 	token, err := generateTempToken()
 	if err != nil {
@@ -241,6 +243,8 @@ func (s *Service) CreateTemp(ctx context.Context, ownerUserID string, params mod
 		models.BuildStatusTemp,
 		title,
 		description,
+		youtubeURL,
+		flightYouTubeURL,
 		"",
 		token,
 		&expiresAt,
@@ -282,6 +286,14 @@ func (s *Service) UpdateTempByToken(ctx context.Context, token string, params mo
 	if params.Description != nil {
 		desc := strings.TrimSpace(*params.Description)
 		params.Description = &desc
+	}
+	if params.YouTubeURL != nil {
+		url := strings.TrimSpace(*params.YouTubeURL)
+		params.YouTubeURL = &url
+	}
+	if params.FlightYouTubeURL != nil {
+		url := strings.TrimSpace(*params.FlightYouTubeURL)
+		params.FlightYouTubeURL = &url
 	}
 	if params.Parts != nil {
 		params.Parts = normalizeParts(params.Parts)
@@ -329,6 +341,8 @@ func (s *Service) ShareTempByToken(ctx context.Context, token string) (*models.T
 		models.BuildStatusShared,
 		strings.TrimSpace(source.Title),
 		strings.TrimSpace(source.Description),
+		strings.TrimSpace(source.YouTubeURL),
+		strings.TrimSpace(source.FlightYouTubeURL),
 		strings.TrimSpace(source.SourceAircraftID),
 		sharedToken,
 		nil,
@@ -372,6 +386,8 @@ func (s *Service) CreateDraft(ctx context.Context, ownerUserID string, params mo
 		models.BuildStatusDraft,
 		title,
 		strings.TrimSpace(params.Description),
+		strings.TrimSpace(params.YouTubeURL),
+		strings.TrimSpace(params.FlightYouTubeURL),
 		strings.TrimSpace(params.SourceAircraftID),
 		"",
 		nil,
@@ -463,6 +479,8 @@ func (s *Service) CreateDraftFromAircraft(ctx context.Context, ownerUserID strin
 		models.BuildStatusDraft,
 		title,
 		"",
+		"",
+		"",
 		details.Aircraft.ID,
 		"",
 		nil,
@@ -524,6 +542,14 @@ func (s *Service) UpdateByOwner(ctx context.Context, id string, ownerUserID stri
 		desc := strings.TrimSpace(*params.Description)
 		params.Description = &desc
 	}
+	if params.YouTubeURL != nil {
+		url := strings.TrimSpace(*params.YouTubeURL)
+		params.YouTubeURL = &url
+	}
+	if params.FlightYouTubeURL != nil {
+		url := strings.TrimSpace(*params.FlightYouTubeURL)
+		params.FlightYouTubeURL = &url
+	}
 	if params.Parts != nil {
 		params.Parts = normalizeParts(params.Parts)
 	}
@@ -548,6 +574,14 @@ func (s *Service) UpdateForModeration(ctx context.Context, id string, params mod
 	if params.Description != nil {
 		desc := strings.TrimSpace(*params.Description)
 		params.Description = &desc
+	}
+	if params.YouTubeURL != nil {
+		url := strings.TrimSpace(*params.YouTubeURL)
+		params.YouTubeURL = &url
+	}
+	if params.FlightYouTubeURL != nil {
+		url := strings.TrimSpace(*params.FlightYouTubeURL)
+		params.FlightYouTubeURL = &url
 	}
 	if params.Parts != nil {
 		params.Parts = normalizeParts(params.Parts)

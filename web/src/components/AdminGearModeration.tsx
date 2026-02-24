@@ -1313,6 +1313,8 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
   const [build, setBuild] = useState<Build | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [flightYoutubeUrl, setFlightYoutubeUrl] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [showImageModal, setShowImageModal] = useState(false);
@@ -1339,6 +1341,8 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
         setBuild(loaded);
         setTitle(loaded.title || '');
         setDescription(loaded.description || '');
+        setYoutubeUrl(loaded.youtubeUrl || '');
+        setFlightYoutubeUrl(loaded.flightYoutubeUrl || '');
       } catch (err) {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : 'Failed to load build');
@@ -1371,6 +1375,8 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
     setBuild(refreshed);
     setTitle(refreshed.title || '');
     setDescription(refreshed.description || '');
+    setYoutubeUrl(refreshed.youtubeUrl || '');
+    setFlightYoutubeUrl(refreshed.flightYoutubeUrl || '');
     setImageFile(null);
     if (imagePreview?.startsWith('blob:')) {
       URL.revokeObjectURL(imagePreview);
@@ -1439,6 +1445,8 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
     const updatePayload = {
       title: title.trim(),
       description: description.trim(),
+      youtubeUrl: youtubeUrl.trim(),
+      flightYoutubeUrl: flightYoutubeUrl.trim(),
     };
 
     if (publishAfterSave) {
@@ -1486,7 +1494,7 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
       setIsSaving(false);
       setIsPublishing(false);
     }
-  }, [build, description, imageFile, imagePreview, onPublished, onSave, title]);
+  }, [build, description, flightYoutubeUrl, imageFile, imagePreview, onPublished, onSave, title, youtubeUrl]);
 
   const handleDeleteImage = async () => {
     if (!build || isDeletingImage) return;
@@ -1582,6 +1590,24 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
                   onChange={(event) => setDescription(event.target.value)}
                   rows={6}
                   className="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">Build Video URL</span>
+                <input
+                  value={youtubeUrl}
+                  onChange={(event) => setYoutubeUrl(event.target.value)}
+                  className="h-11 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 text-white focus:border-primary-500 focus:outline-none"
+                  placeholder="https://www.youtube.com/watch?v=..."
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">Flight Video URL</span>
+                <input
+                  value={flightYoutubeUrl}
+                  onChange={(event) => setFlightYoutubeUrl(event.target.value)}
+                  className="h-11 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 text-white focus:border-primary-500 focus:outline-none"
+                  placeholder="https://www.youtube.com/watch?v=..."
                 />
               </label>
             </div>

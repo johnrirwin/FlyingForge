@@ -42,6 +42,8 @@ export interface Build {
   expiresAt?: string;
   title: string;
   description?: string;
+  youtubeUrl?: string;
+  flightYoutubeUrl?: string;
   sourceAircraftId?: string;
   createdAt: string;
   updatedAt: string;
@@ -65,6 +67,8 @@ export interface BuildPartInput {
 export interface CreateBuildParams {
   title?: string;
   description?: string;
+  youtubeUrl?: string;
+  flightYoutubeUrl?: string;
   sourceAircraftId?: string;
   parts?: BuildPartInput[];
 }
@@ -72,6 +76,8 @@ export interface CreateBuildParams {
 export interface UpdateBuildParams {
   title?: string;
   description?: string;
+  youtubeUrl?: string;
+  flightYoutubeUrl?: string;
   parts?: BuildPartInput[];
 }
 

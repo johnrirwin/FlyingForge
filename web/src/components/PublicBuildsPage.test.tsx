@@ -208,6 +208,63 @@ describe('PublicBuildsPage', () => {
     expect(await screen.findByText('Est. MSRP: $89.99+')).toBeInTheDocument();
   });
 
+  it('deduplicates reused catalog items when calculating MSRP on cards', async () => {
+    mockedListPublicBuilds.mockResolvedValue({
+      builds: [
+        makeBuild({
+          parts: [
+            {
+              gearType: 'aio',
+              catalogItemId: 'aio-1',
+              catalogItem: {
+                id: 'aio-1',
+                gearType: 'aio',
+                brand: 'SpeedyBee',
+                model: 'F405 AIO',
+                status: 'published',
+                msrp: 79.99,
+              },
+            },
+            {
+              gearType: 'receiver',
+              catalogItemId: 'aio-1',
+              catalogItem: {
+                id: 'aio-1',
+                gearType: 'aio',
+                brand: 'SpeedyBee',
+                model: 'F405 AIO',
+                status: 'published',
+                msrp: 79.99,
+              },
+            },
+            {
+              gearType: 'frame',
+              catalogItemId: 'frame-1',
+              catalogItem: {
+                id: 'frame-1',
+                gearType: 'frame',
+                brand: 'Kayou',
+                model: 'Kayoumini',
+                status: 'published',
+                msrp: 89.99,
+              },
+            },
+          ],
+        }),
+      ],
+      totalCount: 1,
+      sort: 'newest',
+    });
+
+    render(
+      <MemoryRouter>
+        <PublicBuildsPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Est. MSRP: $169.98')).toBeInTheDocument();
+  });
+
   it('allows authenticated users to like a build card', async () => {
     mockAuth(true);
 
