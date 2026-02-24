@@ -104,6 +104,19 @@ describe('Sidebar', () => {
       expect(shopButton).toHaveClass('bg-primary-600/20')
       expect(shopButton).toHaveClass('text-primary-400')
     })
+
+    it('shows My Builds directly under My Aircraft for authenticated users', () => {
+      render(<Sidebar {...createDefaultProps({ isAuthenticated: true, user: mockUser })} />)
+
+      const aircraftButton = screen.getByRole('button', { name: /My Aircraft/i })
+      const myBuildsButton = screen.getByRole('button', { name: /My Builds/i })
+      const myRadioButton = screen.getByRole('button', { name: /My Radio/i })
+      const myBatteriesButton = screen.getByRole('button', { name: /My Batteries/i })
+
+      expect(aircraftButton.compareDocumentPosition(myBuildsButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(myBuildsButton.compareDocumentPosition(myRadioButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(myRadioButton.compareDocumentPosition(myBatteriesButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
   })
 
   describe('Inventory navigation', () => {
