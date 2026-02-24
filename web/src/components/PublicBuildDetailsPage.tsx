@@ -7,6 +7,7 @@ import { copyURLToClipboard, getPublishedBuildUrl } from '../buildShare';
 import { getGearCatalogItem } from '../gearCatalogApi';
 import type { GearCatalogItem } from '../gearCatalogTypes';
 import { useAuth } from '../hooks/useAuth';
+import { getYouTubeEmbedURL } from '../youtube';
 import { GearDetailModal } from './GearDetailModal';
 
 interface SectionPart {
@@ -204,6 +205,8 @@ export function PublicBuildDetailsPage({ onAddToInventory }: PublicBuildDetailsP
 
   const handleBuildYourOwn = useCallback(async () => {
     if (!build) return;
+    const normalizedYouTubeURL = (build.youtubeUrl || '').trim();
+    const normalizedFlightYouTubeURL = (build.flightYoutubeUrl || '').trim();
 
     const clonedParts = (build.parts || [])
       .filter((part) => part.catalogItemId)
@@ -221,6 +224,8 @@ export function PublicBuildDetailsPage({ onAddToInventory }: PublicBuildDetailsP
         await createDraftBuild({
           title: build.title ? `${build.title} Copy` : 'Untitled Build',
           description: build.description || '',
+          ...(normalizedYouTubeURL ? { youtubeUrl: normalizedYouTubeURL } : {}),
+          ...(normalizedFlightYouTubeURL ? { flightYoutubeUrl: normalizedFlightYouTubeURL } : {}),
           parts: clonedParts,
         });
         navigate('/me/builds');
@@ -230,6 +235,8 @@ export function PublicBuildDetailsPage({ onAddToInventory }: PublicBuildDetailsP
       const temp = await createTempBuild({
         title: build.title ? `${build.title} Copy` : 'Temporary Build',
         description: build.description || '',
+        ...(normalizedYouTubeURL ? { youtubeUrl: normalizedYouTubeURL } : {}),
+        ...(normalizedFlightYouTubeURL ? { flightYoutubeUrl: normalizedFlightYouTubeURL } : {}),
         parts: clonedParts,
       });
       navigate(temp.url);
@@ -282,6 +289,8 @@ export function PublicBuildDetailsPage({ onAddToInventory }: PublicBuildDetailsP
   const isPilotProfileVisible = Boolean(build.pilot?.isProfilePublic && pilotUserID);
   const canOpenPilotProfile = Boolean(isAuthenticated && isPilotProfileVisible);
   const buildURL = getPublishedBuildUrl(build.id);
+  const buildVideoEmbedURL = getYouTubeEmbedURL(build.youtubeUrl);
+  const flightVideoEmbedURL = getYouTubeEmbedURL(build.flightYoutubeUrl);
 
   return (
     <div className="flex-1 overflow-y-auto p-6">
@@ -347,6 +356,46 @@ export function PublicBuildDetailsPage({ onAddToInventory }: PublicBuildDetailsP
           <div className="overflow-hidden rounded-xl border border-slate-700 bg-slate-800/70">
             <img src={build.mainImageUrl} alt={build.title} className="max-h-[420px] w-full object-cover" />
           </div>
+        )}
+
+        {(buildVideoEmbedURL || flightVideoEmbedURL) && (
+          <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-5">
+            <h2 className="text-lg font-semibold text-white">Videos</h2>
+            <div className="mt-3 space-y-4">
+              {buildVideoEmbedURL && (
+                <div>
+                  <p className="mb-2 text-sm font-medium text-slate-300">Build Video</p>
+                  <div className="aspect-video overflow-hidden rounded-xl border border-slate-700 bg-slate-900/60">
+                    <iframe
+                      src={buildVideoEmbedURL}
+                      title={`${build.title} - Build Video`}
+                      className="h-full w-full"
+                      loading="lazy"
+                      referrerPolicy="strict-origin-when-cross-origin"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                    />
+                  </div>
+                </div>
+              )}
+              {flightVideoEmbedURL && (
+                <div>
+                  <p className="mb-2 text-sm font-medium text-slate-300">Flight Video</p>
+                  <div className="aspect-video overflow-hidden rounded-xl border border-slate-700 bg-slate-900/60">
+                    <iframe
+                      src={flightVideoEmbedURL}
+                      title={`${build.title} - Flight Video`}
+                      className="h-full w-full"
+                      loading="lazy"
+                      referrerPolicy="strict-origin-when-cross-origin"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
         )}
 
         <section className="rounded-xl border border-slate-700 bg-slate-800/60 p-5">

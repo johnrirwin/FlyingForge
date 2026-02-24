@@ -212,7 +212,26 @@ export function PublicBuildsPage() {
                 const likeCount = build.likeCount ?? 0;
                 const dislikeCount = build.dislikeCount ?? 0;
                 const isReactionPending = !!reactionPendingById[build.id];
-                const msrpSummary = (build.parts || []).reduce(
+                const uniqueCatalogParts = new Map<string, (typeof build.parts)[number]>();
+                for (const part of build.parts || []) {
+                  const catalogItemId = part.catalogItemId?.trim() || part.catalogItem?.id?.trim();
+                  if (!catalogItemId) continue;
+
+                  const existingPart = uniqueCatalogParts.get(catalogItemId);
+                  const existingMsrp = existingPart?.catalogItem?.msrp;
+                  const currentMsrp = part.catalogItem?.msrp;
+
+                  if (
+                    !existingPart
+                    || (typeof existingMsrp !== 'number' || existingMsrp <= 0)
+                      && typeof currentMsrp === 'number'
+                      && currentMsrp > 0
+                  ) {
+                    uniqueCatalogParts.set(catalogItemId, part);
+                  }
+                }
+
+                const msrpSummary = Array.from(uniqueCatalogParts.values()).reduce(
                   (summary, part) => {
                     const msrp = part.catalogItem?.msrp;
                     if (typeof msrp === 'number' && msrp > 0) {
@@ -223,23 +242,11 @@ export function PublicBuildsPage() {
                       };
                     }
 
-                    if (part.catalogItem) {
-                      return {
-                        total: summary.total,
-                        hasAtLeastOnePrice: summary.hasAtLeastOnePrice,
-                        hasMissingPrices: true,
-                      };
-                    }
-
-                    if (part.catalogItemId?.trim()) {
-                      return {
-                        total: summary.total,
-                        hasAtLeastOnePrice: summary.hasAtLeastOnePrice,
-                        hasMissingPrices: true,
-                      };
-                    }
-
-                    return summary;
+                    return {
+                      total: summary.total,
+                      hasAtLeastOnePrice: summary.hasAtLeastOnePrice,
+                      hasMissingPrices: true,
+                    };
                   },
                   {
                     total: 0,

@@ -325,6 +325,42 @@ describe('PublicBuildDetailsPage', () => {
     expect(mockedCreateTempBuild).not.toHaveBeenCalled();
   });
 
+  it('includes youtubeUrl when creating a copy for authenticated users', async () => {
+    mockAuth(true);
+    const user = userEvent.setup();
+    mockedGetPublicBuild.mockResolvedValue({
+      ...buildFixture(),
+      youtubeUrl: 'https://youtu.be/demo123',
+    });
+    renderPage();
+
+    await waitFor(() => {
+      expect(mockedGetPublicBuild).toHaveBeenCalledWith('build-1');
+    });
+
+    await user.click(await screen.findByRole('button', { name: /build your own/i }));
+
+    expect(mockedCreateDraftBuild).toHaveBeenCalledWith(expect.objectContaining({
+      youtubeUrl: 'https://youtu.be/demo123',
+    }));
+  });
+
+  it('embeds build and flight YouTube players when video links are provided', async () => {
+    mockedGetPublicBuild.mockResolvedValue({
+      ...buildFixture(),
+      youtubeUrl: 'https://youtu.be/demo123',
+      flightYoutubeUrl: 'https://www.youtube.com/watch?v=flight999',
+    });
+
+    renderPage();
+
+    const buildIframe = await screen.findByTitle(/micro racer.*build video/i);
+    expect(buildIframe).toHaveAttribute('src', 'https://www.youtube.com/embed/demo123?rel=0');
+
+    const flightIframe = await screen.findByTitle(/micro racer.*flight video/i);
+    expect(flightIframe).toHaveAttribute('src', 'https://www.youtube.com/embed/flight999?rel=0');
+  });
+
   it('copies published build URL', async () => {
     const user = userEvent.setup();
 

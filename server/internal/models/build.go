@@ -172,6 +172,8 @@ type Build struct {
 	ExpiresAt        *time.Time    `json:"expiresAt,omitempty"`
 	Title            string        `json:"title"`
 	Description      string        `json:"description,omitempty"`
+	YouTubeURL       string        `json:"youtubeUrl,omitempty"`
+	FlightYouTubeURL string        `json:"flightYoutubeUrl,omitempty"`
 	SourceAircraftID string        `json:"sourceAircraftId,omitempty"`
 	CreatedAt        time.Time     `json:"createdAt"`
 	UpdatedAt        time.Time     `json:"updatedAt"`
@@ -189,15 +191,19 @@ type Build struct {
 type CreateBuildParams struct {
 	Title            string           `json:"title"`
 	Description      string           `json:"description,omitempty"`
+	YouTubeURL       string           `json:"youtubeUrl,omitempty"`
+	FlightYouTubeURL string           `json:"flightYoutubeUrl,omitempty"`
 	SourceAircraftID string           `json:"sourceAircraftId,omitempty"`
 	Parts            []BuildPartInput `json:"parts,omitempty"`
 }
 
 // UpdateBuildParams defines payload for editing a build.
 type UpdateBuildParams struct {
-	Title       *string          `json:"title,omitempty"`
-	Description *string          `json:"description,omitempty"`
-	Parts       []BuildPartInput `json:"parts,omitempty"`
+	Title            *string          `json:"title,omitempty"`
+	Description      *string          `json:"description,omitempty"`
+	YouTubeURL       *string          `json:"youtubeUrl,omitempty"`
+	FlightYouTubeURL *string          `json:"flightYoutubeUrl,omitempty"`
+	Parts            []BuildPartInput `json:"parts,omitempty"`
 }
 
 // SetBuildImageParams defines parameters for uploading a build image.

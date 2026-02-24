@@ -8,9 +8,13 @@ import { CatalogSearchModal } from './CatalogSearchModal';
 interface BuildBuilderProps {
   title: string;
   description: string;
+  youtubeUrl?: string;
+  flightYoutubeUrl?: string;
   parts: BuildPart[];
   onTitleChange: (value: string) => void;
   onDescriptionChange: (value: string) => void;
+  onYouTubeUrlChange?: (value: string) => void;
+  onFlightYouTubeUrlChange?: (value: string) => void;
   onPartsChange: (parts: BuildPart[]) => void;
   validationErrors?: BuildValidationError[];
   readOnly?: boolean;
@@ -52,9 +56,13 @@ const OPTIONAL_ROWS: BuildRow[] = [
 export function BuildBuilder({
   title,
   description,
+  youtubeUrl,
+  flightYoutubeUrl,
   parts,
   onTitleChange,
   onDescriptionChange,
+  onYouTubeUrlChange,
+  onFlightYouTubeUrlChange,
   onPartsChange,
   validationErrors,
   readOnly = false,
@@ -192,6 +200,30 @@ export function BuildBuilder({
                   placeholder="Describe the goals, tune style, and intended use."
                 />
               </div>
+              {(onYouTubeUrlChange || youtubeUrl !== undefined) && (
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-300">Build video (optional)</label>
+                  <input
+                    value={youtubeUrl || ''}
+                    onChange={(event) => onYouTubeUrlChange?.(event.target.value)}
+                    disabled={readOnly}
+                    className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none disabled:opacity-70"
+                    placeholder="https://www.youtube.com/watch?v=..."
+                  />
+                </div>
+              )}
+              {(onFlightYouTubeUrlChange || flightYoutubeUrl !== undefined) && (
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-300">Flight video (optional)</label>
+                  <input
+                    value={flightYoutubeUrl || ''}
+                    onChange={(event) => onFlightYouTubeUrlChange?.(event.target.value)}
+                    disabled={readOnly}
+                    className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-white focus:border-primary-500 focus:outline-none disabled:opacity-70"
+                    placeholder="https://www.youtube.com/watch?v=..."
+                  />
+                </div>
+              )}
             </div>
 
             {(onImageAction || imagePreviewUrl) && (

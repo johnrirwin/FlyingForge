@@ -65,6 +65,8 @@ import {
   getMyBuild,
   getMyBuildImageUrl,
   listMyBuilds,
+  publishMyBuild,
+  updateMyBuild,
   updateTempBuild,
 } from '../buildApi';
 import { listAircraft } from '../aircraftApi';
@@ -75,6 +77,8 @@ const mockedGetMyBuild = vi.mocked(getMyBuild);
 const mockedGetMyBuildImageUrl = vi.mocked(getMyBuildImageUrl);
 const mockedListMyBuilds = vi.mocked(listMyBuilds);
 const mockedListAircraft = vi.mocked(listAircraft);
+const mockedPublishMyBuild = vi.mocked(publishMyBuild);
+const mockedUpdateMyBuild = vi.mocked(updateMyBuild);
 const mockedUpdateTempBuild = vi.mocked(updateTempBuild);
 const mockedCopyURLToClipboard = vi.mocked(copyURLToClipboard);
 
@@ -128,6 +132,8 @@ describe('MyBuildsPage share URL behavior', () => {
     mockedGetMyBuild.mockReset();
     mockedListAircraft.mockReset();
     mockedCreateTempBuild.mockReset();
+    mockedPublishMyBuild.mockReset();
+    mockedUpdateMyBuild.mockReset();
     mockedUpdateTempBuild.mockReset();
     mockedCopyURLToClipboard.mockReset();
     mockedGetMyBuildImageUrl.mockReset();
@@ -140,6 +146,17 @@ describe('MyBuildsPage share URL behavior', () => {
     mockedGetMyBuild.mockResolvedValue(draftBuildFixture());
     mockedListAircraft.mockResolvedValue({ aircraft: [], totalCount: 0 });
     mockedCreateTempBuild.mockResolvedValue(tempResponse('temp-1'));
+    mockedUpdateMyBuild.mockImplementation(async (_id, params) => draftBuildFixture({
+      title: params?.title ?? 'Untitled Build',
+      description: params?.description ?? '',
+      parts: params?.parts ?? [],
+      youtubeUrl: params?.youtubeUrl,
+      flightYoutubeUrl: params?.flightYoutubeUrl,
+    }));
+    mockedPublishMyBuild.mockResolvedValue({
+      build: draftBuildFixture({ status: 'PENDING_REVIEW' }),
+      validation: { valid: true, errors: [] },
+    });
     mockedUpdateTempBuild.mockResolvedValue(tempResponse('temp-2'));
     mockedCopyURLToClipboard.mockResolvedValue(undefined);
     mockedGetMyBuildImageUrl.mockReturnValue('/api/builds/build-1/image');
@@ -249,5 +266,97 @@ describe('MyBuildsPage share URL behavior', () => {
     });
     expect(mockedCreateTempBuild).toHaveBeenCalledTimes(1);
     expect(await screen.findByText('Share URL copied')).toBeInTheDocument();
+  });
+
+  it('switches to the new draft id after saving changes from a published build', async () => {
+    const publishedBuild = draftBuildFixture({
+      id: 'pub-1',
+      status: 'PUBLISHED',
+      title: 'Published Build',
+      parts: [
+        { gearType: 'frame', catalogItemId: 'frame-1' },
+        { gearType: 'aio', catalogItemId: 'aio-1' },
+      ],
+    });
+    const revisionBuild = draftBuildFixture({
+      id: 'rev-1',
+      status: 'DRAFT',
+      title: 'Published Build',
+      parts: [
+        { gearType: 'frame', catalogItemId: 'frame-1' },
+        { gearType: 'aio', catalogItemId: 'aio-1' },
+      ],
+    });
+
+    mockedListMyBuilds.mockResolvedValue({
+      builds: [publishedBuild],
+      totalCount: 1,
+      sort: 'newest',
+    });
+    mockedGetMyBuild.mockImplementation(async (id: string) => {
+      if (id === 'rev-1') return revisionBuild;
+      return publishedBuild;
+    });
+    mockedUpdateMyBuild.mockResolvedValue(revisionBuild);
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(mockedGetMyBuild).toHaveBeenCalledWith('pub-1');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /save draft/i }));
+
+    await waitFor(() => {
+      expect(mockedUpdateMyBuild).toHaveBeenCalledWith('pub-1', expect.any(Object));
+    });
+
+    await waitFor(() => {
+      expect(mockedGetMyBuild).toHaveBeenCalledWith('rev-1');
+    });
+
+    expect(await screen.findByRole('button', { name: /submit for review/i })).toBeInTheDocument();
+  });
+
+  it('publishes the id returned by the save step', async () => {
+    const startingBuild = draftBuildFixture({
+      id: 'build-1',
+      status: 'DRAFT',
+      parts: [
+        { gearType: 'frame', catalogItemId: 'frame-1' },
+        { gearType: 'aio', catalogItemId: 'aio-1' },
+      ],
+    });
+    const savedBuild = draftBuildFixture({
+      id: 'build-2',
+      status: 'DRAFT',
+      parts: [
+        { gearType: 'frame', catalogItemId: 'frame-1' },
+        { gearType: 'aio', catalogItemId: 'aio-1' },
+      ],
+    });
+
+    mockedListMyBuilds.mockResolvedValue({
+      builds: [startingBuild],
+      totalCount: 1,
+      sort: 'newest',
+    });
+    mockedGetMyBuild.mockImplementation(async (id: string) => {
+      if (id === 'build-2') return savedBuild;
+      return startingBuild;
+    });
+    mockedUpdateMyBuild.mockResolvedValue(savedBuild);
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(mockedGetMyBuild).toHaveBeenCalledWith('build-1');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /submit for review/i }));
+
+    await waitFor(() => {
+      expect(mockedPublishMyBuild).toHaveBeenCalledWith('build-2');
+    });
   });
 });

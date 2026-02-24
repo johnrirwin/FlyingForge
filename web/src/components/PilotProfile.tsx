@@ -14,6 +14,7 @@ import { FollowListModal } from './FollowListModal';
 import { CallSignPromptModal } from './SocialPage';
 import { AircraftImage } from './AircraftImage';
 import { trackEvent } from '../hooks/useGoogleAnalytics';
+import { getYouTubeEmbedURL } from '../youtube';
 
 type FollowListType = 'followers' | 'following' | null;
 
@@ -588,6 +589,8 @@ function PublishedBuildPreviewModal({
   const msrpLabel = msrpTotal > 0
     ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(msrpTotal)
     : 'N/A';
+  const buildVideoEmbedURL = getYouTubeEmbedURL(build?.youtubeUrl);
+  const flightVideoEmbedURL = getYouTubeEmbedURL(build?.flightYoutubeUrl);
 
   return (
     <div
@@ -634,6 +637,46 @@ function PublishedBuildPreviewModal({
                 </div>
               )}
 
+              {(buildVideoEmbedURL || flightVideoEmbedURL) && (
+                <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
+                  <h5 className="text-sm font-semibold uppercase tracking-wide text-slate-400 mb-3">Videos</h5>
+                  <div className="space-y-4">
+                    {buildVideoEmbedURL && (
+                      <div>
+                        <p className="mb-2 text-sm font-medium text-slate-300">Build Video</p>
+                        <div className="aspect-video overflow-hidden rounded-lg border border-slate-700 bg-slate-900/60">
+                          <iframe
+                            src={buildVideoEmbedURL}
+                            title={`${build.title} - Build Video`}
+                            className="h-full w-full"
+                            loading="lazy"
+                            referrerPolicy="strict-origin-when-cross-origin"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                            allowFullScreen
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {flightVideoEmbedURL && (
+                      <div>
+                        <p className="mb-2 text-sm font-medium text-slate-300">Flight Video</p>
+                        <div className="aspect-video overflow-hidden rounded-lg border border-slate-700 bg-slate-900/60">
+                          <iframe
+                            src={flightVideoEmbedURL}
+                            title={`${build.title} - Flight Video`}
+                            className="h-full w-full"
+                            loading="lazy"
+                            referrerPolicy="strict-origin-when-cross-origin"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                            allowFullScreen
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-4">
                 <div className="flex items-center justify-between">
                   <h5 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Estimated MSRP</h5>
@@ -663,7 +706,7 @@ function PublishedBuildPreviewModal({
           )}
         </div>
 
-        <div className="px-5 py-4 border-t border-slate-700 bg-slate-900/80 flex items-center justify-end">
+        <div className="px-5 py-4 border-t border-slate-700 bg-slate-900/80 flex items-center justify-end gap-2">
           {build && (
             <Link
               to={`/builds/${build.id}`}

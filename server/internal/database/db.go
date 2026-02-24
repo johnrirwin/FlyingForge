@@ -122,6 +122,8 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationGearCatalogPublishedStatus,                // Normalizes catalog status to published/pending/removed
 		migrationGearCatalogPublishAutoApproveScannedImage, // Aligns published items to approved image status
 		migrationBuilds,                                    // Adds user/public/temp builds with part mappings
+		migrationBuildVideoURLs,                            // Adds optional build/flight video metadata to builds
+		migrationBuildRevisions,                            // Adds moderation-safe draft revisions for published builds
 		migrationBuildReactions,                            // Adds likes/dislikes for published builds
 		migrationFeedItems,                                 // Adds persistent storage for aggregated feed/news items
 		migrationDropLegacyImageURLs,                       // Drops legacy image_url columns in favor of image_assets
@@ -934,6 +936,78 @@ BEGIN
         FOREIGN KEY (image_asset_id) REFERENCES image_assets(id) ON DELETE SET NULL;
     END IF;
 END $$;
+`
+
+// Migration to support optional build and flight video links.
+const migrationBuildVideoURLs = `
+ALTER TABLE builds
+ADD COLUMN IF NOT EXISTS build_video_url TEXT;
+
+ALTER TABLE builds
+ADD COLUMN IF NOT EXISTS flight_video_url TEXT;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'builds'
+          AND column_name = 'youtube_url'
+    ) THEN
+        UPDATE builds
+        SET build_video_url = COALESCE(NULLIF(TRIM(build_video_url), ''), NULLIF(TRIM(youtube_url), ''))
+        WHERE NULLIF(TRIM(COALESCE(youtube_url, '')), '') IS NOT NULL;
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'builds'
+          AND column_name = 'flight_youtube_url'
+    ) THEN
+        UPDATE builds
+        SET flight_video_url = COALESCE(NULLIF(TRIM(flight_video_url), ''), NULLIF(TRIM(flight_youtube_url), ''))
+        WHERE NULLIF(TRIM(COALESCE(flight_youtube_url, '')), '') IS NOT NULL;
+    END IF;
+END $$;
+`
+
+// Migration to stage edits to published builds behind moderation approval.
+const migrationBuildRevisions = `
+ALTER TABLE builds
+ADD COLUMN IF NOT EXISTS revision_of_build_id UUID;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'fk_builds_revision_of'
+    ) THEN
+        ALTER TABLE builds
+        ADD CONSTRAINT fk_builds_revision_of
+        FOREIGN KEY (revision_of_build_id) REFERENCES builds(id) ON DELETE CASCADE;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'chk_builds_revision_status'
+    ) THEN
+        ALTER TABLE builds DROP CONSTRAINT chk_builds_revision_status;
+    END IF;
+END $$;
+
+ALTER TABLE builds
+ADD CONSTRAINT chk_builds_revision_status
+CHECK (
+    revision_of_build_id IS NULL
+    OR status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED')
+);
+
+CREATE INDEX IF NOT EXISTS idx_builds_revision_of ON builds(revision_of_build_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_builds_revision_unique ON builds(revision_of_build_id) WHERE revision_of_build_id IS NOT NULL;
 `
 
 // Migration to add per-user build likes/dislikes for published builds.

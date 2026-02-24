@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -29,6 +30,8 @@ func (s *BuildStore) Create(
 	status models.BuildStatus,
 	title string,
 	description string,
+	youtubeURL string,
+	flightYouTubeURL string,
 	sourceAircraftID string,
 	token string,
 	expiresAt *time.Time,
@@ -41,8 +44,8 @@ func (s *BuildStore) Create(
 	defer tx.Rollback()
 
 	query := `
-		INSERT INTO builds (owner_user_id, status, token, expires_at, title, description, source_aircraft_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO builds (owner_user_id, status, token, expires_at, title, description, build_video_url, flight_video_url, source_aircraft_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id
 	`
 
@@ -61,6 +64,8 @@ func (s *BuildStore) Create(
 		expiresArg,
 		title,
 		nullString(description),
+		nullString(youtubeURL),
+		nullString(flightYouTubeURL),
 		nullString(sourceAircraftID),
 	).Scan(&buildID)
 	if err != nil {
@@ -110,6 +115,8 @@ func (s *BuildStore) ListByOwner(ctx context.Context, ownerUserID string, params
 			b.expires_at,
 			b.title,
 			b.description,
+			b.build_video_url,
+			b.flight_video_url,
 			b.source_aircraft_id,
 			b.created_at,
 			b.updated_at,
@@ -211,6 +218,8 @@ func (s *BuildStore) ListPublic(ctx context.Context, params models.BuildListPara
 			b.expires_at,
 			b.title,
 			b.description,
+			b.build_video_url,
+			b.flight_video_url,
 			b.source_aircraft_id,
 			b.created_at,
 			b.updated_at,
@@ -284,6 +293,8 @@ func (s *BuildStore) ListPublishedByOwner(ctx context.Context, ownerUserID strin
 			b.expires_at,
 			b.title,
 			b.description,
+			b.build_video_url,
+			b.flight_video_url,
 			b.source_aircraft_id,
 			b.created_at,
 			b.updated_at,
@@ -405,6 +416,30 @@ func (s *BuildStore) Update(ctx context.Context, id string, ownerUserID string, 
 	}
 	defer tx.Rollback()
 
+	targetBuildID := id
+	var currentStatus models.BuildStatus
+	if err := tx.QueryRowContext(
+		ctx,
+		`SELECT status FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')`,
+		id,
+		ownerUserID,
+	).Scan(&currentStatus); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to load build before update: %w", err)
+	}
+
+	if currentStatus == models.BuildStatusPublished {
+		targetBuildID, err = s.ensurePublishedRevisionDraftTx(ctx, tx, id, ownerUserID)
+		if err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(targetBuildID) == "" {
+			return nil, nil
+		}
+	}
+
 	setClauses := []string{"updated_at = NOW()"}
 	args := []interface{}{}
 	argIndex := 1
@@ -419,13 +454,23 @@ func (s *BuildStore) Update(ctx context.Context, id string, ownerUserID string, 
 		args = append(args, strings.TrimSpace(*params.Description))
 		argIndex++
 	}
+	if params.YouTubeURL != nil {
+		setClauses = append(setClauses, fmt.Sprintf("build_video_url = $%d", argIndex))
+		args = append(args, nullString(strings.TrimSpace(*params.YouTubeURL)))
+		argIndex++
+	}
+	if params.FlightYouTubeURL != nil {
+		setClauses = append(setClauses, fmt.Sprintf("flight_video_url = $%d", argIndex))
+		args = append(args, nullString(strings.TrimSpace(*params.FlightYouTubeURL)))
+		argIndex++
+	}
 
 	query := fmt.Sprintf(`
 		UPDATE builds
 		SET %s
-		WHERE id = $%d AND owner_user_id = $%d AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')
+		WHERE id = $%d AND owner_user_id = $%d AND status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED')
 	`, strings.Join(setClauses, ", "), argIndex, argIndex+1)
-	args = append(args, id, ownerUserID)
+	args = append(args, targetBuildID, ownerUserID)
 
 	result, err := tx.ExecContext(ctx, query, args...)
 	if err != nil {
@@ -437,7 +482,7 @@ func (s *BuildStore) Update(ctx context.Context, id string, ownerUserID string, 
 	}
 
 	if params.Parts != nil {
-		if err := s.replacePartsTx(ctx, tx, id, params.Parts); err != nil {
+		if err := s.replacePartsTx(ctx, tx, targetBuildID, params.Parts); err != nil {
 			return nil, err
 		}
 	}
@@ -446,7 +491,7 @@ func (s *BuildStore) Update(ctx context.Context, id string, ownerUserID string, 
 		return nil, fmt.Errorf("failed to commit build update: %w", err)
 	}
 
-	return s.GetForOwner(ctx, id, ownerUserID)
+	return s.GetForOwner(ctx, targetBuildID, ownerUserID)
 }
 
 // UpdateTempByToken creates a new temp build revision with a rotated token.
@@ -468,6 +513,14 @@ func (s *BuildStore) UpdateTempByToken(ctx context.Context, token string, params
 	if params.Description != nil {
 		description = strings.TrimSpace(*params.Description)
 	}
+	youtubeURL := strings.TrimSpace(build.YouTubeURL)
+	if params.YouTubeURL != nil {
+		youtubeURL = strings.TrimSpace(*params.YouTubeURL)
+	}
+	flightYouTubeURL := strings.TrimSpace(build.FlightYouTubeURL)
+	if params.FlightYouTubeURL != nil {
+		flightYouTubeURL = strings.TrimSpace(*params.FlightYouTubeURL)
+	}
 
 	parts := models.BuildPartInputsFromParts(build.Parts)
 	if params.Parts != nil {
@@ -480,6 +533,8 @@ func (s *BuildStore) UpdateTempByToken(ctx context.Context, token string, params
 		models.BuildStatusTemp,
 		title,
 		description,
+		youtubeURL,
+		flightYouTubeURL,
 		build.SourceAircraftID,
 		nextToken,
 		build.ExpiresAt,
@@ -536,7 +591,7 @@ func (s *BuildStore) SetStatus(ctx context.Context, id string, ownerUserID strin
 		query = `
 			UPDATE builds
 			SET status = 'UNPUBLISHED', published_at = NULL, updated_at = NOW()
-			WHERE id = $1 AND owner_user_id = $2 AND status = 'PUBLISHED'
+			WHERE id = $1 AND owner_user_id = $2 AND status IN ('PUBLISHED', 'PENDING_REVIEW')
 		`
 	default:
 		return nil, fmt.Errorf("unsupported status transition to %q", status)
@@ -782,10 +837,12 @@ func (s *BuildStore) ListForModeration(ctx context.Context, params models.BuildM
 			(
 				LOWER(COALESCE(b.title, '')) LIKE LOWER($%d)
 				OR LOWER(COALESCE(b.description, '')) LIKE LOWER($%d)
+				OR LOWER(COALESCE(b.build_video_url, '')) LIKE LOWER($%d)
+				OR LOWER(COALESCE(b.flight_video_url, '')) LIKE LOWER($%d)
 				OR LOWER(COALESCE(u.call_sign, '')) LIKE LOWER($%d)
 				OR LOWER(COALESCE(u.display_name, '')) LIKE LOWER($%d)
 			)
-		`, argIdx, argIdx, argIdx, argIdx))
+		`, argIdx, argIdx, argIdx, argIdx, argIdx, argIdx))
 		args = append(args, "%"+search+"%")
 		argIdx++
 	}
@@ -814,6 +871,8 @@ func (s *BuildStore) ListForModeration(ctx context.Context, params models.BuildM
 			b.expires_at,
 			b.title,
 			b.description,
+			b.build_video_url,
+			b.flight_video_url,
 			b.source_aircraft_id,
 			b.created_at,
 			b.updated_at,
@@ -898,6 +957,16 @@ func (s *BuildStore) UpdateForModeration(ctx context.Context, id string, params 
 	if params.Description != nil {
 		setClauses = append(setClauses, fmt.Sprintf("description = $%d", argIndex))
 		args = append(args, strings.TrimSpace(*params.Description))
+		argIndex++
+	}
+	if params.YouTubeURL != nil {
+		setClauses = append(setClauses, fmt.Sprintf("build_video_url = $%d", argIndex))
+		args = append(args, nullString(strings.TrimSpace(*params.YouTubeURL)))
+		argIndex++
+	}
+	if params.FlightYouTubeURL != nil {
+		setClauses = append(setClauses, fmt.Sprintf("flight_video_url = $%d", argIndex))
+		args = append(args, nullString(strings.TrimSpace(*params.FlightYouTubeURL)))
 		argIndex++
 	}
 
@@ -1020,20 +1089,191 @@ func (s *BuildStore) DeleteImageForModeration(ctx context.Context, id string) (s
 
 // ApproveForModeration publishes a build from the pending moderation queue.
 func (s *BuildStore) ApproveForModeration(ctx context.Context, id string) (*models.Build, error) {
-	result, err := s.db.ExecContext(
-		ctx,
-		`UPDATE builds SET status = 'PUBLISHED', published_at = NOW(), updated_at = NOW() WHERE id = $1 AND status = 'PENDING_REVIEW'`,
-		id,
-	)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to approve moderation build: %w", err)
+		return nil, fmt.Errorf("failed to start moderation approval transaction: %w", err)
 	}
-	rows, _ := result.RowsAffected()
-	if rows == 0 {
-		return nil, nil
+	defer tx.Rollback()
+
+	var revisionOfBuildID sql.NullString
+	if err := tx.QueryRowContext(
+		ctx,
+		`SELECT revision_of_build_id FROM builds WHERE id = $1 AND status = 'PENDING_REVIEW'`,
+		id,
+	).Scan(&revisionOfBuildID); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to load pending moderation build: %w", err)
 	}
 
-	return s.GetForModeration(ctx, id)
+	approvedBuildID := id
+	if strings.TrimSpace(revisionOfBuildID.String) != "" {
+		approvedBuildID = strings.TrimSpace(revisionOfBuildID.String)
+
+		result, err := tx.ExecContext(
+			ctx,
+			`
+				UPDATE builds AS published
+				SET title = pending.title,
+				    description = pending.description,
+				    build_video_url = pending.build_video_url,
+				    flight_video_url = pending.flight_video_url,
+				    source_aircraft_id = pending.source_aircraft_id,
+				    image_asset_id = pending.image_asset_id,
+				    updated_at = NOW()
+				FROM builds AS pending
+				WHERE pending.id = $1
+				  AND pending.status = 'PENDING_REVIEW'
+				  AND published.id = pending.revision_of_build_id
+				  AND published.owner_user_id = pending.owner_user_id
+				  AND published.status = 'PUBLISHED'
+			`,
+			id,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to merge approved build revision: %w", err)
+		}
+		rows, _ := result.RowsAffected()
+		if rows == 0 {
+			return nil, nil
+		}
+
+		if _, err := tx.ExecContext(ctx, `DELETE FROM build_parts WHERE build_id = $1`, approvedBuildID); err != nil {
+			return nil, fmt.Errorf("failed to clear published build parts during approval: %w", err)
+		}
+		if _, err := tx.ExecContext(
+			ctx,
+			`
+				INSERT INTO build_parts (build_id, gear_type, catalog_item_id, position, notes)
+				SELECT $1, gear_type, catalog_item_id, position, notes
+				FROM build_parts
+				WHERE build_id = $2
+			`,
+			approvedBuildID,
+			id,
+		); err != nil {
+			return nil, fmt.Errorf("failed to copy approved revision parts: %w", err)
+		}
+
+		if _, err := tx.ExecContext(ctx, `DELETE FROM builds WHERE id = $1`, id); err != nil {
+			return nil, fmt.Errorf("failed to clean up approved build revision: %w", err)
+		}
+	} else {
+		result, err := tx.ExecContext(
+			ctx,
+			`UPDATE builds SET status = 'PUBLISHED', published_at = NOW(), updated_at = NOW() WHERE id = $1 AND status = 'PENDING_REVIEW'`,
+			id,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to approve moderation build: %w", err)
+		}
+		rows, _ := result.RowsAffected()
+		if rows == 0 {
+			return nil, nil
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit moderation approval: %w", err)
+	}
+
+	return s.GetForModeration(ctx, approvedBuildID)
+}
+
+func (s *BuildStore) ensurePublishedRevisionDraftTx(ctx context.Context, tx *sql.Tx, publishedBuildID string, ownerUserID string) (string, error) {
+	var revisionBuildID string
+	if err := s.selectExistingRevisionDraftTx(ctx, tx, ownerUserID, publishedBuildID, &revisionBuildID); err == nil {
+		return revisionBuildID, nil
+	} else if err != sql.ErrNoRows {
+		return "", fmt.Errorf("failed to check existing published build revision: %w", err)
+	}
+
+	if err := tx.QueryRowContext(
+		ctx,
+		`
+			INSERT INTO builds (
+				owner_user_id,
+				image_asset_id,
+				status,
+				title,
+				description,
+				build_video_url,
+				flight_video_url,
+				source_aircraft_id,
+				revision_of_build_id
+			)
+			SELECT
+				owner_user_id,
+				image_asset_id,
+				'DRAFT',
+				title,
+				description,
+				build_video_url,
+				flight_video_url,
+				source_aircraft_id,
+				id
+			FROM builds
+			WHERE id = $1
+			  AND owner_user_id = $2
+			  AND status = 'PUBLISHED'
+			RETURNING id
+		`,
+		publishedBuildID,
+		ownerUserID,
+	).Scan(&revisionBuildID); err != nil {
+		if err == sql.ErrNoRows {
+			return "", nil
+		}
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && string(pqErr.Code) == "23505" {
+			if retryErr := s.selectExistingRevisionDraftTx(ctx, tx, ownerUserID, publishedBuildID, &revisionBuildID); retryErr == nil {
+				return revisionBuildID, nil
+			} else if retryErr != sql.ErrNoRows {
+				return "", fmt.Errorf("failed to recover existing revision draft after concurrent insert: %w", retryErr)
+			}
+		}
+		return "", fmt.Errorf("failed to create published build revision draft: %w", err)
+	}
+
+	if _, err := tx.ExecContext(
+		ctx,
+		`
+			INSERT INTO build_parts (build_id, gear_type, catalog_item_id, position, notes)
+			SELECT $1, gear_type, catalog_item_id, position, notes
+			FROM build_parts
+			WHERE build_id = $2
+		`,
+		revisionBuildID,
+		publishedBuildID,
+	); err != nil {
+		return "", fmt.Errorf("failed to copy parts into revision draft: %w", err)
+	}
+
+	return revisionBuildID, nil
+}
+
+func (s *BuildStore) selectExistingRevisionDraftTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	ownerUserID string,
+	publishedBuildID string,
+	revisionBuildID *string,
+) error {
+	return tx.QueryRowContext(
+		ctx,
+		`
+			SELECT id
+			FROM builds
+			WHERE owner_user_id = $1
+			  AND revision_of_build_id = $2
+			  AND status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED')
+			ORDER BY updated_at DESC
+			LIMIT 1
+		`,
+		ownerUserID,
+		publishedBuildID,
+	).Scan(revisionBuildID)
 }
 
 func (s *BuildStore) replacePartsTx(ctx context.Context, tx *sql.Tx, buildID string, parts []models.BuildPartInput) error {
@@ -1351,6 +1591,8 @@ var baseBuildSelect = `
 		b.expires_at,
 		b.title,
 		b.description,
+		b.build_video_url,
+		b.flight_video_url,
 		b.source_aircraft_id,
 		b.created_at,
 		b.updated_at,
@@ -1384,6 +1626,8 @@ func scanBuildRow(scanner interface {
 	var token sql.NullString
 	var expiresAt sql.NullTime
 	var description sql.NullString
+	var youtubeURL sql.NullString
+	var flightYouTubeURL sql.NullString
 	var sourceAircraftID sql.NullString
 	var publishedAt sql.NullTime
 
@@ -1401,6 +1645,8 @@ func scanBuildRow(scanner interface {
 		&expiresAt,
 		&item.Title,
 		&description,
+		&youtubeURL,
+		&flightYouTubeURL,
 		&sourceAircraftID,
 		&item.CreatedAt,
 		&item.UpdatedAt,
@@ -1418,6 +1664,8 @@ func scanBuildRow(scanner interface {
 	item.ImageAssetID = imageAssetID.String
 	item.Token = token.String
 	item.Description = description.String
+	item.YouTubeURL = youtubeURL.String
+	item.FlightYouTubeURL = flightYouTubeURL.String
 	item.SourceAircraftID = sourceAircraftID.String
 	if expiresAt.Valid {
 		item.ExpiresAt = &expiresAt.Time

@@ -213,10 +213,13 @@ export function MyBuildsPage() {
       const updated = await updateMyBuild(editorBuild.id, {
         title: editorBuild.title,
         description: editorBuild.description,
+        youtubeUrl: editorBuild.youtubeUrl,
+        flightYoutubeUrl: editorBuild.flightYoutubeUrl,
         parts: toPartInputs(editorBuild.parts),
       });
       setEditorBuild(updated);
       setBuilds((prev) => [updated, ...prev.filter((item) => item.id !== updated.id)]);
+      setSelectedBuildId(updated.id);
       setValidationErrors([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save build');
@@ -236,12 +239,15 @@ export function MyBuildsPage() {
       const saved = await updateMyBuild(editorBuild.id, {
         title: editorBuild.title,
         description: editorBuild.description,
+        youtubeUrl: editorBuild.youtubeUrl,
+        flightYoutubeUrl: editorBuild.flightYoutubeUrl,
         parts: toPartInputs(editorBuild.parts),
       });
       setEditorBuild(saved);
       setBuilds((prev) => [saved, ...prev.filter((item) => item.id !== saved.id)]);
+      setSelectedBuildId(saved.id);
 
-      const response = await publishMyBuild(editorBuild.id);
+      const response = await publishMyBuild(saved.id);
       if (!response.validation.valid) {
         setValidationErrors(response.validation.errors ?? []);
         return;
@@ -249,6 +255,7 @@ export function MyBuildsPage() {
       if (response.build) {
         setEditorBuild(response.build);
         setBuilds((prev) => [response.build!, ...prev.filter((item) => item.id !== response.build!.id)]);
+        setSelectedBuildId(response.build.id);
       }
       setValidationErrors([]);
     } catch (err) {
@@ -735,10 +742,11 @@ export function MyBuildsPage() {
                     ) : editorBuild.status === 'PENDING_REVIEW' ? (
                       <button
                         type="button"
-                        disabled
-                        className="rounded-lg bg-slate-700 px-3 py-2 text-sm font-medium text-slate-300"
+                        disabled={isSaving}
+                        onClick={handleUnpublish}
+                        className="rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        Awaiting Review
+                        Withdraw Review
                       </button>
                     ) : (
                       <button
@@ -787,6 +795,8 @@ export function MyBuildsPage() {
                 <BuildBuilder
                   title={editorBuild.title}
                   description={editorBuild.description || ''}
+                  youtubeUrl={editorBuild.youtubeUrl || ''}
+                  flightYoutubeUrl={editorBuild.flightYoutubeUrl || ''}
                   parts={editorBuild.parts || []}
                   validationErrors={validationErrors}
                   imagePreviewUrl={buildImagePreviewUrl}
@@ -795,6 +805,8 @@ export function MyBuildsPage() {
                   imageHelperText="JPEG or PNG. Max 2MB."
                   onTitleChange={(value) => setEditorBuild((prev) => (prev ? { ...prev, title: value } : prev))}
                   onDescriptionChange={(value) => setEditorBuild((prev) => (prev ? { ...prev, description: value } : prev))}
+                  onYouTubeUrlChange={(value) => setEditorBuild((prev) => (prev ? { ...prev, youtubeUrl: value } : prev))}
+                  onFlightYouTubeUrlChange={(value) => setEditorBuild((prev) => (prev ? { ...prev, flightYoutubeUrl: value } : prev))}
                   onPartsChange={(parts) => setEditorBuild((prev) => (prev ? { ...prev, parts } : prev))}
                 />
               </>
@@ -898,9 +910,13 @@ function toPartInputs(parts: Build['parts']) {
 }
 
 function toBuildSharePayload(build: Build) {
+  const normalizedYouTubeURL = (build.youtubeUrl || '').trim();
+  const normalizedFlightYouTubeURL = (build.flightYoutubeUrl || '').trim();
   return {
     title: build.title || 'Temporary Build',
     description: build.description || '',
+    ...(normalizedYouTubeURL ? { youtubeUrl: normalizedYouTubeURL } : {}),
+    ...(normalizedFlightYouTubeURL ? { flightYoutubeUrl: normalizedFlightYouTubeURL } : {}),
     sourceAircraftId: build.sourceAircraftId,
     parts: toPartInputs(build.parts),
   };
@@ -923,6 +939,8 @@ function buildSharePayloadKey(build: Build) {
   return JSON.stringify({
     title: build.title ?? '',
     description: build.description ?? '',
+    youtubeUrl: build.youtubeUrl ?? '',
+    flightYoutubeUrl: build.flightYoutubeUrl ?? '',
     sourceAircraftId: build.sourceAircraftId ?? '',
     parts: sortedParts,
   });

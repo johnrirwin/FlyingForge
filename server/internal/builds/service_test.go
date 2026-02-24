@@ -671,6 +671,239 @@ func TestPublish_SubmitsPendingReview(t *testing.T) {
 	}
 }
 
+func TestCreateDraft_TrimsYouTubeURL(t *testing.T) {
+	store := newFakeBuildStore()
+	svc := NewServiceWithDeps(store, nil, nil, logging.New(logging.LevelError))
+	ctx := context.Background()
+
+	created, err := svc.CreateDraft(ctx, "user-1", models.CreateBuildParams{
+		Title:            "Video Build",
+		YouTubeURL:       "  https://www.youtube.com/watch?v=dQw4w9WgXcQ  ",
+		FlightYouTubeURL: " https://youtu.be/flight123 ",
+	})
+	if err != nil {
+		t.Fatalf("CreateDraft error: %v", err)
+	}
+	if created.YouTubeURL != "https://www.youtube.com/watch?v=dQw4w9WgXcQ" {
+		t.Fatalf("expected trimmed youtube url, got %q", created.YouTubeURL)
+	}
+	if created.FlightYouTubeURL != "https://youtu.be/flight123" {
+		t.Fatalf("expected trimmed flight youtube url, got %q", created.FlightYouTubeURL)
+	}
+}
+
+func TestUpdateByOwner_AllowsUpdatingAndClearingYouTubeURL(t *testing.T) {
+	store := newFakeBuildStore()
+	svc := NewServiceWithDeps(store, nil, nil, logging.New(logging.LevelError))
+	ctx := context.Background()
+
+	created, err := svc.CreateDraft(ctx, "user-1", models.CreateBuildParams{
+		Title:            "Video Build",
+		YouTubeURL:       "https://youtu.be/abc123",
+		FlightYouTubeURL: "https://youtu.be/flightabc",
+	})
+	if err != nil {
+		t.Fatalf("CreateDraft error: %v", err)
+	}
+
+	nextURL := "  https://www.youtube.com/watch?v=xyz789  "
+	updated, err := svc.UpdateByOwner(ctx, created.ID, "user-1", models.UpdateBuildParams{
+		YouTubeURL: &nextURL,
+	})
+	if err != nil {
+		t.Fatalf("UpdateByOwner error: %v", err)
+	}
+	if updated == nil {
+		t.Fatalf("expected updated build")
+	}
+	if updated.YouTubeURL != "https://www.youtube.com/watch?v=xyz789" {
+		t.Fatalf("expected trimmed youtube url after update, got %q", updated.YouTubeURL)
+	}
+	if updated.FlightYouTubeURL != "https://youtu.be/flightabc" {
+		t.Fatalf("expected unchanged flight youtube url after update, got %q", updated.FlightYouTubeURL)
+	}
+
+	nextFlightURL := "  https://www.youtube.com/watch?v=flightxyz  "
+	updatedFlight, err := svc.UpdateByOwner(ctx, created.ID, "user-1", models.UpdateBuildParams{
+		FlightYouTubeURL: &nextFlightURL,
+	})
+	if err != nil {
+		t.Fatalf("UpdateByOwner flight error: %v", err)
+	}
+	if updatedFlight == nil {
+		t.Fatalf("expected updated flight build")
+	}
+	if updatedFlight.FlightYouTubeURL != "https://www.youtube.com/watch?v=flightxyz" {
+		t.Fatalf("expected trimmed flight youtube url after update, got %q", updatedFlight.FlightYouTubeURL)
+	}
+
+	clearURL := "   "
+	cleared, err := svc.UpdateByOwner(ctx, created.ID, "user-1", models.UpdateBuildParams{
+		YouTubeURL: &clearURL,
+	})
+	if err != nil {
+		t.Fatalf("UpdateByOwner clear error: %v", err)
+	}
+	if cleared == nil {
+		t.Fatalf("expected cleared build")
+	}
+	if cleared.YouTubeURL != "" {
+		t.Fatalf("expected youtube url to be cleared, got %q", cleared.YouTubeURL)
+	}
+
+	clearFlightURL := ""
+	clearedFlight, err := svc.UpdateByOwner(ctx, created.ID, "user-1", models.UpdateBuildParams{
+		FlightYouTubeURL: &clearFlightURL,
+	})
+	if err != nil {
+		t.Fatalf("UpdateByOwner clear flight error: %v", err)
+	}
+	if clearedFlight == nil {
+		t.Fatalf("expected cleared flight build")
+	}
+	if clearedFlight.FlightYouTubeURL != "" {
+		t.Fatalf("expected flight youtube url to be cleared, got %q", clearedFlight.FlightYouTubeURL)
+	}
+}
+
+func TestUpdateByOwner_PublishedBuildCreatesDraftRevision(t *testing.T) {
+	ctx := context.Background()
+	store := newFakeBuildStore()
+	svc := NewServiceWithDeps(store, nil, nil, logging.New(logging.LevelError))
+
+	published, err := svc.CreateDraft(ctx, "user-1", models.CreateBuildParams{
+		Title:       "Live Build",
+		Description: "public description",
+		Parts: []models.BuildPartInput{
+			{GearType: models.GearTypeFrame, CatalogItemID: "frame-1"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateDraft error: %v", err)
+	}
+	if _, err := store.SetStatus(ctx, published.ID, "user-1", models.BuildStatusPublished); err != nil {
+		t.Fatalf("SetStatus setup error: %v", err)
+	}
+
+	nextDescription := "draft revision description"
+	updated, err := svc.UpdateByOwner(ctx, published.ID, "user-1", models.UpdateBuildParams{
+		Description: &nextDescription,
+	})
+	if err != nil {
+		t.Fatalf("UpdateByOwner error: %v", err)
+	}
+	if updated == nil {
+		t.Fatalf("expected updated build")
+	}
+	if updated.ID == published.ID {
+		t.Fatalf("expected a separate revision build id, got same id %q", updated.ID)
+	}
+	if updated.Status != models.BuildStatusDraft {
+		t.Fatalf("expected draft revision status, got %s", updated.Status)
+	}
+	if updated.Description != nextDescription {
+		t.Fatalf("expected revision description %q, got %q", nextDescription, updated.Description)
+	}
+
+	stillPublished, err := store.GetForOwner(ctx, published.ID, "user-1")
+	if err != nil {
+		t.Fatalf("GetForOwner published error: %v", err)
+	}
+	if stillPublished == nil {
+		t.Fatalf("expected published build to remain")
+	}
+	if stillPublished.Status != models.BuildStatusPublished {
+		t.Fatalf("expected original build to remain published, got %s", stillPublished.Status)
+	}
+	if stillPublished.Description != "public description" {
+		t.Fatalf("expected original published description to remain unchanged, got %q", stillPublished.Description)
+	}
+}
+
+func TestApproveForModeration_MergesPublishedRevision(t *testing.T) {
+	ctx := context.Background()
+	store := newFakeBuildStore()
+	svc := NewServiceWithDeps(store, nil, nil, logging.New(logging.LevelError))
+
+	published, err := svc.CreateDraft(ctx, "user-1", models.CreateBuildParams{
+		Title:       "Live Build",
+		Description: "public description",
+		YouTubeURL:  "https://youtu.be/live",
+		Parts: []models.BuildPartInput{
+			{GearType: models.GearTypeFrame, CatalogItemID: "frame-1"},
+			{GearType: models.GearTypeMotor, CatalogItemID: "motor-1"},
+			{GearType: models.GearTypeAIO, CatalogItemID: "aio-1"},
+			{GearType: models.GearTypeReceiver, CatalogItemID: "rx-1"},
+			{GearType: models.GearTypeVTX, CatalogItemID: "vtx-1"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateDraft error: %v", err)
+	}
+	if _, err := store.SetImage(ctx, published.ID, "user-1", "asset-1"); err != nil {
+		t.Fatalf("SetImage setup error: %v", err)
+	}
+	if _, err := store.SetStatus(ctx, published.ID, "user-1", models.BuildStatusPublished); err != nil {
+		t.Fatalf("SetStatus setup error: %v", err)
+	}
+
+	nextTitle := "Revised Title"
+	nextDescription := "pending description"
+	revision, err := svc.UpdateByOwner(ctx, published.ID, "user-1", models.UpdateBuildParams{
+		Title:       &nextTitle,
+		Description: &nextDescription,
+	})
+	if err != nil {
+		t.Fatalf("UpdateByOwner error: %v", err)
+	}
+	if revision == nil {
+		t.Fatalf("expected revision build")
+	}
+	if revision.ID == published.ID {
+		t.Fatalf("expected separate revision build id")
+	}
+
+	beforeApproval, err := store.GetForOwner(ctx, published.ID, "user-1")
+	if err != nil {
+		t.Fatalf("GetForOwner before approval error: %v", err)
+	}
+	if beforeApproval == nil || beforeApproval.Title != "Live Build" {
+		t.Fatalf("expected published build to remain unchanged before approval, got %+v", beforeApproval)
+	}
+
+	if _, validation, err := svc.Publish(ctx, revision.ID, "user-1"); err != nil || !validation.Valid {
+		t.Fatalf("Publish revision failed: err=%v validation=%+v", err, validation)
+	}
+
+	approved, validation, err := svc.ApproveForModeration(ctx, revision.ID)
+	if err != nil {
+		t.Fatalf("ApproveForModeration error: %v", err)
+	}
+	if !validation.Valid {
+		t.Fatalf("expected moderation approval validation to pass, got %+v", validation)
+	}
+	if approved == nil {
+		t.Fatalf("expected approved build")
+	}
+	if approved.ID != published.ID {
+		t.Fatalf("expected moderation to update original published build id=%q, got %q", published.ID, approved.ID)
+	}
+	if approved.Title != nextTitle || approved.Description != nextDescription {
+		t.Fatalf("expected approved build to include revision updates, got title=%q description=%q", approved.Title, approved.Description)
+	}
+	if approved.Status != models.BuildStatusPublished {
+		t.Fatalf("expected approved build to remain published, got %s", approved.Status)
+	}
+
+	revisionAfterApproval, err := store.GetByID(ctx, revision.ID)
+	if err != nil {
+		t.Fatalf("GetByID revision after approval error: %v", err)
+	}
+	if revisionAfterApproval != nil {
+		t.Fatalf("expected revision to be removed after approval, got %+v", revisionAfterApproval)
+	}
+}
+
 func TestApproveForModeration_PublishesPendingBuild(t *testing.T) {
 	ctx := context.Background()
 	store := newFakeBuildStore()
@@ -910,21 +1143,25 @@ func pendingCatalog(id string, gearType models.GearType) *models.BuildCatalogIte
 
 // fakeBuildStore is a lightweight in-memory store used for service tests.
 type fakeBuildStore struct {
-	byID      map[string]*models.Build
-	byToken   map[string]string
-	reactions map[string]map[string]models.BuildReaction
-	nextID    int
+	byID                map[string]*models.Build
+	byToken             map[string]string
+	reactions           map[string]map[string]models.BuildReaction
+	revisionByPublished map[string]string
+	publishedByRevision map[string]string
+	nextID              int
 }
 
 func newFakeBuildStore() *fakeBuildStore {
 	return &fakeBuildStore{
-		byID:      map[string]*models.Build{},
-		byToken:   map[string]string{},
-		reactions: map[string]map[string]models.BuildReaction{},
+		byID:                map[string]*models.Build{},
+		byToken:             map[string]string{},
+		reactions:           map[string]map[string]models.BuildReaction{},
+		revisionByPublished: map[string]string{},
+		publishedByRevision: map[string]string{},
 	}
 }
 
-func (s *fakeBuildStore) Create(ctx context.Context, ownerUserID string, status models.BuildStatus, title string, description string, sourceAircraftID string, token string, expiresAt *time.Time, parts []models.BuildPartInput) (*models.Build, error) {
+func (s *fakeBuildStore) Create(ctx context.Context, ownerUserID string, status models.BuildStatus, title string, description string, youtubeURL string, flightYouTubeURL string, sourceAircraftID string, token string, expiresAt *time.Time, parts []models.BuildPartInput) (*models.Build, error) {
 	s.nextID++
 	id := "build-" + strconvItoa(s.nextID)
 	now := time.Now().UTC()
@@ -936,6 +1173,8 @@ func (s *fakeBuildStore) Create(ctx context.Context, ownerUserID string, status 
 		ExpiresAt:        expiresAt,
 		Title:            title,
 		Description:      description,
+		YouTubeURL:       youtubeURL,
+		FlightYouTubeURL: flightYouTubeURL,
 		SourceAircraftID: sourceAircraftID,
 		CreatedAt:        now,
 		UpdatedAt:        now,
@@ -1065,17 +1304,48 @@ func (s *fakeBuildStore) Update(ctx context.Context, id string, ownerUserID stri
 	if build == nil || build.OwnerUserID != ownerUserID {
 		return nil, nil
 	}
+	target := build
+	if build.Status == models.BuildStatusPublished {
+		revisionID := s.revisionByPublished[build.ID]
+		if revisionID != "" {
+			if existing := s.byID[revisionID]; existing != nil && existing.OwnerUserID == ownerUserID {
+				target = existing
+			}
+		}
+
+		if target == build {
+			s.nextID++
+			revisionID = "build-" + strconvItoa(s.nextID)
+			now := time.Now().UTC()
+			revision := cloneBuild(build)
+			revision.ID = revisionID
+			revision.Status = models.BuildStatusDraft
+			revision.PublishedAt = nil
+			revision.CreatedAt = now
+			revision.UpdatedAt = now
+			s.byID[revisionID] = revision
+			s.revisionByPublished[build.ID] = revisionID
+			s.publishedByRevision[revisionID] = build.ID
+			target = revision
+		}
+	}
 	if params.Title != nil {
-		build.Title = *params.Title
+		target.Title = *params.Title
 	}
 	if params.Description != nil {
-		build.Description = *params.Description
+		target.Description = *params.Description
+	}
+	if params.YouTubeURL != nil {
+		target.YouTubeURL = *params.YouTubeURL
+	}
+	if params.FlightYouTubeURL != nil {
+		target.FlightYouTubeURL = *params.FlightYouTubeURL
 	}
 	if params.Parts != nil {
-		build.Parts = convertParts(params.Parts)
+		target.Parts = convertParts(params.Parts)
 	}
-	build.UpdatedAt = time.Now().UTC()
-	return cloneBuild(build), nil
+	target.UpdatedAt = time.Now().UTC()
+	return cloneBuild(target), nil
 }
 
 func (s *fakeBuildStore) UpdateTempByToken(ctx context.Context, token string, params models.UpdateBuildParams, nextToken string) (*models.Build, error) {
@@ -1095,6 +1365,14 @@ func (s *fakeBuildStore) UpdateTempByToken(ctx context.Context, token string, pa
 	description := build.Description
 	if params.Description != nil {
 		description = *params.Description
+	}
+	youtubeURL := build.YouTubeURL
+	if params.YouTubeURL != nil {
+		youtubeURL = *params.YouTubeURL
+	}
+	flightYouTubeURL := build.FlightYouTubeURL
+	if params.FlightYouTubeURL != nil {
+		flightYouTubeURL = *params.FlightYouTubeURL
 	}
 
 	parts := make([]models.BuildPart, len(build.Parts))
@@ -1120,6 +1398,8 @@ func (s *fakeBuildStore) UpdateTempByToken(ctx context.Context, token string, pa
 		ExpiresAt:        expiresAt,
 		Title:            title,
 		Description:      description,
+		YouTubeURL:       youtubeURL,
+		FlightYouTubeURL: flightYouTubeURL,
 		SourceAircraftID: build.SourceAircraftID,
 		CreatedAt:        now,
 		UpdatedAt:        now,
@@ -1141,6 +1421,12 @@ func (s *fakeBuildStore) UpdateForModeration(ctx context.Context, id string, par
 	}
 	if params.Description != nil {
 		build.Description = *params.Description
+	}
+	if params.YouTubeURL != nil {
+		build.YouTubeURL = *params.YouTubeURL
+	}
+	if params.FlightYouTubeURL != nil {
+		build.FlightYouTubeURL = *params.FlightYouTubeURL
 	}
 	if params.Parts != nil {
 		build.Parts = convertParts(params.Parts)
@@ -1238,6 +1524,29 @@ func (s *fakeBuildStore) ApproveForModeration(ctx context.Context, id string) (*
 	if build == nil || build.Status != models.BuildStatusPendingReview {
 		return nil, nil
 	}
+
+	if publishedID := s.publishedByRevision[id]; publishedID != "" {
+		publishedBuild := s.byID[publishedID]
+		if publishedBuild == nil || publishedBuild.Status != models.BuildStatusPublished {
+			return nil, nil
+		}
+		now := time.Now().UTC()
+		publishedBuild.Title = build.Title
+		publishedBuild.Description = build.Description
+		publishedBuild.YouTubeURL = build.YouTubeURL
+		publishedBuild.FlightYouTubeURL = build.FlightYouTubeURL
+		publishedBuild.SourceAircraftID = build.SourceAircraftID
+		publishedBuild.ImageAssetID = build.ImageAssetID
+		publishedBuild.Parts = convertParts(models.BuildPartInputsFromParts(build.Parts))
+		publishedBuild.UpdatedAt = now
+
+		delete(s.byID, id)
+		delete(s.publishedByRevision, id)
+		delete(s.revisionByPublished, publishedID)
+
+		return cloneBuild(publishedBuild), nil
+	}
+
 	now := time.Now().UTC()
 	build.Status = models.BuildStatusPublished
 	build.PublishedAt = &now
@@ -1326,6 +1635,15 @@ func (s *fakeBuildStore) Delete(ctx context.Context, id string, ownerUserID stri
 	delete(s.byID, id)
 	if build.Token != "" {
 		delete(s.byToken, build.Token)
+	}
+	if revisionID := s.revisionByPublished[id]; revisionID != "" {
+		delete(s.byID, revisionID)
+		delete(s.publishedByRevision, revisionID)
+		delete(s.revisionByPublished, id)
+	}
+	if publishedID := s.publishedByRevision[id]; publishedID != "" {
+		delete(s.publishedByRevision, id)
+		delete(s.revisionByPublished, publishedID)
 	}
 	return true, nil
 }
