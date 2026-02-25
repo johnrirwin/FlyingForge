@@ -24,6 +24,7 @@ import {
   getAdminGearImageUrl,
 } from '../adminApi';
 import { moderateGearCatalogImageUpload } from '../gearCatalogApi';
+import { copyURLToClipboard } from '../buildShare';
 
 vi.mock('../adminApi', () => ({
   adminSearchBuilds: vi.fn(),
@@ -69,6 +70,10 @@ vi.mock('../gearCatalogApi', () => ({
   moderateGearCatalogImageUpload: vi.fn(),
 }));
 
+vi.mock('../buildShare', () => ({
+  copyURLToClipboard: vi.fn(),
+}));
+
 const mockAdminSearchBuilds = vi.mocked(adminSearchBuilds);
 const mockAdminGetBuild = vi.mocked(adminGetBuild);
 const mockAdminUpdateBuild = vi.mocked(adminUpdateBuild);
@@ -87,6 +92,7 @@ const mockAdminGetGear = vi.mocked(adminGetGear);
 const mockGetAdminBuildImageUrl = vi.mocked(getAdminBuildImageUrl);
 const mockGetAdminGearImageUrl = vi.mocked(getAdminGearImageUrl);
 const mockModerateGearCatalogImageUpload = vi.mocked(moderateGearCatalogImageUpload);
+const mockCopyURLToClipboard = vi.mocked(copyURLToClipboard);
 
 type ObjectUrlStatics = {
   createObjectURL?: (obj: Blob) => string;
@@ -125,6 +131,8 @@ const mockBuild: Build = {
   status: 'PUBLISHED',
   title: 'Blue Beast Build',
   description: 'Fast freestyle build',
+  youtubeUrl: 'https://www.youtube.com/watch?v=build-video-123',
+  flightYoutubeUrl: 'https://www.youtube.com/watch?v=flight-video-456',
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-05T00:00:00Z',
   publishedAt: '2026-01-04T00:00:00Z',
@@ -182,6 +190,7 @@ describe('AdminGearModeration', () => {
     mockGetAdminBuildImageUrl.mockReturnValue('/mock-build-image.png');
     mockGetAdminGearImageUrl.mockReturnValue('/mock-image.png');
     mockModerateGearCatalogImageUpload.mockResolvedValue({ status: 'APPROVED', uploadId: 'upload-1' });
+    mockCopyURLToClipboard.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -363,6 +372,31 @@ describe('AdminGearModeration', () => {
     expect(buildVideoInput).toHaveAttribute('readonly');
     expect(flightVideoInput).toHaveAttribute('readonly');
     expect(screen.queryByRole('button', { name: /save changes/i })).not.toBeInTheDocument();
+  });
+
+  it('adds copy buttons for build links in the moderation modal', async () => {
+    mockAdminSearchBuilds.mockResolvedValue({
+      builds: [mockBuild],
+      totalCount: 1,
+      sort: 'newest',
+    });
+    mockAdminGetBuild.mockResolvedValue(mockBuild);
+
+    render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Builds$/i }));
+    const row = await screen.findByRole('button', { name: /open editor for blue beast build/i });
+    fireEvent.click(row);
+
+    expect(await screen.findByText('Review Build')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy Build Video URL' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy Flight Video URL' }));
+
+    await waitFor(() => {
+      expect(mockCopyURLToClipboard).toHaveBeenNthCalledWith(1, 'https://www.youtube.com/watch?v=build-video-123');
+      expect(mockCopyURLToClipboard).toHaveBeenNthCalledWith(2, 'https://www.youtube.com/watch?v=flight-video-456');
+    });
   });
 
   it('requires a moderator reason when declining a pending build', async () => {

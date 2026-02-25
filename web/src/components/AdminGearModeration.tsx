@@ -20,6 +20,7 @@ import {
   getAdminBuildImageUrl,
 } from '../adminApi';
 import { moderateGearCatalogImageUpload } from '../gearCatalogApi';
+import { copyURLToClipboard } from '../buildShare';
 import { CatalogSearchModal } from './CatalogSearchModal';
 import { MobileFloatingControls } from './MobileFloatingControls';
 import { ImageUploadModal } from './ImageUploadModal';
@@ -1308,6 +1309,8 @@ interface AdminBuildEditModalProps {
 }
 
 function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBuildEditModalProps) {
+  type CopyableBuildUrlField = 'buildVideoUrl' | 'flightVideoUrl';
+
   const [build, setBuild] = useState<Build | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -1325,6 +1328,8 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<BuildValidationError[]>([]);
   const [imageCacheBuster, setImageCacheBuster] = useState(() => Date.now());
+  const [copiedUrlField, setCopiedUrlField] = useState<CopyableBuildUrlField | null>(null);
+  const copiedUrlTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -1369,6 +1374,32 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
     setFlightYoutubeUrl(refreshed.flightYoutubeUrl || '');
     setImageCacheBuster(Date.now());
   }, [buildId]);
+
+  useEffect(() => () => {
+    if (copiedUrlTimerRef.current !== null) {
+      window.clearTimeout(copiedUrlTimerRef.current);
+    }
+  }, []);
+
+  const handleCopyUrl = useCallback(async (field: CopyableBuildUrlField) => {
+    const value = (field === 'buildVideoUrl' ? youtubeUrl : flightYoutubeUrl).trim();
+    if (!value) return;
+
+    try {
+      await copyURLToClipboard(value);
+      setCopiedUrlField(field);
+
+      if (copiedUrlTimerRef.current !== null) {
+        window.clearTimeout(copiedUrlTimerRef.current);
+      }
+
+      copiedUrlTimerRef.current = window.setTimeout(() => {
+        setCopiedUrlField((currentField) => (currentField === field ? null : currentField));
+      }, 1500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to copy URL');
+    }
+  }, [flightYoutubeUrl, youtubeUrl]);
 
   const handleOpenDeclineModal = () => {
     if (build?.status !== 'PENDING_REVIEW' || isDeclining) return;
@@ -1545,21 +1576,61 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
               </label>
               <label className="block">
                 <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">Build Video URL</span>
-                <input
-                  value={youtubeUrl}
-                  readOnly
-                  className="h-11 w-full cursor-default rounded-lg border border-slate-600 bg-slate-900 px-3 text-white"
-                  placeholder="https://www.youtube.com/watch?v=..."
-                />
+                <div className="flex items-center gap-2">
+                  <input
+                    value={youtubeUrl}
+                    readOnly
+                    className="h-11 w-full min-w-0 cursor-default rounded-lg border border-slate-600 bg-slate-900 px-3 text-white"
+                    placeholder="https://www.youtube.com/watch?v=..."
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleCopyUrl('buildVideoUrl')}
+                    disabled={!youtubeUrl.trim()}
+                    aria-label="Copy Build Video URL"
+                    title={copiedUrlField === 'buildVideoUrl' ? 'Copied!' : 'Copy build video URL'}
+                    className="inline-flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg border border-slate-600 text-slate-300 transition-colors hover:border-slate-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {copiedUrlField === 'buildVideoUrl' ? (
+                      <svg className="h-4 w-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </label>
               <label className="block">
                 <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">Flight Video URL</span>
-                <input
-                  value={flightYoutubeUrl}
-                  readOnly
-                  className="h-11 w-full cursor-default rounded-lg border border-slate-600 bg-slate-900 px-3 text-white"
-                  placeholder="https://www.youtube.com/watch?v=..."
-                />
+                <div className="flex items-center gap-2">
+                  <input
+                    value={flightYoutubeUrl}
+                    readOnly
+                    className="h-11 w-full min-w-0 cursor-default rounded-lg border border-slate-600 bg-slate-900 px-3 text-white"
+                    placeholder="https://www.youtube.com/watch?v=..."
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleCopyUrl('flightVideoUrl')}
+                    disabled={!flightYoutubeUrl.trim()}
+                    aria-label="Copy Flight Video URL"
+                    title={copiedUrlField === 'flightVideoUrl' ? 'Copied!' : 'Copy flight video URL'}
+                    className="inline-flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg border border-slate-600 text-slate-300 transition-colors hover:border-slate-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {copiedUrlField === 'flightVideoUrl' ? (
+                      <svg className="h-4 w-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </label>
             </div>
 
