@@ -448,4 +448,44 @@ describe('MyBuildsPage share URL behavior', () => {
     const submitChangesButton = await screen.findByRole('button', { name: /submit changes for review/i });
     expect(submitChangesButton).toBeEnabled();
   });
+
+  it('shows moderator decline feedback in a modal for unpublished builds', async () => {
+    const declinedBuild = draftBuildFixture({
+      id: 'build-declined',
+      status: 'UNPUBLISHED',
+      title: 'Needs Fixes',
+      moderationReason: 'Please provide a complete parts list and build description.',
+      parts: [
+        { gearType: 'frame', catalogItemId: 'frame-1' },
+      ],
+    });
+
+    mockedListMyBuilds.mockResolvedValue({
+      builds: [declinedBuild],
+      totalCount: 1,
+      sort: 'newest',
+    });
+    mockedGetMyBuild.mockResolvedValue(declinedBuild);
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(mockedGetMyBuild).toHaveBeenCalledWith('build-declined');
+    });
+
+    const feedbackModal = await screen.findByRole('dialog', { name: 'Build moderation feedback' });
+    expect(feedbackModal).toHaveTextContent('Please provide a complete parts list and build description.');
+    const gotItButton = screen.getByRole('button', { name: 'Got it' });
+    await waitFor(() => {
+      expect(gotItButton).toHaveFocus();
+    });
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Build moderation feedback' })).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /change title/i }));
+    expect(screen.queryByRole('dialog', { name: 'Build moderation feedback' })).not.toBeInTheDocument();
+  });
 });

@@ -554,6 +554,40 @@ export async function adminUnpublishBuild(id: string): Promise<Build> {
   return response.json();
 }
 
+export async function adminDeclineBuild(id: string, reason: string): Promise<Build> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const trimmedReason = reason.trim();
+  if (!trimmedReason) {
+    throw new Error('Decline reason is required');
+  }
+
+  const response = await fetch(`${API_BASE}/builds/${id}/decline`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ reason: trimmedReason }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Request failed' }));
+    if (response.status === 403) {
+      throw new Error('Admin or content-admin access required');
+    }
+    if (response.status === 404) {
+      throw new Error('Build not found');
+    }
+    throw new Error(data.error || 'Failed to decline build');
+  }
+
+  return response.json();
+}
+
 export async function adminUploadBuildImage(id: string, imageFile: File): Promise<void> {
   const token = getAuthToken();
   if (!token) {

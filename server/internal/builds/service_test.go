@@ -667,6 +667,56 @@ func TestUnpublishForModeration_UnpublishesPendingReviewBuild(t *testing.T) {
 	}
 }
 
+func TestDeclineForModeration_RequiresReason(t *testing.T) {
+	ctx := context.Background()
+	store := newFakeBuildStore()
+	svc := NewServiceWithDeps(store, nil, nil, logging.New(logging.LevelError))
+
+	pending, err := svc.CreateDraft(ctx, "user-1", models.CreateBuildParams{Title: "Pending Build"})
+	if err != nil {
+		t.Fatalf("CreateDraft error: %v", err)
+	}
+	if _, err := store.SetStatus(ctx, pending.ID, "user-1", models.BuildStatusPendingReview); err != nil {
+		t.Fatalf("SetStatus setup error: %v", err)
+	}
+
+	_, err = svc.DeclineForModeration(ctx, pending.ID, "   ")
+	if err == nil {
+		t.Fatalf("expected decline reason validation error")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "decline reason is required") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestDeclineForModeration_UnpublishesPendingReviewAndStoresReason(t *testing.T) {
+	ctx := context.Background()
+	store := newFakeBuildStore()
+	svc := NewServiceWithDeps(store, nil, nil, logging.New(logging.LevelError))
+
+	pending, err := svc.CreateDraft(ctx, "user-1", models.CreateBuildParams{Title: "Pending Build"})
+	if err != nil {
+		t.Fatalf("CreateDraft error: %v", err)
+	}
+	if _, err := store.SetStatus(ctx, pending.ID, "user-1", models.BuildStatusPendingReview); err != nil {
+		t.Fatalf("SetStatus setup error: %v", err)
+	}
+
+	updated, err := svc.DeclineForModeration(ctx, pending.ID, "Needs more detailed component notes")
+	if err != nil {
+		t.Fatalf("DeclineForModeration error: %v", err)
+	}
+	if updated == nil {
+		t.Fatalf("expected declined build")
+	}
+	if updated.Status != models.BuildStatusUnpublished {
+		t.Fatalf("status=%s want UNPUBLISHED", updated.Status)
+	}
+	if updated.ModerationReason != "Needs more detailed component notes" {
+		t.Fatalf("moderationReason=%q want %q", updated.ModerationReason, "Needs more detailed component notes")
+	}
+}
+
 func TestSetReactionAndClearReaction(t *testing.T) {
 	ctx := context.Background()
 	store := newFakeBuildStore()
@@ -1029,6 +1079,50 @@ func TestApproveForModeration_PublishesPendingBuild(t *testing.T) {
 	store.byID[build.ID] = cloneBuild(build)
 
 	updated, validation, err := svc.ApproveForModeration(ctx, build.ID)
+	if err != nil {
+		t.Fatalf("ApproveForModeration error: %v", err)
+	}
+	if !validation.Valid {
+		t.Fatalf("expected validation to pass, errors=%+v", validation.Errors)
+	}
+	if updated == nil {
+		t.Fatalf("expected updated build")
+	}
+	if updated.Status != models.BuildStatusPublished {
+		t.Fatalf("status=%s want PUBLISHED", updated.Status)
+	}
+	if updated.PublishedAt == nil {
+		t.Fatalf("expected publishedAt to be set")
+	}
+}
+
+func TestApproveForModeration_PublishesUnpublishedBuild(t *testing.T) {
+	ctx := context.Background()
+	store := newFakeBuildStore()
+	svc := NewServiceWithDeps(store, nil, nil, logging.New(logging.LevelError))
+
+	created, err := svc.CreateDraft(ctx, "user-1", models.CreateBuildParams{
+		Title:       "Unpublished Build",
+		Description: "Ready to republish",
+		Parts: []models.BuildPartInput{
+			{GearType: models.GearTypeFrame, CatalogItemID: "frame-1"},
+			{GearType: models.GearTypeMotor, CatalogItemID: "motor-1"},
+			{GearType: models.GearTypeAIO, CatalogItemID: "aio-1"},
+			{GearType: models.GearTypeReceiver, CatalogItemID: "rx-1"},
+			{GearType: models.GearTypeVTX, CatalogItemID: "vtx-1"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateDraft error: %v", err)
+	}
+	if _, err := store.SetImage(ctx, created.ID, "user-1", "asset-1"); err != nil {
+		t.Fatalf("SetImage setup error: %v", err)
+	}
+	if _, err := store.SetStatus(ctx, created.ID, "user-1", models.BuildStatusUnpublished); err != nil {
+		t.Fatalf("SetStatus setup error: %v", err)
+	}
+
+	updated, validation, err := svc.ApproveForModeration(ctx, created.ID)
 	if err != nil {
 		t.Fatalf("ApproveForModeration error: %v", err)
 	}
@@ -1569,10 +1663,13 @@ func (s *fakeBuildStore) SetStatus(ctx context.Context, id string, ownerUserID s
 	switch status {
 	case models.BuildStatusPendingReview:
 		build.PublishedAt = nil
+		build.ModerationReason = ""
 	case models.BuildStatusPublished:
 		build.PublishedAt = &now
+		build.ModerationReason = ""
 	case models.BuildStatusUnpublished:
 		build.PublishedAt = nil
+		build.ModerationReason = ""
 	}
 	build.UpdatedAt = now
 	return cloneBuild(build), nil
@@ -1637,6 +1734,7 @@ func (s *fakeBuildStore) ApproveForModeration(ctx context.Context, id string) (*
 		publishedBuild.FlightYouTubeURL = build.FlightYouTubeURL
 		publishedBuild.SourceAircraftID = build.SourceAircraftID
 		publishedBuild.ImageAssetID = build.ImageAssetID
+		publishedBuild.ModerationReason = ""
 		publishedBuild.Parts = convertParts(models.BuildPartInputsFromParts(build.Parts))
 		publishedBuild.UpdatedAt = now
 
@@ -1650,7 +1748,20 @@ func (s *fakeBuildStore) ApproveForModeration(ctx context.Context, id string) (*
 	now := time.Now().UTC()
 	build.Status = models.BuildStatusPublished
 	build.PublishedAt = &now
+	build.ModerationReason = ""
 	build.UpdatedAt = now
+	return cloneBuild(build), nil
+}
+
+func (s *fakeBuildStore) DeclineForModeration(ctx context.Context, id string, reason string) (*models.Build, error) {
+	build := s.byID[id]
+	if build == nil || build.Status != models.BuildStatusPendingReview {
+		return nil, nil
+	}
+	build.Status = models.BuildStatusUnpublished
+	build.PublishedAt = nil
+	build.ModerationReason = strings.TrimSpace(reason)
+	build.UpdatedAt = time.Now().UTC()
 	return cloneBuild(build), nil
 }
 

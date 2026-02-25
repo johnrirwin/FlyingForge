@@ -609,6 +609,13 @@ func (api *AdminAPI) handleAdminBuildByID(w http.ResponseWriter, r *http.Request
 			}
 			api.handleUnpublishAdminBuild(w, r, buildID)
 			return
+		case "decline":
+			if r.Method != http.MethodPost {
+				api.writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+				return
+			}
+			api.handleDeclineAdminBuild(w, r, buildID)
+			return
 		default:
 			api.writeJSON(w, http.StatusNotFound, map[string]string{"error": "unknown build action"})
 			return
@@ -644,27 +651,7 @@ func (api *AdminAPI) handleGetAdminBuild(w http.ResponseWriter, r *http.Request,
 }
 
 func (api *AdminAPI) handleUpdateAdminBuild(w http.ResponseWriter, r *http.Request, buildID string) {
-	var params models.UpdateBuildParams
-	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
-		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
-	defer cancel()
-
-	updated, err := api.buildSvc.UpdateForModeration(ctx, buildID, params)
-	if err != nil {
-		api.logger.Error("Failed to update moderation build", logging.WithField("error", err.Error()))
-		api.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update build"})
-		return
-	}
-	if updated == nil {
-		api.writeJSON(w, http.StatusNotFound, map[string]string{"error": "build not found"})
-		return
-	}
-
-	api.writeJSON(w, http.StatusOK, updated)
+	api.writeJSON(w, http.StatusForbidden, map[string]string{"error": "build field edits are disabled for moderation"})
 }
 
 func (api *AdminAPI) handlePublishAdminBuild(w http.ResponseWriter, r *http.Request, buildID string) {
@@ -711,6 +698,35 @@ func (api *AdminAPI) handleUnpublishAdminBuild(w http.ResponseWriter, r *http.Re
 		}
 		api.logger.Error("Failed to unpublish moderation build", logging.WithField("error", err.Error()))
 		api.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to unpublish build"})
+		return
+	}
+	if updated == nil {
+		api.writeJSON(w, http.StatusNotFound, map[string]string{"error": "build not found"})
+		return
+	}
+
+	api.writeJSON(w, http.StatusOK, updated)
+}
+
+func (api *AdminAPI) handleDeclineAdminBuild(w http.ResponseWriter, r *http.Request, buildID string) {
+	var params models.BuildDeclineParams
+	if err := decodeJSONAllowEmpty(r, &params); err != nil {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	updated, err := api.buildSvc.DeclineForModeration(ctx, buildID, params.Reason)
+	if err != nil {
+		var svcErr *builds.ServiceError
+		if errors.As(err, &svcErr) {
+			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": svcErr.Message})
+			return
+		}
+		api.logger.Error("Failed to decline moderation build", logging.WithField("error", err.Error()))
+		api.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to decline build"})
 		return
 	}
 	if updated == nil {

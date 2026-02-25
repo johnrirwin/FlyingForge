@@ -124,7 +124,8 @@ describe('CatalogSearchModal', () => {
     renderModal({ showInventoryMatches: true, onSelectItem });
 
     expect(await screen.findByText('My Inventory')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /GEPRC GEP-MK5 O4 Pro DC Frame 5 inch/i }));
+    const inventoryMatchButton = await screen.findByRole('button', { name: /GEP-MK5 O4 Pro DC Frame 5 inch/i });
+    await userEvent.click(inventoryMatchButton);
 
     await waitFor(() => {
       expect(mockedGetGearCatalogItem).toHaveBeenCalledWith('catalog-frame-1');

@@ -124,6 +124,7 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationBuilds,                                    // Adds user/public/temp builds with part mappings
 		migrationBuildVideoURLs,                            // Adds optional build/flight video metadata to builds
 		migrationBuildRevisions,                            // Adds moderation-safe draft revisions for published builds
+		migrationBuildModerationReason,                     // Adds moderator decline feedback field for owner notifications
 		migrationBuildReactions,                            // Adds likes/dislikes for published builds
 		migrationFeedItems,                                 // Adds persistent storage for aggregated feed/news items
 		migrationDropLegacyImageURLs,                       // Drops legacy image_url columns in favor of image_assets
@@ -886,6 +887,7 @@ CREATE TABLE IF NOT EXISTS builds (
     title VARCHAR(255) NOT NULL DEFAULT 'Untitled Build',
     description TEXT,
     source_aircraft_id UUID REFERENCES aircraft(id) ON DELETE SET NULL,
+    moderation_reason TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     published_at TIMESTAMPTZ
@@ -1008,6 +1010,12 @@ CHECK (
 
 CREATE INDEX IF NOT EXISTS idx_builds_revision_of ON builds(revision_of_build_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_builds_revision_unique ON builds(revision_of_build_id) WHERE revision_of_build_id IS NOT NULL;
+`
+
+// Migration to store moderator decline feedback on builds.
+const migrationBuildModerationReason = `
+ALTER TABLE builds
+ADD COLUMN IF NOT EXISTS moderation_reason TEXT;
 `
 
 // Migration to add per-user build likes/dislikes for published builds.

@@ -66,6 +66,7 @@ type buildStore interface {
 	DeleteImage(ctx context.Context, id string, ownerUserID string) (string, error)
 	DeleteImageForModeration(ctx context.Context, id string) (string, error)
 	ApproveForModeration(ctx context.Context, id string) (*models.Build, error)
+	DeclineForModeration(ctx context.Context, id string, reason string) (*models.Build, error)
 	Delete(ctx context.Context, id string, ownerUserID string) (bool, error)
 	DeleteExpiredTemp(ctx context.Context, cutoff time.Time) (int64, error)
 }
@@ -129,6 +130,7 @@ func (s *Service) ListPublic(ctx context.Context, viewerUserID string, params mo
 	}
 	for i := range resp.Builds {
 		resp.Builds[i].Verified = isBuildVerified(&resp.Builds[i])
+		resp.Builds[i].ModerationReason = ""
 	}
 	return resp, nil
 }
@@ -141,6 +143,7 @@ func (s *Service) ListPublishedByOwner(ctx context.Context, ownerUserID string, 
 	}
 	for i := range builds {
 		builds[i].Verified = isBuildVerified(&builds[i])
+		builds[i].ModerationReason = ""
 	}
 	return builds, nil
 }
@@ -167,6 +170,7 @@ func (s *Service) GetPublic(ctx context.Context, id string, viewerUserID string)
 		return nil, nil
 	}
 	build.Verified = isBuildVerified(build)
+	build.ModerationReason = ""
 	return build, nil
 }
 
@@ -194,6 +198,7 @@ func (s *Service) SetReaction(ctx context.Context, id string, userID string, rea
 		return nil, nil
 	}
 	build.Verified = isBuildVerified(build)
+	build.ModerationReason = ""
 	return build, nil
 }
 
@@ -217,6 +222,7 @@ func (s *Service) ClearReaction(ctx context.Context, id string, userID string) (
 		return nil, nil
 	}
 	build.Verified = isBuildVerified(build)
+	build.ModerationReason = ""
 	return build, nil
 }
 
@@ -664,7 +670,37 @@ func (s *Service) UnpublishForModeration(ctx context.Context, id string) (*model
 	return updated, nil
 }
 
-// ApproveForModeration publishes a pending build from the moderation queue.
+// DeclineForModeration rejects a pending build and stores moderator feedback for the owner.
+func (s *Service) DeclineForModeration(ctx context.Context, id string, reason string) (*models.Build, error) {
+	buildID := strings.TrimSpace(id)
+	trimmedReason := strings.TrimSpace(reason)
+	if trimmedReason == "" {
+		return nil, &ServiceError{Message: "decline reason is required"}
+	}
+
+	build, err := s.store.GetForModeration(ctx, buildID)
+	if err != nil {
+		return nil, err
+	}
+	if build == nil {
+		return nil, nil
+	}
+	if build.Status != models.BuildStatusPendingReview {
+		return nil, &ServiceError{Message: "build is not pending moderation"}
+	}
+
+	updated, err := s.store.DeclineForModeration(ctx, buildID, trimmedReason)
+	if err != nil {
+		return nil, err
+	}
+	if updated == nil {
+		return nil, nil
+	}
+	updated.Verified = isBuildVerified(updated)
+	return updated, nil
+}
+
+// ApproveForModeration publishes a build from the moderation queue.
 func (s *Service) ApproveForModeration(ctx context.Context, id string) (*models.Build, models.BuildValidationResult, error) {
 	build, err := s.store.GetForModeration(ctx, strings.TrimSpace(id))
 	if err != nil {
@@ -678,8 +714,28 @@ func (s *Service) ApproveForModeration(ctx context.Context, id string) (*models.
 	if !validation.Valid {
 		return nil, validation, &ValidationError{Validation: validation}
 	}
+
+	if build.Status == models.BuildStatusPublished {
+		build.Verified = isBuildVerified(build)
+		return build, validation, nil
+	}
+
+	if build.Status == models.BuildStatusDraft || build.Status == models.BuildStatusUnpublished {
+		if strings.TrimSpace(build.OwnerUserID) == "" {
+			return nil, validation, &ServiceError{Message: "build owner missing"}
+		}
+		pending, err := s.store.SetStatus(ctx, build.ID, build.OwnerUserID, models.BuildStatusPendingReview)
+		if err != nil {
+			return nil, validation, err
+		}
+		if pending == nil {
+			return nil, validation, &ServiceError{Message: "build is not pending moderation"}
+		}
+		build = pending
+	}
+
 	if build.Status != models.BuildStatusPendingReview {
-		return nil, validation, &ServiceError{Message: "build is not pending moderation"}
+		return nil, validation, &ServiceError{Message: "build cannot be published"}
 	}
 
 	updated, err := s.store.ApproveForModeration(ctx, build.ID)
