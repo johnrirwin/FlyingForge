@@ -15,6 +15,7 @@ import {
   adminUpdateBuild,
   adminPublishBuild,
   adminUnpublishBuild,
+  adminDeclineBuild,
   adminUploadBuildImage,
   adminDeleteBuildImage,
   getAdminGearImageUrl,
@@ -542,12 +543,10 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
   }, []);
 
   const handleBuildEditSaved = useCallback(() => {
-    setEditingBuildId(null);
     void loadBuilds();
   }, [loadBuilds]);
 
   const handleBuildPublished = useCallback(() => {
-    setEditingBuildId(null);
     void loadBuilds();
   }, [loadBuilds]);
 
@@ -1326,7 +1325,11 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isUnpublishing, setIsUnpublishing] = useState(false);
+  const [isDeclining, setIsDeclining] = useState(false);
   const [isDeletingImage, setIsDeletingImage] = useState(false);
+  const [showDeclineModal, setShowDeclineModal] = useState(false);
+  const [declineReason, setDeclineReason] = useState('');
+  const [declineReasonError, setDeclineReasonError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<BuildValidationError[]>([]);
   const [imageCacheBuster, setImageCacheBuster] = useState(() => Date.now());
@@ -1371,6 +1374,7 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
   const hasExistingImage = Boolean(build?.mainImageUrl);
   const existingImageUrl = build ? getAdminBuildImageUrl(build.id, imageCacheBuster) : null;
   const currentPreview = imagePreview || (hasExistingImage ? existingImageUrl : null);
+  const isPublishedBuild = build?.status === 'PUBLISHED';
 
   const refreshBuild = useCallback(async () => {
     const refreshed = await adminGetBuild(buildId);
@@ -1441,11 +1445,31 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
     setShowImageModal(false);
   };
 
+  const handleOpenDeclineModal = () => {
+    if (build?.status !== 'PENDING_REVIEW' || isDeclining) return;
+    setDeclineReason('');
+    setDeclineReasonError(null);
+    setShowDeclineModal(true);
+  };
+
+  const handleCloseDeclineModal = () => {
+    if (isDeclining) return;
+    setShowDeclineModal(false);
+    setDeclineReason('');
+    setDeclineReasonError(null);
+  };
+
   const saveChanges = useCallback(async (action: 'save' | 'publish' | 'unpublish') => {
     if (!build) return;
 
     const publishAfterSave = action === 'publish';
     const unpublishAfterSave = action === 'unpublish';
+    const saveOnly = action === 'save';
+
+    if (saveOnly && build.status === 'PUBLISHED') {
+      setError('Unpublish the build before saving moderation edits.');
+      return;
+    }
 
     const updatePayload = {
       title: title.trim(),
@@ -1465,6 +1489,13 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
     setValidationErrors([]);
 
     try {
+      if (unpublishAfterSave && build.status === 'PUBLISHED') {
+        const unpublished = await adminUnpublishBuild(build.id);
+        setBuild(unpublished);
+        onSave();
+        return;
+      }
+
       let updated = await adminUpdateBuild(build.id, updatePayload);
 
       if (imageFile) {
@@ -1592,6 +1623,7 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
                 <input
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
+                  disabled={isPublishedBuild}
                   className="h-11 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 text-white focus:border-primary-500 focus:outline-none"
                 />
               </label>
@@ -1600,6 +1632,7 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
                 <textarea
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
+                  disabled={isPublishedBuild}
                   rows={6}
                   className="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
                 />
@@ -1609,6 +1642,7 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
                 <input
                   value={youtubeUrl}
                   onChange={(event) => setYoutubeUrl(event.target.value)}
+                  disabled={isPublishedBuild}
                   className="h-11 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 text-white focus:border-primary-500 focus:outline-none"
                   placeholder="https://www.youtube.com/watch?v=..."
                 />
@@ -1618,6 +1652,7 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
                 <input
                   value={flightYoutubeUrl}
                   onChange={(event) => setFlightYoutubeUrl(event.target.value)}
+                  disabled={isPublishedBuild}
                   className="h-11 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 text-white focus:border-primary-500 focus:outline-none"
                   placeholder="https://www.youtube.com/watch?v=..."
                 />
@@ -1637,6 +1672,7 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
                 <button
                   type="button"
                   onClick={handleOpenImageModal}
+                  disabled={isPublishedBuild}
                   className="rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-500"
                 >
                   {currentPreview ? 'Change Image' : 'Upload Image'}
@@ -1654,7 +1690,7 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
                   <button
                     type="button"
                     onClick={() => void handleDeleteImage()}
-                    disabled={isDeletingImage}
+                    disabled={isDeletingImage || isPublishedBuild}
                     className="rounded-lg border border-red-500/40 px-3 py-2 text-sm text-red-300 hover:bg-red-500/10 disabled:opacity-50"
                   >
                     {isDeletingImage ? 'Removing...' : 'Remove Image'}
@@ -1663,6 +1699,12 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
               </div>
             </div>
           </div>
+
+          {isPublishedBuild && (
+            <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+              Unpublish this build before editing fields or image.
+            </div>
+          )}
 
           <div className="mt-5 flex flex-wrap justify-end gap-2">
             <button
@@ -1674,26 +1716,36 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
             </button>
             <button
               type="button"
-              disabled={isSaving || isPublishing || isUnpublishing}
+              disabled={isPublishedBuild || isSaving || isPublishing || isUnpublishing || isDeclining}
               onClick={() => void saveChanges('save')}
               className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-medium text-slate-200 hover:border-slate-500 hover:text-white disabled:opacity-60"
             >
-              {isSaving ? 'Saving...' : 'Save Changes'}
+              {isPublishedBuild ? 'Unpublish to Edit' : isSaving ? 'Saving...' : 'Save Changes'}
             </button>
-            {(build.status === 'PENDING_REVIEW' || build.status === 'PUBLISHED') && (
+            {build.status === 'PUBLISHED' && (
               <button
                 type="button"
-                disabled={isSaving || isPublishing || isUnpublishing}
+                disabled={isSaving || isPublishing || isUnpublishing || isDeclining}
                 onClick={() => void saveChanges('unpublish')}
                 className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-60"
               >
                 {isUnpublishing ? 'Unpublishing...' : 'Unpublish Build'}
               </button>
             )}
+            {build.status === 'PENDING_REVIEW' && (
+              <button
+                type="button"
+                disabled={isSaving || isPublishing || isUnpublishing || isDeclining}
+                onClick={handleOpenDeclineModal}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-60"
+              >
+                {isDeclining ? 'Declining...' : 'Decline Build'}
+              </button>
+            )}
             {(build.status === 'PENDING_REVIEW' || build.status === 'DRAFT' || build.status === 'UNPUBLISHED') && (
               <button
                 type="button"
-                disabled={isSaving || isPublishing || isUnpublishing}
+                disabled={isSaving || isPublishing || isUnpublishing || isDeclining}
                 onClick={() => void saveChanges('publish')}
                 className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-60"
               >
@@ -1703,6 +1755,82 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
           </div>
         </div>
       </div>
+
+      {showDeclineModal && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/75" onClick={handleCloseDeclineModal} />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="decline-build-title"
+            className="relative w-full max-w-xl rounded-xl border border-slate-700 bg-slate-800 p-5 shadow-2xl"
+          >
+            <h4 id="decline-build-title" className="text-lg font-semibold text-white">Decline build submission</h4>
+            <p className="mt-2 text-sm text-slate-300">
+              Add a message for the pilot explaining why this build was declined.
+            </p>
+            <label className="mt-4 block">
+              <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">Reason for decline</span>
+              <textarea
+                value={declineReason}
+                onChange={(event) => {
+                  setDeclineReason(event.target.value);
+                  if (declineReasonError && event.target.value.trim()) {
+                    setDeclineReasonError(null);
+                  }
+                }}
+                rows={4}
+                className="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+                placeholder="Explain what needs to be fixed before this build can be published."
+              />
+            </label>
+            {declineReasonError && (
+              <p className="mt-2 text-sm text-red-300">{declineReasonError}</p>
+            )}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleCloseDeclineModal}
+                disabled={isDeclining}
+                className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-medium text-slate-200 hover:border-slate-500 hover:text-white disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!build || build.status !== 'PENDING_REVIEW') return;
+                  const reason = declineReason.trim();
+                  if (!reason) {
+                    setDeclineReasonError('Decline reason is required.');
+                    return;
+                  }
+
+                  setIsDeclining(true);
+                  setDeclineReasonError(null);
+                  setError(null);
+                  try {
+                    const updated = await adminDeclineBuild(build.id, reason);
+                    setBuild(updated);
+                    setValidationErrors([]);
+                    setShowDeclineModal(false);
+                    setDeclineReason('');
+                    onSave();
+                  } catch (err) {
+                    setDeclineReasonError(err instanceof Error ? err.message : 'Failed to decline build');
+                  } finally {
+                    setIsDeclining(false);
+                  }
+                }}
+                disabled={isDeclining}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-60"
+              >
+                {isDeclining ? 'Declining...' : 'Decline Build'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ImageUploadModal
         isOpen={showImageModal}

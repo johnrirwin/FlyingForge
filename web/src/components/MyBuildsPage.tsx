@@ -59,6 +59,13 @@ function hasPowerStackRequirement(parts: Build['parts'] | undefined): boolean {
   return hasAIO || hasStack || (hasFC && hasESC);
 }
 
+function moderationNoticeKey(build: Build): string {
+  if (build.status === 'PUBLISHED' && build.stagedRevisionStatus === 'UNPUBLISHED' && build.stagedRevisionId) {
+    return `${build.id}:${build.stagedRevisionId}`;
+  }
+  return build.id;
+}
+
 export function MyBuildsPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -78,6 +85,8 @@ export function MyBuildsPage() {
   const [validationErrors, setValidationErrors] = useState<BuildValidationError[]>([]);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [deleteTargetBuildId, setDeleteTargetBuildId] = useState<string | null>(null);
+  const [showDeclineNoticeModal, setShowDeclineNoticeModal] = useState(false);
+  const [declineNoticeReason, setDeclineNoticeReason] = useState('');
   const [showImageModal, setShowImageModal] = useState(false);
   const [modalImage, setModalImage] = useState<PendingBuildImage | null>(null);
   const [imageStatusText, setImageStatusText] = useState<string | null>(null);
@@ -90,6 +99,7 @@ export function MyBuildsPage() {
   const [shareStatusMessage, setShareStatusMessage] = useState<string | null>(null);
   const [shareURLError, setShareURLError] = useState<string | null>(null);
   const [liveShareByBuildID, setLiveShareByBuildID] = useState<Record<string, LiveBuildShareState>>({});
+  const dismissedDeclineReasonsRef = useRef<Record<string, string>>({});
   const modalPreviewRef = useRef<string | null>(null);
 
   const loadBuildList = useCallback(async () => {
@@ -512,6 +522,38 @@ export function MyBuildsPage() {
     setShareURLError(null);
   }, [selectedBuildId]);
 
+  useEffect(() => {
+    if (!editorBuild) {
+      setShowDeclineNoticeModal(false);
+      setDeclineNoticeReason('');
+      return;
+    }
+
+    const trimmedReason = editorBuild.moderationReason?.trim() || '';
+    const isDeclinedSubmission = editorBuild.status === 'UNPUBLISHED'
+      || (editorBuild.status === 'PUBLISHED' && editorBuild.stagedRevisionStatus === 'UNPUBLISHED');
+    if (!trimmedReason || !isDeclinedSubmission) {
+      setShowDeclineNoticeModal(false);
+      setDeclineNoticeReason('');
+      return;
+    }
+
+    const key = moderationNoticeKey(editorBuild);
+    if (dismissedDeclineReasonsRef.current[key] === trimmedReason) {
+      return;
+    }
+
+    setDeclineNoticeReason(trimmedReason);
+    setShowDeclineNoticeModal(true);
+  }, [editorBuild]);
+
+  const handleCloseDeclineNotice = useCallback(() => {
+    if (editorBuild && declineNoticeReason) {
+      dismissedDeclineReasonsRef.current[moderationNoticeKey(editorBuild)] = declineNoticeReason;
+    }
+    setShowDeclineNoticeModal(false);
+  }, [declineNoticeReason, editorBuild]);
+
   const editorBuildPayloadKey = useMemo(() => {
     if (!editorBuild) return '';
     return buildSharePayloadKey(editorBuild);
@@ -923,6 +965,35 @@ export function MyBuildsPage() {
                 className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSaving ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeclineNoticeModal && declineNoticeReason && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70" onClick={handleCloseDeclineNotice} />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="build-decline-feedback-title"
+            className="relative w-full max-w-lg rounded-xl border border-amber-500/40 bg-slate-800 p-6 shadow-2xl"
+          >
+            <h3 id="build-decline-feedback-title" className="text-lg font-semibold text-white">Build moderation feedback</h3>
+            <p className="mt-2 text-sm text-slate-300">
+              A moderator declined this build submission. Review the feedback below before resubmitting.
+            </p>
+            <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100">
+              {declineNoticeReason}
+            </div>
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={handleCloseDeclineNotice}
+                className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-primary-500"
+              >
+                Got it
               </button>
             </div>
           </div>

@@ -152,10 +152,17 @@ func (s *BuildStore) ListByOwner(ctx context.Context, ownerUserID string, params
 			COALESCE(
 				CASE
 					WHEN b.status = 'PUBLISHED' THEN r.source_aircraft_id
-					ELSE NULL
+				ELSE NULL
 				END,
 				b.source_aircraft_id
 			) AS source_aircraft_id,
+			COALESCE(
+				CASE
+					WHEN b.status = 'PUBLISHED' THEN r.moderation_reason
+					ELSE NULL
+				END,
+				b.moderation_reason
+			) AS moderation_reason,
 			b.created_at,
 			COALESCE(
 				CASE
@@ -282,6 +289,7 @@ func (s *BuildStore) ListPublic(ctx context.Context, params models.BuildListPara
 			b.build_video_url,
 			b.flight_video_url,
 			b.source_aircraft_id,
+			b.moderation_reason,
 			b.created_at,
 			b.updated_at,
 			b.published_at,
@@ -357,6 +365,7 @@ func (s *BuildStore) ListPublishedByOwner(ctx context.Context, ownerUserID strin
 			b.build_video_url,
 			b.flight_video_url,
 			b.source_aircraft_id,
+			b.moderation_reason,
 			b.created_at,
 			b.updated_at,
 			b.published_at,
@@ -647,19 +656,19 @@ func (s *BuildStore) SetStatus(ctx context.Context, id string, ownerUserID strin
 	case models.BuildStatusPendingReview:
 		query = `
 			UPDATE builds
-			SET status = 'PENDING_REVIEW', published_at = NULL, updated_at = NOW()
+			SET status = 'PENDING_REVIEW', published_at = NULL, moderation_reason = NULL, updated_at = NOW()
 			WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'UNPUBLISHED')
 		`
 	case models.BuildStatusPublished:
 		query = `
 			UPDATE builds
-			SET status = 'PUBLISHED', published_at = NOW(), updated_at = NOW()
+			SET status = 'PUBLISHED', published_at = NOW(), moderation_reason = NULL, updated_at = NOW()
 			WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'UNPUBLISHED', 'PENDING_REVIEW')
 		`
 	case models.BuildStatusUnpublished:
 		query = `
 			UPDATE builds
-			SET status = 'UNPUBLISHED', published_at = NULL, updated_at = NOW()
+			SET status = 'UNPUBLISHED', published_at = NULL, moderation_reason = NULL, updated_at = NOW()
 			WHERE id = $1 AND owner_user_id = $2 AND status IN ('PUBLISHED', 'PENDING_REVIEW')
 		`
 	default:
@@ -677,7 +686,7 @@ func (s *BuildStore) SetStatus(ctx context.Context, id string, ownerUserID strin
 			ctx,
 			`
 				UPDATE builds AS revision
-				SET status = 'PENDING_REVIEW', published_at = NULL, updated_at = NOW()
+				SET status = 'PENDING_REVIEW', published_at = NULL, moderation_reason = NULL, updated_at = NOW()
 				FROM builds AS published
 				WHERE published.id = $1
 				  AND published.owner_user_id = $2
@@ -1056,6 +1065,7 @@ func (s *BuildStore) ListForModeration(ctx context.Context, params models.BuildM
 			b.build_video_url,
 			b.flight_video_url,
 			b.source_aircraft_id,
+			b.moderation_reason,
 			b.created_at,
 			b.updated_at,
 			b.published_at,
@@ -1303,6 +1313,7 @@ func (s *BuildStore) ApproveForModeration(ctx context.Context, id string) (*mode
 				    flight_video_url = pending.flight_video_url,
 				    source_aircraft_id = pending.source_aircraft_id,
 				    image_asset_id = pending.image_asset_id,
+				    moderation_reason = NULL,
 				    updated_at = NOW()
 				FROM builds AS pending
 				WHERE pending.id = $1
@@ -1344,7 +1355,7 @@ func (s *BuildStore) ApproveForModeration(ctx context.Context, id string) (*mode
 	} else {
 		result, err := tx.ExecContext(
 			ctx,
-			`UPDATE builds SET status = 'PUBLISHED', published_at = NOW(), updated_at = NOW() WHERE id = $1 AND status = 'PENDING_REVIEW'`,
+			`UPDATE builds SET status = 'PUBLISHED', published_at = NOW(), moderation_reason = NULL, updated_at = NOW() WHERE id = $1 AND status = 'PENDING_REVIEW'`,
 			id,
 		)
 		if err != nil {
@@ -1361,6 +1372,38 @@ func (s *BuildStore) ApproveForModeration(ctx context.Context, id string) (*mode
 	}
 
 	return s.GetForModeration(ctx, approvedBuildID)
+}
+
+// DeclineForModeration rejects a pending build and stores moderator feedback.
+func (s *BuildStore) DeclineForModeration(ctx context.Context, id string, reason string) (*models.Build, error) {
+	trimmedReason := strings.TrimSpace(reason)
+	if trimmedReason == "" {
+		return nil, fmt.Errorf("decline reason is required")
+	}
+
+	result, err := s.db.ExecContext(
+		ctx,
+		`
+			UPDATE builds
+			SET status = 'UNPUBLISHED',
+			    published_at = NULL,
+			    moderation_reason = $2,
+			    updated_at = NOW()
+			WHERE id = $1
+			  AND status = 'PENDING_REVIEW'
+		`,
+		id,
+		trimmedReason,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decline moderation build: %w", err)
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return nil, nil
+	}
+
+	return s.GetForModeration(ctx, id)
 }
 
 func (s *BuildStore) ensurePublishedRevisionDraftTx(ctx context.Context, tx *sql.Tx, publishedBuildID string, ownerUserID string) (string, error) {
@@ -1833,6 +1876,7 @@ var baseBuildSelect = `
 		b.build_video_url,
 		b.flight_video_url,
 		b.source_aircraft_id,
+		b.moderation_reason,
 		b.created_at,
 		b.updated_at,
 		b.published_at,
@@ -1893,6 +1937,13 @@ var ownerBuildSelect = `
 			END,
 			b.source_aircraft_id
 		) AS source_aircraft_id,
+		COALESCE(
+			CASE
+				WHEN b.status = 'PUBLISHED' THEN r.moderation_reason
+				ELSE NULL
+			END,
+			b.moderation_reason
+		) AS moderation_reason,
 		b.created_at,
 		COALESCE(
 			CASE
@@ -1958,6 +2009,7 @@ func scanBuildRow(scanner interface {
 	var youtubeURL sql.NullString
 	var flightYouTubeURL sql.NullString
 	var sourceAircraftID sql.NullString
+	var moderationReason sql.NullString
 	var publishedAt sql.NullTime
 
 	var pilotUserID sql.NullString
@@ -1977,6 +2029,7 @@ func scanBuildRow(scanner interface {
 		&youtubeURL,
 		&flightYouTubeURL,
 		&sourceAircraftID,
+		&moderationReason,
 		&item.CreatedAt,
 		&item.UpdatedAt,
 		&publishedAt,
@@ -1996,6 +2049,7 @@ func scanBuildRow(scanner interface {
 	item.YouTubeURL = youtubeURL.String
 	item.FlightYouTubeURL = flightYouTubeURL.String
 	item.SourceAircraftID = sourceAircraftID.String
+	item.ModerationReason = moderationReason.String
 	if expiresAt.Valid {
 		item.ExpiresAt = &expiresAt.Time
 	}
@@ -2031,6 +2085,7 @@ func scanOwnerBuildRow(scanner interface {
 	var youtubeURL sql.NullString
 	var flightYouTubeURL sql.NullString
 	var sourceAircraftID sql.NullString
+	var moderationReason sql.NullString
 	var publishedAt sql.NullTime
 	var stagedRevisionID sql.NullString
 	var stagedRevisionStatus sql.NullString
@@ -2052,6 +2107,7 @@ func scanOwnerBuildRow(scanner interface {
 		&youtubeURL,
 		&flightYouTubeURL,
 		&sourceAircraftID,
+		&moderationReason,
 		&item.CreatedAt,
 		&item.UpdatedAt,
 		&publishedAt,
@@ -2073,6 +2129,7 @@ func scanOwnerBuildRow(scanner interface {
 	item.YouTubeURL = youtubeURL.String
 	item.FlightYouTubeURL = flightYouTubeURL.String
 	item.SourceAircraftID = sourceAircraftID.String
+	item.ModerationReason = moderationReason.String
 	item.StagedRevisionID = stagedRevisionID.String
 	item.StagedRevisionStatus = models.NormalizeBuildStatus(models.BuildStatus(stagedRevisionStatus.String))
 	if expiresAt.Valid {

@@ -167,6 +167,7 @@ type Build struct {
 	ID                   string        `json:"id"`
 	OwnerUserID          string        `json:"ownerUserId,omitempty"`
 	ImageAssetID         string        `json:"-"`
+	ModerationReason     string        `json:"moderationReason,omitempty"`
 	Status               BuildStatus   `json:"status"`
 	StagedRevisionID     string        `json:"stagedRevisionId,omitempty"`
 	StagedRevisionStatus BuildStatus   `json:"stagedRevisionStatus,omitempty"`
@@ -219,6 +220,11 @@ type SetBuildImageParams struct {
 // SetBuildReactionParams defines request payload for setting a build reaction.
 type SetBuildReactionParams struct {
 	Reaction BuildReaction `json:"reaction"`
+}
+
+// BuildDeclineParams defines payload for moderator decline actions.
+type BuildDeclineParams struct {
+	Reason string `json:"reason"`
 }
 
 // BuildListParams describes list query options.
