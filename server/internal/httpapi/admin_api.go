@@ -543,35 +543,23 @@ func (api *AdminAPI) handleAdminBuilds(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := r.URL.Query()
-	rawStatus := strings.ToUpper(strings.TrimSpace(query.Get("status")))
-	var status models.BuildStatus
-	declineFilter := models.BuildModerationDeclineFilterAll
-	switch rawStatus {
-	case "":
+	status := models.NormalizeBuildStatus(models.BuildStatus(strings.TrimSpace(query.Get("status"))))
+	if status == "" {
 		status = models.BuildStatusPendingReview
-	case "DECLINED":
-		status = models.BuildStatusUnpublished
-		declineFilter = models.BuildModerationDeclineFilterDeclined
+	}
+	switch status {
+	case models.BuildStatusPendingReview, models.BuildStatusDraft, models.BuildStatusPublished, models.BuildStatusUnpublished, models.BuildStatusDeclined:
+		// valid
 	default:
-		normalizedStatus := models.NormalizeBuildStatus(models.BuildStatus(rawStatus))
-		switch normalizedStatus {
-		case models.BuildStatusPendingReview, models.BuildStatusDraft, models.BuildStatusPublished:
-			status = normalizedStatus
-		case models.BuildStatusUnpublished:
-			status = normalizedStatus
-			declineFilter = models.BuildModerationDeclineFilterNotDeclined
-		default:
-			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid status"})
-			return
-		}
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid status"})
+		return
 	}
 
 	params := models.BuildModerationListParams{
-		Query:         strings.TrimSpace(query.Get("query")),
-		Status:        status,
-		DeclineFilter: declineFilter,
-		Limit:         parseIntQuery(query.Get("limit"), 20),
-		Offset:        parseIntQuery(query.Get("offset"), 0),
+		Query:  strings.TrimSpace(query.Get("query")),
+		Status: status,
+		Limit:  parseIntQuery(query.Get("limit"), 20),
+		Offset: parseIntQuery(query.Get("offset"), 0),
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)

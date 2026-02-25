@@ -100,7 +100,7 @@ func (s *BuildStore) ListByOwner(ctx context.Context, ownerUserID string, params
 		FROM builds b
 		WHERE b.owner_user_id = $1
 		  AND b.revision_of_build_id IS NULL
-		  AND b.status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')
+		  AND b.status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED', 'DECLINED')
 	`
 	var totalCount int
 	if err := s.db.QueryRowContext(ctx, countQuery, ownerUserID).Scan(&totalCount); err != nil {
@@ -188,11 +188,11 @@ func (s *BuildStore) ListByOwner(ctx context.Context, ownerUserID string, params
 		LEFT JOIN builds r
 		  ON r.revision_of_build_id = b.id
 		 AND r.owner_user_id = b.owner_user_id
-		 AND r.status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED')
+		 AND r.status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED', 'DECLINED')
 		LEFT JOIN users u ON b.owner_user_id = u.id
 		WHERE b.owner_user_id = $1
 		  AND b.revision_of_build_id IS NULL
-		  AND b.status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')
+		  AND b.status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED', 'DECLINED')
 		ORDER BY updated_at DESC
 		LIMIT $2 OFFSET $3
 	`
@@ -493,7 +493,7 @@ func (s *BuildStore) Update(ctx context.Context, id string, ownerUserID string, 
 	var currentStatus models.BuildStatus
 	if err := tx.QueryRowContext(
 		ctx,
-		`SELECT status FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')`,
+		`SELECT status FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED', 'DECLINED')`,
 		id,
 		ownerUserID,
 	).Scan(&currentStatus); err != nil {
@@ -541,7 +541,7 @@ func (s *BuildStore) Update(ctx context.Context, id string, ownerUserID string, 
 	query := fmt.Sprintf(`
 		UPDATE builds
 		SET %s
-		WHERE id = $%d AND owner_user_id = $%d AND status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED')
+		WHERE id = $%d AND owner_user_id = $%d AND status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED', 'DECLINED')
 	`, strings.Join(setClauses, ", "), argIndex, argIndex+1)
 	args = append(args, targetBuildID, ownerUserID)
 
@@ -657,13 +657,13 @@ func (s *BuildStore) SetStatus(ctx context.Context, id string, ownerUserID strin
 		query = `
 			UPDATE builds
 			SET status = 'PENDING_REVIEW', published_at = NULL, moderation_reason = NULL, updated_at = NOW()
-			WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'UNPUBLISHED')
+			WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'UNPUBLISHED', 'DECLINED')
 		`
 	case models.BuildStatusPublished:
 		query = `
 			UPDATE builds
 			SET status = 'PUBLISHED', published_at = NOW(), moderation_reason = NULL, updated_at = NOW()
-			WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'UNPUBLISHED', 'PENDING_REVIEW')
+			WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'UNPUBLISHED', 'DECLINED', 'PENDING_REVIEW')
 		`
 	case models.BuildStatusUnpublished:
 		query = `
@@ -693,7 +693,7 @@ func (s *BuildStore) SetStatus(ctx context.Context, id string, ownerUserID strin
 				  AND published.status = 'PUBLISHED'
 				  AND revision.revision_of_build_id = published.id
 				  AND revision.owner_user_id = published.owner_user_id
-				  AND revision.status IN ('DRAFT', 'UNPUBLISHED')
+				  AND revision.status IN ('DRAFT', 'UNPUBLISHED', 'DECLINED')
 			`,
 			id,
 			ownerUserID,
@@ -780,7 +780,7 @@ func (s *BuildStore) SetImage(ctx context.Context, id string, ownerUserID string
 	var currentStatus models.BuildStatus
 	if err := tx.QueryRowContext(
 		ctx,
-		`SELECT status FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')`,
+		`SELECT status FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED', 'DECLINED')`,
 		id,
 		ownerUserID,
 	).Scan(&currentStatus); err != nil {
@@ -804,7 +804,7 @@ func (s *BuildStore) SetImage(ctx context.Context, id string, ownerUserID string
 	var previousAssetID sql.NullString
 	if err := tx.QueryRowContext(
 		ctx,
-		`SELECT image_asset_id FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED')`,
+		`SELECT image_asset_id FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED', 'DECLINED')`,
 		targetBuildID,
 		ownerUserID,
 	).Scan(&previousAssetID); err != nil {
@@ -818,7 +818,7 @@ func (s *BuildStore) SetImage(ctx context.Context, id string, ownerUserID string
 		UPDATE builds
 		SET image_asset_id = $1,
 		    updated_at = NOW()
-		WHERE id = $2 AND owner_user_id = $3 AND status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED')
+		WHERE id = $2 AND owner_user_id = $3 AND status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED', 'DECLINED')
 	`
 	result, err := tx.ExecContext(ctx, query, imageAssetID, targetBuildID, ownerUserID)
 	if err != nil {
@@ -847,7 +847,7 @@ func (s *BuildStore) GetImageForOwner(ctx context.Context, id string, ownerUserI
 		LEFT JOIN builds r
 		  ON r.revision_of_build_id = b.id
 		 AND r.owner_user_id = b.owner_user_id
-		 AND r.status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED')
+		 AND r.status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED', 'DECLINED')
 		JOIN image_assets ia
 		  ON ia.id = COALESCE(
 			CASE
@@ -859,7 +859,7 @@ func (s *BuildStore) GetImageForOwner(ctx context.Context, id string, ownerUserI
 		 AND ia.status = 'APPROVED'
 		WHERE b.id = $1
 		  AND b.owner_user_id = $2
-		  AND b.status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')
+		  AND b.status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED', 'DECLINED')
 		  AND COALESCE(
 			CASE
 				WHEN b.status = 'PUBLISHED' THEN r.image_asset_id
@@ -914,7 +914,7 @@ func (s *BuildStore) DeleteImage(ctx context.Context, id string, ownerUserID str
 	var currentStatus models.BuildStatus
 	if err := tx.QueryRowContext(
 		ctx,
-		`SELECT status FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')`,
+		`SELECT status FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED', 'DECLINED')`,
 		id,
 		ownerUserID,
 	).Scan(&currentStatus); err != nil {
@@ -938,7 +938,7 @@ func (s *BuildStore) DeleteImage(ctx context.Context, id string, ownerUserID str
 	var previousAssetID sql.NullString
 	if err := tx.QueryRowContext(
 		ctx,
-		`SELECT image_asset_id FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED')`,
+		`SELECT image_asset_id FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED', 'DECLINED')`,
 		targetBuildID,
 		ownerUserID,
 	).Scan(&previousAssetID); err != nil {
@@ -952,7 +952,7 @@ func (s *BuildStore) DeleteImage(ctx context.Context, id string, ownerUserID str
 		UPDATE builds
 		SET image_asset_id = NULL,
 		    updated_at = NOW()
-		WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED')
+		WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED', 'DECLINED')
 	`
 	result, err := tx.ExecContext(ctx, query, targetBuildID, ownerUserID)
 	if err != nil {
@@ -976,7 +976,7 @@ func (s *BuildStore) DeleteImage(ctx context.Context, id string, ownerUserID str
 func (s *BuildStore) Delete(ctx context.Context, id string, ownerUserID string) (bool, error) {
 	result, err := s.db.ExecContext(
 		ctx,
-		`DELETE FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')`,
+		`DELETE FROM builds WHERE id = $1 AND owner_user_id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED', 'DECLINED')`,
 		id,
 		ownerUserID,
 	)
@@ -1036,13 +1036,6 @@ func (s *BuildStore) ListForModeration(ctx context.Context, params models.BuildM
 		`, argIdx, argIdx, argIdx, argIdx, argIdx, argIdx))
 		args = append(args, "%"+search+"%")
 		argIdx++
-	}
-
-	switch params.DeclineFilter {
-	case models.BuildModerationDeclineFilterDeclined:
-		conditions = append(conditions, "NULLIF(TRIM(b.moderation_reason), '') IS NOT NULL")
-	case models.BuildModerationDeclineFilterNotDeclined:
-		conditions = append(conditions, "NULLIF(TRIM(b.moderation_reason), '') IS NULL")
 	}
 
 	whereClause := strings.Join(conditions, " AND ")
@@ -1121,7 +1114,7 @@ func (s *BuildStore) ListForModeration(ctx context.Context, params models.BuildM
 
 // GetForModeration returns a build for content moderation workflows.
 func (s *BuildStore) GetForModeration(ctx context.Context, id string) (*models.Build, error) {
-	query := baseBuildSelect + ` WHERE b.id = $1 AND b.status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')`
+	query := baseBuildSelect + ` WHERE b.id = $1 AND b.status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED', 'DECLINED')`
 	build, err := s.scanBuild(ctx, query, id)
 	if err != nil || build == nil {
 		return build, err
@@ -1172,7 +1165,7 @@ func (s *BuildStore) UpdateForModeration(ctx context.Context, id string, params 
 	query := fmt.Sprintf(`
 		UPDATE builds
 		SET %s
-		WHERE id = $%d AND status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED')
+		WHERE id = $%d AND status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED', 'DECLINED')
 	`, strings.Join(setClauses, ", "), argIndex)
 	args = append(args, id)
 
@@ -1203,7 +1196,7 @@ func (s *BuildStore) SetImageForModeration(ctx context.Context, id string, image
 	var previousAssetID sql.NullString
 	if err := s.db.QueryRowContext(
 		ctx,
-		`SELECT image_asset_id FROM builds WHERE id = $1 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')`,
+		`SELECT image_asset_id FROM builds WHERE id = $1 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED', 'DECLINED')`,
 		id,
 	).Scan(&previousAssetID); err != nil {
 		if err == sql.ErrNoRows {
@@ -1214,7 +1207,7 @@ func (s *BuildStore) SetImageForModeration(ctx context.Context, id string, image
 
 	result, err := s.db.ExecContext(
 		ctx,
-		`UPDATE builds SET image_asset_id = $1, updated_at = NOW() WHERE id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')`,
+		`UPDATE builds SET image_asset_id = $1, updated_at = NOW() WHERE id = $2 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED', 'DECLINED')`,
 		imageAssetID,
 		id,
 	)
@@ -1239,7 +1232,7 @@ func (s *BuildStore) GetImageForModeration(ctx context.Context, id string) ([]by
 		FROM builds b
 		JOIN image_assets ia ON ia.id = b.image_asset_id AND ia.status = 'APPROVED'
 		WHERE b.id = $1
-		  AND b.status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')
+		  AND b.status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED', 'DECLINED')
 		  AND b.image_asset_id IS NOT NULL
 	`
 
@@ -1259,7 +1252,7 @@ func (s *BuildStore) DeleteImageForModeration(ctx context.Context, id string) (s
 	var previousAssetID sql.NullString
 	if err := s.db.QueryRowContext(
 		ctx,
-		`SELECT image_asset_id FROM builds WHERE id = $1 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')`,
+		`SELECT image_asset_id FROM builds WHERE id = $1 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED', 'DECLINED')`,
 		id,
 	).Scan(&previousAssetID); err != nil {
 		if err == sql.ErrNoRows {
@@ -1270,7 +1263,7 @@ func (s *BuildStore) DeleteImageForModeration(ctx context.Context, id string) (s
 
 	result, err := s.db.ExecContext(
 		ctx,
-		`UPDATE builds SET image_asset_id = NULL, updated_at = NOW() WHERE id = $1 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED')`,
+		`UPDATE builds SET image_asset_id = NULL, updated_at = NOW() WHERE id = $1 AND status IN ('DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'UNPUBLISHED', 'DECLINED')`,
 		id,
 	)
 	if err != nil {
@@ -1392,7 +1385,7 @@ func (s *BuildStore) DeclineForModeration(ctx context.Context, id string, reason
 		ctx,
 		`
 			UPDATE builds
-			SET status = 'UNPUBLISHED',
+			SET status = 'DECLINED',
 			    published_at = NULL,
 			    moderation_reason = $2,
 			    updated_at = NOW()
@@ -1499,7 +1492,7 @@ func (s *BuildStore) selectExistingRevisionDraftTx(
 			FROM builds
 			WHERE owner_user_id = $1
 			  AND revision_of_build_id = $2
-			  AND status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED')
+			  AND status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED', 'DECLINED')
 			ORDER BY updated_at DESC
 			LIMIT 1
 		`,
@@ -1976,7 +1969,7 @@ var ownerBuildSelect = `
 	LEFT JOIN builds r
 	  ON r.revision_of_build_id = b.id
 	 AND r.owner_user_id = b.owner_user_id
-	 AND r.status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED')
+	 AND r.status IN ('DRAFT', 'PENDING_REVIEW', 'UNPUBLISHED', 'DECLINED')
 	LEFT JOIN users u ON b.owner_user_id = u.id
 `
 
