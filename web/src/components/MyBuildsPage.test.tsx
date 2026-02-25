@@ -449,7 +449,7 @@ describe('MyBuildsPage share URL behavior', () => {
     expect(submitChangesButton).toBeEnabled();
   });
 
-  it('shows moderator decline feedback in a modal for declined builds', async () => {
+  it('shows moderator decline feedback after opening moderation reason for declined builds', async () => {
     const declinedBuild = draftBuildFixture({
       id: 'build-declined',
       status: 'DECLINED',
@@ -473,8 +473,13 @@ describe('MyBuildsPage share URL behavior', () => {
       expect(mockedGetMyBuild).toHaveBeenCalledWith('build-declined');
     });
 
+    expect(screen.queryByRole('dialog', { name: 'Build moderation feedback' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /view moderation reason/i }));
+
     const feedbackModal = await screen.findByRole('dialog', { name: 'Build moderation feedback' });
     expect(feedbackModal).toHaveTextContent('Please provide a complete parts list and build description.');
+    expect(feedbackModal).toHaveTextContent('Needs Fixes');
     const gotItButton = screen.getByRole('button', { name: 'Got it' });
     await waitFor(() => {
       expect(gotItButton).toHaveFocus();
