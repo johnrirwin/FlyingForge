@@ -86,6 +86,9 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
   const [buildId, setBuildId] = useState('');
   const [itemDetailForms, setItemDetailForms] = useState<InventoryItemDetailForm[]>([]);
   const [activeItemDetailIndex, setActiveItemDetailIndex] = useState(0);
+  const [imageLoadFailed, setImageLoadFailed] = useState(false);
+
+  const modalImageUrl = (editItem?.imageUrl || equipmentItem?.imageUrl || '').trim();
 
   // Auto-add pre-selected catalog item to inventory
   const autoAddCatalogItem = useCallback(async (item: GearCatalogItem) => {
@@ -184,6 +187,11 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
 
     wasDeleteConfirmOpenRef.current = showDeleteConfirmModal;
   }, [showDeleteConfirmModal]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setImageLoadFailed(false);
+  }, [isOpen, modalImageUrl]);
 
   const updateItemDetail = useCallback((index: number, updates: Partial<InventoryItemDetailForm>) => {
     setItemDetailForms((prev) => {
@@ -427,6 +435,26 @@ export function AddGearModal({ isOpen, onClose, onSubmit, onDelete, equipmentIte
         {/* Form */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto overflow-x-hidden">
           <div className="p-6 space-y-4">
+            {/* Item image */}
+            {(modalImageUrl || imageLoadFailed) && (
+              <div className="rounded-xl border border-slate-700 overflow-hidden bg-slate-900/40">
+                {modalImageUrl && !imageLoadFailed ? (
+                  <img
+                    src={modalImageUrl}
+                    alt={editItem?.name || equipmentItem?.name || name || 'Inventory item'}
+                    className="w-full h-44 object-contain bg-slate-900"
+                    onError={() => setImageLoadFailed(true)}
+                  />
+                ) : (
+                  <div className="h-44 flex items-center justify-center text-slate-500">
+                    <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Error */}
             {error && (
               <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
