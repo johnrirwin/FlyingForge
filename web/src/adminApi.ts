@@ -551,7 +551,7 @@ export async function adminUnpublishBuild(id: string): Promise<Build> {
     throw new Error(data.error || 'Failed to unpublish build');
   }
 
-	return response.json();
+  return response.json();
 }
 
 export async function adminDeclineBuild(id: string, reason: string): Promise<Build> {

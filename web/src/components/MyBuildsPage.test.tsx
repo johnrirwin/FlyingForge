@@ -475,8 +475,12 @@ describe('MyBuildsPage share URL behavior', () => {
 
     const feedbackModal = await screen.findByRole('dialog', { name: 'Build moderation feedback' });
     expect(feedbackModal).toHaveTextContent('Please provide a complete parts list and build description.');
+    const gotItButton = screen.getByRole('button', { name: 'Got it' });
+    await waitFor(() => {
+      expect(gotItButton).toHaveFocus();
+    });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
+    fireEvent.keyDown(window, { key: 'Escape' });
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: 'Build moderation feedback' })).not.toBeInTheDocument();
     });

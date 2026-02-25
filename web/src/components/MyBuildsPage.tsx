@@ -100,6 +100,7 @@ export function MyBuildsPage() {
   const [shareURLError, setShareURLError] = useState<string | null>(null);
   const [liveShareByBuildID, setLiveShareByBuildID] = useState<Record<string, LiveBuildShareState>>({});
   const dismissedDeclineReasonsRef = useRef<Record<string, string>>({});
+  const declineNoticePrimaryActionRef = useRef<HTMLButtonElement | null>(null);
   const modalPreviewRef = useRef<string | null>(null);
 
   const loadBuildList = useCallback(async () => {
@@ -554,6 +555,26 @@ export function MyBuildsPage() {
     setShowDeclineNoticeModal(false);
   }, [declineNoticeReason, editorBuild]);
 
+  useEffect(() => {
+    if (!showDeclineNoticeModal) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      handleCloseDeclineNotice();
+    };
+
+    const focusTimer = window.setTimeout(() => {
+      declineNoticePrimaryActionRef.current?.focus();
+    }, 0);
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.clearTimeout(focusTimer);
+    };
+  }, [handleCloseDeclineNotice, showDeclineNoticeModal]);
+
   const editorBuildPayloadKey = useMemo(() => {
     if (!editorBuild) return '';
     return buildSharePayloadKey(editorBuild);
@@ -991,6 +1012,7 @@ export function MyBuildsPage() {
               <button
                 type="button"
                 onClick={handleCloseDeclineNotice}
+                ref={declineNoticePrimaryActionRef}
                 className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-primary-500"
               >
                 Got it
