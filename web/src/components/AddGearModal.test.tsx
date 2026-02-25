@@ -134,6 +134,26 @@ describe('AddGearModal quantity editing', () => {
     expect(image).toHaveAttribute('src', 'https://example.com/motor.jpg');
   });
 
+  it('shows the placeholder icon when the item image fails to load', () => {
+    render(
+      <AddGearModal
+        isOpen
+        onClose={vi.fn()}
+        onSubmit={vi.fn().mockResolvedValue(undefined)}
+        editItem={{
+          ...editItem,
+          imageUrl: 'https://example.com/missing-motor.jpg',
+        }}
+      />,
+    );
+
+    const image = screen.getByRole('img', { name: 'Test Motor' });
+    fireEvent.error(image);
+
+    expect(screen.getByRole('img', { name: 'Image unavailable' })).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: 'Test Motor' })).not.toBeInTheDocument();
+  });
+
   it('prefills newly added quantity tabs with the existing item purchase price', () => {
     const singleItem: InventoryItem = {
       ...editItem,
