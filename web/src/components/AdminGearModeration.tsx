@@ -1720,7 +1720,7 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
                 {isDeclining ? 'Declining...' : 'Decline Build'}
               </button>
             )}
-            {(build.status === 'PENDING_REVIEW' || build.status === 'DRAFT' || build.status === 'UNPUBLISHED') && (
+            {(build.status === 'PENDING_REVIEW' || build.status === 'DRAFT' || build.status === 'UNPUBLISHED' || build.status === 'DECLINED') && (
               <button
                 type="button"
                 disabled={isPublishing || isUnpublishing || isDeclining}

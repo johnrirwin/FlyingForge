@@ -720,7 +720,7 @@ func (s *Service) ApproveForModeration(ctx context.Context, id string) (*models.
 		return build, validation, nil
 	}
 
-	if build.Status == models.BuildStatusDraft || build.Status == models.BuildStatusUnpublished {
+	if build.Status == models.BuildStatusDraft || build.Status == models.BuildStatusUnpublished || build.Status == models.BuildStatusDeclined {
 		if strings.TrimSpace(build.OwnerUserID) == "" {
 			return nil, validation, &ServiceError{Message: "build owner missing"}
 		}

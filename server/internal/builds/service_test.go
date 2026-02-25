@@ -689,7 +689,7 @@ func TestDeclineForModeration_RequiresReason(t *testing.T) {
 	}
 }
 
-func TestDeclineForModeration_UnpublishesPendingReviewAndStoresReason(t *testing.T) {
+func TestDeclineForModeration_DeclinesPendingReviewAndStoresReason(t *testing.T) {
 	ctx := context.Background()
 	store := newFakeBuildStore()
 	svc := NewServiceWithDeps(store, nil, nil, logging.New(logging.LevelError))
@@ -709,8 +709,8 @@ func TestDeclineForModeration_UnpublishesPendingReviewAndStoresReason(t *testing
 	if updated == nil {
 		t.Fatalf("expected declined build")
 	}
-	if updated.Status != models.BuildStatusUnpublished {
-		t.Fatalf("status=%s want UNPUBLISHED", updated.Status)
+	if updated.Status != models.BuildStatusDeclined {
+		t.Fatalf("status=%s want DECLINED", updated.Status)
 	}
 	if updated.ModerationReason != "Needs more detailed component notes" {
 		t.Fatalf("moderationReason=%q want %q", updated.ModerationReason, "Needs more detailed component notes")
@@ -1317,7 +1317,7 @@ func TestGetImageAndGetPublicImage_ReturnDetectedContentType(t *testing.T) {
 	}
 }
 
-func TestListForModeration_DeclineFiltersUnpublishedBuilds(t *testing.T) {
+func TestListForModeration_SeparatesDeclinedAndUnpublishedBuilds(t *testing.T) {
 	ctx := context.Background()
 	store := newFakeBuildStore()
 	svc := NewServiceWithDeps(store, nil, nil, logging.New(logging.LevelError))
@@ -1326,7 +1326,7 @@ func TestListForModeration_DeclineFiltersUnpublishedBuilds(t *testing.T) {
 	store.byID["build-declined"] = &models.Build{
 		ID:               "build-declined",
 		OwnerUserID:      "pilot-1",
-		Status:           models.BuildStatusUnpublished,
+		Status:           models.BuildStatusDeclined,
 		ModerationReason: "Missing required component details",
 		Title:            "Declined Build",
 		CreatedAt:        now,
@@ -1342,25 +1342,23 @@ func TestListForModeration_DeclineFiltersUnpublishedBuilds(t *testing.T) {
 	}
 
 	declinedOnly, err := svc.ListForModeration(ctx, models.BuildModerationListParams{
-		Status:        models.BuildStatusUnpublished,
-		DeclineFilter: models.BuildModerationDeclineFilterDeclined,
+		Status: models.BuildStatusDeclined,
 	})
 	if err != nil {
 		t.Fatalf("ListForModeration declined-only error: %v", err)
 	}
 	if len(declinedOnly.Builds) != 1 || declinedOnly.Builds[0].ID != "build-declined" {
-		t.Fatalf("expected declined-only list to include only declined build, got %+v", declinedOnly.Builds)
+		t.Fatalf("expected declined list to include only declined build, got %+v", declinedOnly.Builds)
 	}
 
-	notDeclined, err := svc.ListForModeration(ctx, models.BuildModerationListParams{
-		Status:        models.BuildStatusUnpublished,
-		DeclineFilter: models.BuildModerationDeclineFilterNotDeclined,
+	unpublishedOnly, err := svc.ListForModeration(ctx, models.BuildModerationListParams{
+		Status: models.BuildStatusUnpublished,
 	})
 	if err != nil {
-		t.Fatalf("ListForModeration non-declined error: %v", err)
+		t.Fatalf("ListForModeration unpublished-only error: %v", err)
 	}
-	if len(notDeclined.Builds) != 1 || notDeclined.Builds[0].ID != "build-unpublished" {
-		t.Fatalf("expected non-declined list to include only regular unpublished build, got %+v", notDeclined.Builds)
+	if len(unpublishedOnly.Builds) != 1 || unpublishedOnly.Builds[0].ID != "build-unpublished" {
+		t.Fatalf("expected unpublished list to include only regular unpublished build, got %+v", unpublishedOnly.Builds)
 	}
 }
 
@@ -1432,7 +1430,7 @@ func (s *fakeBuildStore) ListByOwner(ctx context.Context, ownerUserID string, pa
 	items := make([]models.Build, 0)
 	for _, build := range s.byID {
 		if build.OwnerUserID == ownerUserID &&
-			(build.Status == models.BuildStatusDraft || build.Status == models.BuildStatusPendingReview || build.Status == models.BuildStatusPublished || build.Status == models.BuildStatusUnpublished) {
+			(build.Status == models.BuildStatusDraft || build.Status == models.BuildStatusPendingReview || build.Status == models.BuildStatusPublished || build.Status == models.BuildStatusUnpublished || build.Status == models.BuildStatusDeclined) {
 			items = append(items, *cloneBuild(build))
 		}
 	}
@@ -1476,17 +1474,6 @@ func (s *fakeBuildStore) ListForModeration(ctx context.Context, params models.Bu
 		if build.Status != status {
 			continue
 		}
-		isDeclined := strings.TrimSpace(build.ModerationReason) != ""
-		switch params.DeclineFilter {
-		case models.BuildModerationDeclineFilterDeclined:
-			if !isDeclined {
-				continue
-			}
-		case models.BuildModerationDeclineFilterNotDeclined:
-			if isDeclined {
-				continue
-			}
-		}
 		items = append(items, *cloneBuild(build))
 	}
 	return &models.BuildListResponse{Builds: items, TotalCount: len(items)}, nil
@@ -1524,7 +1511,7 @@ func (s *fakeBuildStore) GetForModeration(ctx context.Context, id string) (*mode
 		return nil, nil
 	}
 	switch build.Status {
-	case models.BuildStatusDraft, models.BuildStatusPendingReview, models.BuildStatusPublished, models.BuildStatusUnpublished:
+	case models.BuildStatusDraft, models.BuildStatusPendingReview, models.BuildStatusPublished, models.BuildStatusUnpublished, models.BuildStatusDeclined:
 		return cloneBuild(build), nil
 	default:
 		return nil, nil
@@ -1817,7 +1804,7 @@ func (s *fakeBuildStore) DeclineForModeration(ctx context.Context, id string, re
 	if build == nil || build.Status != models.BuildStatusPendingReview {
 		return nil, nil
 	}
-	build.Status = models.BuildStatusUnpublished
+	build.Status = models.BuildStatusDeclined
 	build.PublishedAt = nil
 	build.ModerationReason = strings.TrimSpace(reason)
 	build.UpdatedAt = time.Now().UTC()
@@ -1897,7 +1884,7 @@ func (s *fakeBuildStore) Delete(ctx context.Context, id string, ownerUserID stri
 	if build == nil || build.OwnerUserID != ownerUserID {
 		return false, nil
 	}
-	if build.Status != models.BuildStatusDraft && build.Status != models.BuildStatusPublished && build.Status != models.BuildStatusUnpublished {
+	if build.Status != models.BuildStatusDraft && build.Status != models.BuildStatusPublished && build.Status != models.BuildStatusUnpublished && build.Status != models.BuildStatusDeclined {
 		if build.Status != models.BuildStatusPendingReview {
 			return false, nil
 		}

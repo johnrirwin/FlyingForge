@@ -406,7 +406,7 @@ describe('AdminGearModeration', () => {
     };
     const declinedBuild: Build = {
       ...pendingBuild,
-      status: 'UNPUBLISHED',
+      status: 'DECLINED',
       moderationReason: 'Missing required component details.',
     };
 
@@ -490,7 +490,7 @@ describe('AdminGearModeration', () => {
   it('includes a declined build filter category for moderation', async () => {
     const declinedBuild: Build = {
       ...mockBuild,
-      status: 'UNPUBLISHED',
+      status: 'DECLINED',
       moderationReason: 'Missing required component details.',
     };
 

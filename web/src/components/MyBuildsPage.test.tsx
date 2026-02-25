@@ -449,10 +449,10 @@ describe('MyBuildsPage share URL behavior', () => {
     expect(submitChangesButton).toBeEnabled();
   });
 
-  it('shows moderator decline feedback in a modal for unpublished builds', async () => {
+  it('shows moderator decline feedback in a modal for declined builds', async () => {
     const declinedBuild = draftBuildFixture({
       id: 'build-declined',
-      status: 'UNPUBLISHED',
+      status: 'DECLINED',
       title: 'Needs Fixes',
       moderationReason: 'Please provide a complete parts list and build description.',
       parts: [

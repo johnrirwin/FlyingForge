@@ -60,7 +60,7 @@ function hasPowerStackRequirement(parts: Build['parts'] | undefined): boolean {
 }
 
 function moderationNoticeKey(build: Build): string {
-  if (build.status === 'PUBLISHED' && build.stagedRevisionStatus === 'UNPUBLISHED' && build.stagedRevisionId) {
+  if (build.status === 'PUBLISHED' && build.stagedRevisionStatus === 'DECLINED' && build.stagedRevisionId) {
     return `${build.id}:${build.stagedRevisionId}`;
   }
   return build.id;
@@ -531,8 +531,8 @@ export function MyBuildsPage() {
     }
 
     const trimmedReason = editorBuild.moderationReason?.trim() || '';
-    const isDeclinedSubmission = editorBuild.status === 'UNPUBLISHED'
-      || (editorBuild.status === 'PUBLISHED' && editorBuild.stagedRevisionStatus === 'UNPUBLISHED');
+    const isDeclinedSubmission = editorBuild.status === 'DECLINED'
+      || (editorBuild.status === 'PUBLISHED' && editorBuild.stagedRevisionStatus === 'DECLINED');
     if (!trimmedReason || !isDeclinedSubmission) {
       setShowDeclineNoticeModal(false);
       setDeclineNoticeReason('');
@@ -650,12 +650,17 @@ export function MyBuildsPage() {
         if (editorBuild.stagedRevisionStatus === 'PENDING_REVIEW') {
           return 'Published • Changes pending moderation';
         }
+        if (editorBuild.stagedRevisionStatus === 'DECLINED') {
+          return 'Published • Changes declined';
+        }
         if (editorBuild.stagedRevisionStatus === 'DRAFT' || editorBuild.stagedRevisionStatus === 'UNPUBLISHED') {
           return 'Published • Changes staged';
         }
         return 'Published';
       case 'PENDING_REVIEW':
         return 'Pending Moderation';
+      case 'DECLINED':
+        return 'Declined';
       case 'UNPUBLISHED':
         return 'Unpublished';
       case 'DRAFT':
@@ -683,7 +688,11 @@ export function MyBuildsPage() {
   }, [editorBuild, persistedBuildKey]);
 
   const hasPublishedStagedChanges = editorBuild?.status === 'PUBLISHED'
-    && (editorBuild.stagedRevisionStatus === 'DRAFT' || editorBuild.stagedRevisionStatus === 'UNPUBLISHED');
+    && (
+      editorBuild.stagedRevisionStatus === 'DRAFT'
+      || editorBuild.stagedRevisionStatus === 'UNPUBLISHED'
+      || editorBuild.stagedRevisionStatus === 'DECLINED'
+    );
 
   const canSubmitPublishedChanges = hasPublishedStagedChanges || hasUnsavedEditorChanges;
   const canDeleteBuild = editorBuild?.status !== 'PUBLISHED' && editorBuild?.status !== 'PENDING_REVIEW';

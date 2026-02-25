@@ -15,6 +15,7 @@ const (
 	BuildStatusPendingReview BuildStatus = "PENDING_REVIEW"
 	BuildStatusPublished     BuildStatus = "PUBLISHED"
 	BuildStatusUnpublished   BuildStatus = "UNPUBLISHED"
+	BuildStatusDeclined      BuildStatus = "DECLINED"
 )
 
 // NormalizeBuildStatus canonicalizes user-provided status values.
@@ -32,6 +33,8 @@ func NormalizeBuildStatus(status BuildStatus) BuildStatus {
 		return BuildStatusPublished
 	case string(BuildStatusUnpublished):
 		return BuildStatusUnpublished
+	case string(BuildStatusDeclined):
+		return BuildStatusDeclined
 	default:
 		return status
 	}
@@ -237,22 +240,11 @@ type BuildListParams struct {
 
 // BuildModerationListParams describes admin moderation list query options.
 type BuildModerationListParams struct {
-	Query         string                       `json:"query,omitempty"`
-	Status        BuildStatus                  `json:"status,omitempty"`
-	DeclineFilter BuildModerationDeclineFilter `json:"declineFilter,omitempty"`
-	Limit         int                          `json:"limit,omitempty"`
-	Offset        int                          `json:"offset,omitempty"`
+	Query  string      `json:"query,omitempty"`
+	Status BuildStatus `json:"status,omitempty"`
+	Limit  int         `json:"limit,omitempty"`
+	Offset int         `json:"offset,omitempty"`
 }
-
-// BuildModerationDeclineFilter controls whether moderation lists include
-// declined (moderation-reason) unpublished builds.
-type BuildModerationDeclineFilter string
-
-const (
-	BuildModerationDeclineFilterAll         BuildModerationDeclineFilter = ""
-	BuildModerationDeclineFilterDeclined    BuildModerationDeclineFilter = "declined"
-	BuildModerationDeclineFilterNotDeclined BuildModerationDeclineFilter = "not_declined"
-)
 
 // BuildListResponse is returned by build list endpoints.
 type BuildListResponse struct {
