@@ -519,7 +519,9 @@ describe('AdminGearModeration', () => {
       );
     });
 
-    expect(screen.getAllByText('Declined').length).toBeGreaterThan(1);
+    await waitFor(() => {
+      expect(screen.getAllByText('Declined').length).toBeGreaterThan(1);
+    });
   });
 
   it('updates gear type from within the edit modal', async () => {
