@@ -401,7 +401,7 @@ export function getAdminGearImageUrl(gearId: string, cacheBuster?: number): stri
 
 export interface AdminBuildSearchParams {
   query?: string;
-  status?: BuildStatus;
+  status?: BuildStatus | 'DECLINED';
   limit?: number;
   offset?: number;
 }

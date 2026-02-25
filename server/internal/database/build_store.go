@@ -1038,6 +1038,13 @@ func (s *BuildStore) ListForModeration(ctx context.Context, params models.BuildM
 		argIdx++
 	}
 
+	switch params.DeclineFilter {
+	case models.BuildModerationDeclineFilterDeclined:
+		conditions = append(conditions, "NULLIF(TRIM(b.moderation_reason), '') IS NOT NULL")
+	case models.BuildModerationDeclineFilterNotDeclined:
+		conditions = append(conditions, "NULLIF(TRIM(b.moderation_reason), '') IS NULL")
+	}
+
 	whereClause := strings.Join(conditions, " AND ")
 
 	countQuery := fmt.Sprintf(`

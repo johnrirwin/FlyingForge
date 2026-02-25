@@ -1317,6 +1317,53 @@ func TestGetImageAndGetPublicImage_ReturnDetectedContentType(t *testing.T) {
 	}
 }
 
+func TestListForModeration_DeclineFiltersUnpublishedBuilds(t *testing.T) {
+	ctx := context.Background()
+	store := newFakeBuildStore()
+	svc := NewServiceWithDeps(store, nil, nil, logging.New(logging.LevelError))
+
+	now := time.Now().UTC()
+	store.byID["build-declined"] = &models.Build{
+		ID:               "build-declined",
+		OwnerUserID:      "pilot-1",
+		Status:           models.BuildStatusUnpublished,
+		ModerationReason: "Missing required component details",
+		Title:            "Declined Build",
+		CreatedAt:        now,
+		UpdatedAt:        now,
+	}
+	store.byID["build-unpublished"] = &models.Build{
+		ID:          "build-unpublished",
+		OwnerUserID: "pilot-1",
+		Status:      models.BuildStatusUnpublished,
+		Title:       "Manual Unpublish",
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+
+	declinedOnly, err := svc.ListForModeration(ctx, models.BuildModerationListParams{
+		Status:        models.BuildStatusUnpublished,
+		DeclineFilter: models.BuildModerationDeclineFilterDeclined,
+	})
+	if err != nil {
+		t.Fatalf("ListForModeration declined-only error: %v", err)
+	}
+	if len(declinedOnly.Builds) != 1 || declinedOnly.Builds[0].ID != "build-declined" {
+		t.Fatalf("expected declined-only list to include only declined build, got %+v", declinedOnly.Builds)
+	}
+
+	notDeclined, err := svc.ListForModeration(ctx, models.BuildModerationListParams{
+		Status:        models.BuildStatusUnpublished,
+		DeclineFilter: models.BuildModerationDeclineFilterNotDeclined,
+	})
+	if err != nil {
+		t.Fatalf("ListForModeration non-declined error: %v", err)
+	}
+	if len(notDeclined.Builds) != 1 || notDeclined.Builds[0].ID != "build-unpublished" {
+		t.Fatalf("expected non-declined list to include only regular unpublished build, got %+v", notDeclined.Builds)
+	}
+}
+
 func assertHasValidationCode(t *testing.T, errs []models.BuildValidationError, category, code string) {
 	t.Helper()
 	for _, err := range errs {
@@ -1426,9 +1473,21 @@ func (s *fakeBuildStore) ListForModeration(ctx context.Context, params models.Bu
 	}
 	items := make([]models.Build, 0)
 	for _, build := range s.byID {
-		if build.Status == status {
-			items = append(items, *cloneBuild(build))
+		if build.Status != status {
+			continue
 		}
+		isDeclined := strings.TrimSpace(build.ModerationReason) != ""
+		switch params.DeclineFilter {
+		case models.BuildModerationDeclineFilterDeclined:
+			if !isDeclined {
+				continue
+			}
+		case models.BuildModerationDeclineFilterNotDeclined:
+			if isDeclined {
+				continue
+			}
+		}
+		items = append(items, *cloneBuild(build))
 	}
 	return &models.BuildListResponse{Builds: items, TotalCount: len(items)}, nil
 }
