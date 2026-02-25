@@ -544,7 +544,7 @@ func (api *AdminAPI) handleAdminBuilds(w http.ResponseWriter, r *http.Request) {
 
 	query := r.URL.Query()
 	rawStatus := strings.ToUpper(strings.TrimSpace(query.Get("status")))
-	status := models.BuildStatusPendingReview
+	var status models.BuildStatus
 	declineFilter := models.BuildModerationDeclineFilterAll
 	switch rawStatus {
 	case "":
