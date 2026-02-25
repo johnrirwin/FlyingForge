@@ -418,6 +418,41 @@ describe('AdminGearModeration', () => {
     expect(screen.getByRole('button', { name: 'Publish Build' })).toBeInTheDocument();
   });
 
+  it('supports focus and Escape dismissal in the decline build modal', async () => {
+    const pendingBuild: Build = {
+      ...mockBuild,
+      status: 'PENDING_REVIEW',
+    };
+
+    mockAdminSearchBuilds.mockResolvedValue({
+      builds: [pendingBuild],
+      totalCount: 1,
+      sort: 'newest',
+    });
+    mockAdminGetBuild.mockResolvedValue(pendingBuild);
+
+    render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Builds$/i }));
+
+    const row = await screen.findByRole('button', { name: /open editor for blue beast build/i });
+    fireEvent.click(row);
+
+    expect(await screen.findByText('Review Build')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Decline Build' }));
+
+    const declineDialog = await screen.findByRole('dialog', { name: 'Decline build submission' });
+    const reasonInput = within(declineDialog).getByLabelText('Reason for decline');
+    await waitFor(() => {
+      expect(reasonInput).toHaveFocus();
+    });
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Decline build submission' })).not.toBeInTheDocument();
+    });
+  });
+
   it('updates gear type from within the edit modal', async () => {
     render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
 

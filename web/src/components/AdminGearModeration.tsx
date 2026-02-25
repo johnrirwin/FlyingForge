@@ -1321,6 +1321,7 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
   const [showDeclineModal, setShowDeclineModal] = useState(false);
   const [declineReason, setDeclineReason] = useState('');
   const [declineReasonError, setDeclineReasonError] = useState<string | null>(null);
+  const declineReasonInputRef = useRef<HTMLTextAreaElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<BuildValidationError[]>([]);
   const [imageCacheBuster, setImageCacheBuster] = useState(() => Date.now());
@@ -1376,12 +1377,32 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
     setShowDeclineModal(true);
   };
 
-  const handleCloseDeclineModal = () => {
+  const handleCloseDeclineModal = useCallback(() => {
     if (isDeclining) return;
     setShowDeclineModal(false);
     setDeclineReason('');
     setDeclineReasonError(null);
-  };
+  }, [isDeclining]);
+
+  useEffect(() => {
+    if (!showDeclineModal) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      handleCloseDeclineModal();
+    };
+
+    const focusTimer = window.setTimeout(() => {
+      declineReasonInputRef.current?.focus();
+    }, 0);
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.clearTimeout(focusTimer);
+    };
+  }, [handleCloseDeclineModal, showDeclineModal]);
 
   const saveChanges = useCallback(async (action: 'publish' | 'unpublish') => {
     if (!build) return;
@@ -1641,6 +1662,7 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
             <label className="mt-4 block">
               <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">Reason for decline</span>
               <textarea
+                ref={declineReasonInputRef}
                 value={declineReason}
                 onChange={(event) => {
                   setDeclineReason(event.target.value);
