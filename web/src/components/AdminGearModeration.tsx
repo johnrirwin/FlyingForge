@@ -12,11 +12,9 @@ import {
   adminGetGear,
   adminSearchBuilds,
   adminGetBuild,
-  adminUpdateBuild,
   adminPublishBuild,
   adminUnpublishBuild,
   adminDeclineBuild,
-  adminUploadBuildImage,
   adminDeleteBuildImage,
   getAdminGearImageUrl,
   getAdminBuildImageUrl,
@@ -1315,14 +1313,7 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
   const [description, setDescription] = useState('');
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [flightYoutubeUrl, setFlightYoutubeUrl] = useState('');
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [showImageModal, setShowImageModal] = useState(false);
-  const [modalImageFile, setModalImageFile] = useState<File | null>(null);
-  const [modalImagePreview, setModalImagePreview] = useState<string | null>(null);
-  const [imageModalError, setImageModalError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isUnpublishing, setIsUnpublishing] = useState(false);
   const [isDeclining, setIsDeclining] = useState(false);
@@ -1361,20 +1352,12 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
     void loadBuild();
     return () => {
       cancelled = true;
-      if (imagePreview?.startsWith('blob:')) {
-        URL.revokeObjectURL(imagePreview);
-      }
-      if (modalImagePreview?.startsWith('blob:')) {
-        URL.revokeObjectURL(modalImagePreview);
-      }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buildId]);
 
   const hasExistingImage = Boolean(build?.mainImageUrl);
   const existingImageUrl = build ? getAdminBuildImageUrl(build.id, imageCacheBuster) : null;
-  const currentPreview = imagePreview || (hasExistingImage ? existingImageUrl : null);
-  const isPublishedBuild = build?.status === 'PUBLISHED';
+  const currentPreview = hasExistingImage ? existingImageUrl : null;
 
   const refreshBuild = useCallback(async () => {
     const refreshed = await adminGetBuild(buildId);
@@ -1383,67 +1366,8 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
     setDescription(refreshed.description || '');
     setYoutubeUrl(refreshed.youtubeUrl || '');
     setFlightYoutubeUrl(refreshed.flightYoutubeUrl || '');
-    setImageFile(null);
-    if (imagePreview?.startsWith('blob:')) {
-      URL.revokeObjectURL(imagePreview);
-    }
-    setImagePreview(null);
-    setModalImageFile(null);
-    if (modalImagePreview?.startsWith('blob:')) {
-      URL.revokeObjectURL(modalImagePreview);
-    }
-    setModalImagePreview(null);
     setImageCacheBuster(Date.now());
-  }, [buildId, imagePreview, modalImagePreview]);
-
-  const handleOpenImageModal = () => {
-    setImageModalError(null);
-    setShowImageModal(true);
-    setModalImageFile(imageFile);
-    setModalImagePreview(imagePreview);
-  };
-
-  const handleCloseImageModal = () => {
-    setShowImageModal(false);
-    if (modalImagePreview?.startsWith('blob:') && modalImagePreview !== imagePreview) {
-      URL.revokeObjectURL(modalImagePreview);
-    }
-    setModalImageFile(null);
-    setModalImagePreview(null);
-    setImageModalError(null);
-  };
-
-  const handleSelectImage = (file: File) => {
-    if (file.size > 2 * 1024 * 1024) {
-      setImageModalError('Image file is too large. Maximum size is 2MB.');
-      return;
-    }
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
-    if (!validTypes.includes(file.type)) {
-      setImageModalError('Invalid image type. Please use JPEG or PNG.');
-      return;
-    }
-
-    const previewUrl = URL.createObjectURL(file);
-    if (modalImagePreview?.startsWith('blob:')) {
-      URL.revokeObjectURL(modalImagePreview);
-    }
-    setModalImageFile(file);
-    setModalImagePreview(previewUrl);
-    setImageModalError(null);
-  };
-
-  const handleSaveImageSelection = () => {
-    if (!modalImageFile || !modalImagePreview) return;
-    if (imagePreview?.startsWith('blob:')) {
-      URL.revokeObjectURL(imagePreview);
-    }
-    setImageFile(modalImageFile);
-    setImagePreview(modalImagePreview);
-    setModalImageFile(null);
-    setModalImagePreview(null);
-    setShowImageModal(false);
-  };
+  }, [buildId]);
 
   const handleOpenDeclineModal = () => {
     if (build?.status !== 'PENDING_REVIEW' || isDeclining) return;
@@ -1459,85 +1383,48 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
     setDeclineReasonError(null);
   };
 
-  const saveChanges = useCallback(async (action: 'save' | 'publish' | 'unpublish') => {
+  const saveChanges = useCallback(async (action: 'publish' | 'unpublish') => {
     if (!build) return;
 
-    const publishAfterSave = action === 'publish';
-    const unpublishAfterSave = action === 'unpublish';
-    const saveOnly = action === 'save';
-
-    if (saveOnly && build.status === 'PUBLISHED') {
-      setError('Unpublish the build before saving moderation edits.');
-      return;
-    }
-
-    const updatePayload = {
-      title: title.trim(),
-      description: description.trim(),
-      youtubeUrl: youtubeUrl.trim(),
-      flightYoutubeUrl: flightYoutubeUrl.trim(),
-    };
-
-    if (publishAfterSave) {
+    if (action === 'publish') {
       setIsPublishing(true);
-    } else if (unpublishAfterSave) {
-      setIsUnpublishing(true);
     } else {
-      setIsSaving(true);
+      setIsUnpublishing(true);
     }
     setError(null);
     setValidationErrors([]);
 
     try {
-      if (unpublishAfterSave && build.status === 'PUBLISHED') {
+      if (action === 'unpublish') {
         const unpublished = await adminUnpublishBuild(build.id);
         setBuild(unpublished);
         onSave();
         return;
       }
 
-      let updated = await adminUpdateBuild(build.id, updatePayload);
-
-      if (imageFile) {
-        await adminUploadBuildImage(build.id, imageFile);
-        updated = await adminGetBuild(build.id);
-      }
-
-      if (publishAfterSave) {
-        const publishResponse = await adminPublishBuild(build.id);
-        if (!publishResponse.validation.valid) {
-          setValidationErrors(publishResponse.validation.errors ?? []);
-          if (publishResponse.build) {
-            setBuild(publishResponse.build);
-          } else {
-            setBuild(updated);
-          }
-          return;
+      const publishResponse = await adminPublishBuild(build.id);
+      if (!publishResponse.validation.valid) {
+        setValidationErrors(publishResponse.validation.errors ?? []);
+        if (publishResponse.build) {
+          setBuild(publishResponse.build);
         }
-        onPublished();
         return;
       }
-
-      if (unpublishAfterSave) {
-        updated = await adminUnpublishBuild(build.id);
+      if (publishResponse.build) {
+        setBuild(publishResponse.build);
       }
-
-      setBuild(updated);
-      setImageFile(null);
-      if (imagePreview?.startsWith('blob:')) {
-        URL.revokeObjectURL(imagePreview);
-      }
-      setImagePreview(null);
-      setImageCacheBuster(Date.now());
-      onSave();
+      onPublished();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save build');
+      setError(err instanceof Error
+        ? err.message
+        : action === 'publish'
+          ? 'Failed to publish build'
+          : 'Failed to unpublish build');
     } finally {
-      setIsSaving(false);
       setIsPublishing(false);
       setIsUnpublishing(false);
     }
-  }, [build, description, flightYoutubeUrl, imageFile, imagePreview, onPublished, onSave, title, youtubeUrl]);
+  }, [build, onPublished, onSave]);
 
   const handleDeleteImage = async () => {
     if (!build || isDeletingImage) return;
@@ -1622,28 +1509,25 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
                 <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">Title</span>
                 <input
                   value={title}
-                  onChange={(event) => setTitle(event.target.value)}
-                  disabled={isPublishedBuild}
-                  className="h-11 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 text-white focus:border-primary-500 focus:outline-none"
+                  readOnly
+                  className="h-11 w-full cursor-default rounded-lg border border-slate-600 bg-slate-900 px-3 text-white"
                 />
               </label>
               <label className="block">
                 <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">Description</span>
                 <textarea
                   value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-                  disabled={isPublishedBuild}
+                  readOnly
                   rows={6}
-                  className="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+                  className="w-full cursor-default rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-white"
                 />
               </label>
               <label className="block">
                 <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">Build Video URL</span>
                 <input
                   value={youtubeUrl}
-                  onChange={(event) => setYoutubeUrl(event.target.value)}
-                  disabled={isPublishedBuild}
-                  className="h-11 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 text-white focus:border-primary-500 focus:outline-none"
+                  readOnly
+                  className="h-11 w-full cursor-default rounded-lg border border-slate-600 bg-slate-900 px-3 text-white"
                   placeholder="https://www.youtube.com/watch?v=..."
                 />
               </label>
@@ -1651,9 +1535,8 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
                 <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">Flight Video URL</span>
                 <input
                   value={flightYoutubeUrl}
-                  onChange={(event) => setFlightYoutubeUrl(event.target.value)}
-                  disabled={isPublishedBuild}
-                  className="h-11 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 text-white focus:border-primary-500 focus:outline-none"
+                  readOnly
+                  className="h-11 w-full cursor-default rounded-lg border border-slate-600 bg-slate-900 px-3 text-white"
                   placeholder="https://www.youtube.com/watch?v=..."
                 />
               </label>
@@ -1669,14 +1552,9 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
                 )}
               </div>
               <div className="grid gap-2">
-                <button
-                  type="button"
-                  onClick={handleOpenImageModal}
-                  disabled={isPublishedBuild}
-                  className="rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-500"
-                >
-                  {currentPreview ? 'Change Image' : 'Upload Image'}
-                </button>
+                <p className="rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-center text-xs text-slate-400">
+                  Moderators can view build details and optionally remove the image.
+                </p>
                 {hasExistingImage && (
                   <a
                     href={existingImageUrl || undefined}
@@ -1690,7 +1568,7 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
                   <button
                     type="button"
                     onClick={() => void handleDeleteImage()}
-                    disabled={isDeletingImage || isPublishedBuild}
+                    disabled={isDeletingImage || isPublishing || isUnpublishing || isDeclining}
                     className="rounded-lg border border-red-500/40 px-3 py-2 text-sm text-red-300 hover:bg-red-500/10 disabled:opacity-50"
                   >
                     {isDeletingImage ? 'Removing...' : 'Remove Image'}
@@ -1700,32 +1578,23 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
             </div>
           </div>
 
-          {isPublishedBuild && (
-            <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-              Unpublish this build before editing fields or image.
-            </div>
-          )}
+          <div className="mt-4 rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-2 text-xs text-slate-300">
+            Build fields are read-only for moderation. You can publish, decline, unpublish, and remove the image.
+          </div>
 
           <div className="mt-5 flex flex-wrap justify-end gap-2">
             <button
               type="button"
               onClick={onClose}
+              disabled={isPublishing || isUnpublishing || isDeclining}
               className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-medium text-slate-200 hover:border-slate-500 hover:text-white"
             >
               Cancel
             </button>
-            <button
-              type="button"
-              disabled={isPublishedBuild || isSaving || isPublishing || isUnpublishing || isDeclining}
-              onClick={() => void saveChanges('save')}
-              className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-medium text-slate-200 hover:border-slate-500 hover:text-white disabled:opacity-60"
-            >
-              {isPublishedBuild ? 'Unpublish to Edit' : isSaving ? 'Saving...' : 'Save Changes'}
-            </button>
             {build.status === 'PUBLISHED' && (
               <button
                 type="button"
-                disabled={isSaving || isPublishing || isUnpublishing || isDeclining}
+                disabled={isPublishing || isUnpublishing || isDeclining}
                 onClick={() => void saveChanges('unpublish')}
                 className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-60"
               >
@@ -1735,7 +1604,7 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
             {build.status === 'PENDING_REVIEW' && (
               <button
                 type="button"
-                disabled={isSaving || isPublishing || isUnpublishing || isDeclining}
+                disabled={isPublishing || isUnpublishing || isDeclining}
                 onClick={handleOpenDeclineModal}
                 className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-60"
               >
@@ -1745,7 +1614,7 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
             {(build.status === 'PENDING_REVIEW' || build.status === 'DRAFT' || build.status === 'UNPUBLISHED') && (
               <button
                 type="button"
-                disabled={isSaving || isPublishing || isUnpublishing || isDeclining}
+                disabled={isPublishing || isUnpublishing || isDeclining}
                 onClick={() => void saveChanges('publish')}
                 className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-60"
               >
@@ -1832,23 +1701,6 @@ function AdminBuildEditModal({ buildId, onClose, onSave, onPublished }: AdminBui
         </div>
       )}
 
-      <ImageUploadModal
-        isOpen={showImageModal}
-        title={currentPreview ? 'Update Build Image' : 'Upload Build Image'}
-        previewUrl={modalImagePreview || currentPreview}
-        previewAlt={title || 'Build image preview'}
-        placeholder="🚁"
-        accept="image/jpeg,image/jpg,image/png"
-        helperText="JPEG or PNG. Max 2MB."
-        selectButtonLabel={modalImagePreview ? 'Choose Different' : 'Select Image'}
-        onSelectFile={(file) => handleSelectImage(file)}
-        onClose={handleCloseImageModal}
-        onSave={handleSaveImageSelection}
-        disableSave={!modalImageFile || !modalImagePreview}
-        saveLabel="Use Image"
-        errorMessage={imageModalError}
-        zIndexClassName="z-[75]"
-      />
     </>
   );
 }

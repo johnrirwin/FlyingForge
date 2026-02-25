@@ -313,7 +313,6 @@ describe('AdminGearModeration', () => {
       sort: 'newest',
     });
     mockAdminGetBuild.mockResolvedValue(mockBuild);
-    mockAdminUpdateBuild.mockResolvedValue(mockBuild);
     mockAdminUnpublishBuild.mockResolvedValue(unpublishedBuild);
 
     render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
@@ -324,8 +323,9 @@ describe('AdminGearModeration', () => {
     fireEvent.click(row);
 
     expect(await screen.findByText('Review Build')).toBeInTheDocument();
-    expect(screen.getByText('Unpublish this build before editing fields or image.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Unpublish to Edit' })).toBeDisabled();
+    expect(screen.getByText('Build fields are read-only for moderation. You can publish, decline, unpublish, and remove the image.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /save changes/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /change image/i })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Unpublish Build' }));
 
@@ -334,8 +334,35 @@ describe('AdminGearModeration', () => {
     });
     expect(mockAdminUpdateBuild).not.toHaveBeenCalled();
     expect(screen.getByText('Review Build')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save Changes' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Publish Build' })).toBeInTheDocument();
+  });
+
+  it('shows build fields as read-only in build moderation modal', async () => {
+    mockAdminSearchBuilds.mockResolvedValue({
+      builds: [mockBuild],
+      totalCount: 1,
+      sort: 'newest',
+    });
+    mockAdminGetBuild.mockResolvedValue(mockBuild);
+
+    render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Builds$/i }));
+    const row = await screen.findByRole('button', { name: /open editor for blue beast build/i });
+    fireEvent.click(row);
+
+    expect(await screen.findByText('Review Build')).toBeInTheDocument();
+
+    const titleInput = screen.getByLabelText('Title') as HTMLInputElement;
+    const descriptionInput = screen.getByLabelText('Description') as HTMLTextAreaElement;
+    const buildVideoInput = screen.getByLabelText('Build Video URL') as HTMLInputElement;
+    const flightVideoInput = screen.getByLabelText('Flight Video URL') as HTMLInputElement;
+
+    expect(titleInput).toHaveAttribute('readonly');
+    expect(descriptionInput).toHaveAttribute('readonly');
+    expect(buildVideoInput).toHaveAttribute('readonly');
+    expect(flightVideoInput).toHaveAttribute('readonly');
+    expect(screen.queryByRole('button', { name: /save changes/i })).not.toBeInTheDocument();
   });
 
   it('requires a moderator reason when declining a pending build', async () => {
@@ -355,7 +382,6 @@ describe('AdminGearModeration', () => {
       sort: 'newest',
     });
     mockAdminGetBuild.mockResolvedValue(pendingBuild);
-    mockAdminUpdateBuild.mockResolvedValue(pendingBuild);
     mockAdminDeclineBuild.mockResolvedValue(declinedBuild);
 
     render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);

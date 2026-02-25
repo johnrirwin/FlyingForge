@@ -651,27 +651,7 @@ func (api *AdminAPI) handleGetAdminBuild(w http.ResponseWriter, r *http.Request,
 }
 
 func (api *AdminAPI) handleUpdateAdminBuild(w http.ResponseWriter, r *http.Request, buildID string) {
-	var params models.UpdateBuildParams
-	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
-		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
-	defer cancel()
-
-	updated, err := api.buildSvc.UpdateForModeration(ctx, buildID, params)
-	if err != nil {
-		api.logger.Error("Failed to update moderation build", logging.WithField("error", err.Error()))
-		api.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update build"})
-		return
-	}
-	if updated == nil {
-		api.writeJSON(w, http.StatusNotFound, map[string]string{"error": "build not found"})
-		return
-	}
-
-	api.writeJSON(w, http.StatusOK, updated)
+	api.writeJSON(w, http.StatusForbidden, map[string]string{"error": "build field edits are disabled for moderation"})
 }
 
 func (api *AdminAPI) handlePublishAdminBuild(w http.ResponseWriter, r *http.Request, buildID string) {
