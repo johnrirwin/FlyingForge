@@ -487,6 +487,41 @@ describe('AdminGearModeration', () => {
     });
   });
 
+  it('includes a declined build filter category for moderation', async () => {
+    const declinedBuild: Build = {
+      ...mockBuild,
+      status: 'UNPUBLISHED',
+      moderationReason: 'Missing required component details.',
+    };
+
+    mockAdminSearchBuilds.mockResolvedValue({
+      builds: [declinedBuild],
+      totalCount: 1,
+      sort: 'newest',
+    });
+
+    render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Builds$/i }));
+
+    const statusSelect = await screen.findByRole('combobox');
+    expect(screen.getByRole('option', { name: 'Declined' })).toBeInTheDocument();
+
+    fireEvent.change(statusSelect, { target: { value: 'DECLINED' } });
+
+    await waitFor(() => {
+      expect(mockAdminSearchBuilds).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'DECLINED',
+          limit: 100,
+          offset: 0,
+        }),
+      );
+    });
+
+    expect(screen.getAllByText('Declined').length).toBeGreaterThan(1);
+  });
+
   it('updates gear type from within the edit modal', async () => {
     render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
 

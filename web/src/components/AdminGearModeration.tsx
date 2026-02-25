@@ -31,7 +31,8 @@ interface AdminGearModerationProps {
 }
 
 type ModerationTab = 'gear' | 'builds';
-type BuildModerationStatus = 'PENDING_REVIEW' | 'DRAFT' | 'PUBLISHED' | 'UNPUBLISHED';
+type BuildModerationStatus = 'PENDING_REVIEW' | 'DRAFT' | 'PUBLISHED' | 'UNPUBLISHED' | 'DECLINED';
+type BuildListStatus = BuildStatus | 'DECLINED';
 
 function formatDate(value?: string): string {
   if (!value) return '—';
@@ -164,7 +165,7 @@ function getGearTypeLabel(gearType: GearType): string {
   return GEAR_TYPES.find((t) => t.value === gearType)?.label ?? gearType;
 }
 
-function getBuildStatusLabel(status: BuildStatus): string {
+function getBuildStatusLabel(status: BuildListStatus): string {
   switch (status) {
     case 'PENDING_REVIEW':
       return 'Pending Review';
@@ -172,6 +173,8 @@ function getBuildStatusLabel(status: BuildStatus): string {
       return 'Published';
     case 'UNPUBLISHED':
       return 'Unpublished';
+    case 'DECLINED':
+      return 'Declined';
     case 'DRAFT':
       return 'Draft';
     case 'SHARED':
@@ -183,7 +186,7 @@ function getBuildStatusLabel(status: BuildStatus): string {
   }
 }
 
-function getBuildStatusClass(status: BuildStatus): string {
+function getBuildStatusClass(status: BuildListStatus): string {
   switch (status) {
     case 'PENDING_REVIEW':
       return 'bg-amber-500/20 text-amber-300';
@@ -191,6 +194,8 @@ function getBuildStatusClass(status: BuildStatus): string {
       return 'bg-green-500/20 text-green-400';
     case 'UNPUBLISHED':
       return 'bg-red-500/20 text-red-400';
+    case 'DECLINED':
+      return 'bg-rose-500/20 text-rose-300';
     case 'DRAFT':
       return 'bg-slate-500/20 text-slate-300';
     case 'SHARED':
@@ -200,6 +205,13 @@ function getBuildStatusClass(status: BuildStatus): string {
     default:
       return 'bg-slate-500/20 text-slate-300';
   }
+}
+
+function getBuildListStatus(build: Build): BuildListStatus {
+  if (build.status === 'UNPUBLISHED' && build.moderationReason?.trim()) {
+    return 'DECLINED';
+  }
+  return build.status;
 }
 
 export function AdminGearModeration({ hasContentAdminAccess, authLoading }: AdminGearModerationProps) {
@@ -789,6 +801,7 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
             className="w-full min-w-0 h-11 px-3 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
             <option value="PENDING_REVIEW">Pending Review</option>
+            <option value="DECLINED">Declined</option>
             <option value="PUBLISHED">Published</option>
             <option value="DRAFT">Draft</option>
             <option value="UNPUBLISHED">Unpublished</option>
@@ -1087,6 +1100,7 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
                   <tbody>
                     {builds.map((build) => {
                       const displayName = build.title || 'Untitled Build';
+                      const buildListStatus = getBuildListStatus(build);
                       const isSelected = editingBuildId === build.id;
                       return (
                         <tr
@@ -1107,8 +1121,8 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
                         >
                           <td className="px-4 py-3 text-sm text-slate-400">{formatDateTime(build.updatedAt)}</td>
                           <td className="px-4 py-3 text-sm">
-                            <span className={`px-2 py-0.5 rounded text-xs ${getBuildStatusClass(build.status)}`}>
-                              {getBuildStatusLabel(build.status)}
+                            <span className={`px-2 py-0.5 rounded text-xs ${getBuildStatusClass(buildListStatus)}`}>
+                              {getBuildStatusLabel(buildListStatus)}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-sm text-white font-medium">{displayName}</td>
@@ -1138,36 +1152,39 @@ export function AdminGearModeration({ hasContentAdminAccess, authLoading }: Admi
                   <p className="text-slate-400">No builds found</p>
                 </div>
               ) : (
-                builds.map((build) => (
-                  <button
-                    key={build.id}
-                    type="button"
-                    onClick={() => handleBuildEditClick(build)}
-                    className={`group w-full rounded-xl border p-4 text-left transition ${
-                      editingBuildId === build.id
-                        ? 'border-primary-500/50 bg-primary-600/10'
-                        : 'border-slate-700 bg-slate-800/50 hover:border-primary-500/50 hover:bg-slate-800'
-                    }`}
-                  >
-                    <div className="mb-2 flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-base font-semibold text-white">{build.title || 'Untitled Build'}</p>
-                        <p className="text-sm text-slate-400">
-                          by {build.pilot?.callSign || build.pilot?.displayName || 'Pilot'}
-                        </p>
+                builds.map((build) => {
+                  const buildListStatus = getBuildListStatus(build);
+                  return (
+                    <button
+                      key={build.id}
+                      type="button"
+                      onClick={() => handleBuildEditClick(build)}
+                      className={`group w-full rounded-xl border p-4 text-left transition ${
+                        editingBuildId === build.id
+                          ? 'border-primary-500/50 bg-primary-600/10'
+                          : 'border-slate-700 bg-slate-800/50 hover:border-primary-500/50 hover:bg-slate-800'
+                      }`}
+                    >
+                      <div className="mb-2 flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-base font-semibold text-white">{build.title || 'Untitled Build'}</p>
+                          <p className="text-sm text-slate-400">
+                            by {build.pilot?.callSign || build.pilot?.displayName || 'Pilot'}
+                          </p>
+                        </div>
+                        <span className={`rounded-full px-2 py-1 text-xs font-medium ${getBuildStatusClass(buildListStatus)}`}>
+                          {getBuildStatusLabel(buildListStatus)}
+                        </span>
                       </div>
-                      <span className={`rounded-full px-2 py-1 text-xs font-medium ${getBuildStatusClass(build.status)}`}>
-                        {getBuildStatusLabel(build.status)}
-                      </span>
-                    </div>
-                    <p className="line-clamp-2 text-sm text-slate-300">
-                      {build.description?.trim() || 'No description provided'}
-                    </p>
-                    <div className="mt-3 text-xs text-slate-500">
-                      Updated {formatDateTime(build.updatedAt)}
-                    </div>
-                  </button>
-                ))
+                      <p className="line-clamp-2 text-sm text-slate-300">
+                        {build.description?.trim() || 'No description provided'}
+                      </p>
+                      <div className="mt-3 text-xs text-slate-500">
+                        Updated {formatDateTime(build.updatedAt)}
+                      </div>
+                    </button>
+                  );
+                })
               )}
             </div>
           </>
