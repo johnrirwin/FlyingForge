@@ -1,11 +1,15 @@
 import '@testing-library/jest-dom'
-import { afterEach } from 'vitest'
+import { afterAll, afterEach, beforeAll } from 'vitest'
 import { cleanup } from '@testing-library/react'
+import { server } from './mocks/server'
 
-// Cleanup after each test
+// Start MSW server before all tests, reset handlers after each, stop after all
+beforeAll(() => server.listen({ onUnhandledRequest: 'warn' }))
 afterEach(() => {
+  server.resetHandlers()
   cleanup()
 })
+afterAll(() => server.close())
 
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
