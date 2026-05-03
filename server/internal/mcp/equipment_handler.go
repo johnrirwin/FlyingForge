@@ -3,276 +3,141 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 
-	"github.com/johnrirwin/flyingforge/internal/equipment"
-	"github.com/johnrirwin/flyingforge/internal/inventory"
 	"github.com/johnrirwin/flyingforge/internal/logging"
 	"github.com/johnrirwin/flyingforge/internal/models"
 )
 
-// EquipmentHandler handles MCP tool calls for equipment and inventory
+// EquipmentHandler handles public read-only MCP tool calls for the gear catalog.
 type EquipmentHandler struct {
-	equipmentSvc *equipment.Service
-	inventorySvc inventory.InventoryManager
+	equipmentSvc EquipmentReader
 	logger       *logging.Logger
 }
 
-// NewEquipmentHandler creates a new equipment handler
-func NewEquipmentHandler(equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, logger *logging.Logger) *EquipmentHandler {
+// NewEquipmentHandler creates a new equipment handler.
+func NewEquipmentHandler(equipmentSvc EquipmentReader, logger *logging.Logger) *EquipmentHandler {
+	if equipmentSvc == nil {
+		return nil
+	}
+
 	return &EquipmentHandler{
 		equipmentSvc: equipmentSvc,
-		inventorySvc: inventorySvc,
 		logger:       logger,
 	}
 }
 
-// GetTools returns the tool definitions for equipment and inventory
+// GetTools returns public read-only tool definitions for the equipment catalog.
 func (h *EquipmentHandler) GetTools() []ToolDefinition {
+	if h == nil {
+		return nil
+	}
+
 	return []ToolDefinition{
-		// Equipment tools
 		{
 			Name:        "search_equipment",
-			Description: "Search the moderated gear catalog. Returns matching products with category, price (MSRP when available), and metadata.",
+			Title:       "Search equipment",
+			Description: "Search the moderated FlyingForge gear catalog for drone components and accessories.",
 			InputSchema: json.RawMessage(`{
 				"type": "object",
 				"properties": {
 					"query": {
 						"type": "string",
-						"description": "Search query (e.g., 'nazgul frame', 'emax motor')"
+						"description": "Search query (for example 'ELRS receiver' or '5 inch frame')."
 					},
 					"category": {
 						"type": "string",
 						"enum": ["frames", "vtx", "flight_controllers", "esc", "aio", "stacks", "motors", "propellers", "receivers", "batteries", "cameras", "antennas", "gps", "accessories"],
-						"description": "Filter by equipment category"
+						"description": "Optional equipment category filter."
 					},
 					"seller": {
 						"type": "string",
-						"description": "Filter by source ID (currently 'gear-catalog')"
+						"description": "Optional seller/source filter. Currently only 'gear-catalog' is supported."
 					},
 					"minPrice": {
 						"type": "number",
-						"description": "Minimum price filter"
+						"description": "Optional minimum price filter."
 					},
 					"maxPrice": {
 						"type": "number",
-						"description": "Maximum price filter"
+						"description": "Optional maximum price filter."
 					},
 					"inStockOnly": {
 						"type": "boolean",
-						"description": "Only show items currently in stock"
+						"description": "Whether to show only items with a shopping link."
 					},
 					"limit": {
 						"type": "integer",
-						"description": "Maximum number of results (default: 20)"
+						"description": "Maximum number of results to return (default: 20)."
+					},
+					"offset": {
+						"type": "integer",
+						"description": "Pagination offset."
+					},
+					"sort": {
+						"type": "string",
+						"description": "Optional sort order supported by the equipment service."
 					}
-				},
-				"required": ["query"]
+				}
 			}`),
+			SecuritySchemes: []SecurityScheme{{Type: "noauth"}},
+			Annotations:     &ToolAnnotations{ReadOnlyHint: true},
 		},
 		{
 			Name:        "get_equipment_by_category",
-			Description: "Browse moderated gear catalog items by category, sorted by price.",
+			Title:       "Browse equipment by category",
+			Description: "Browse catalog gear for a specific category.",
 			InputSchema: json.RawMessage(`{
 				"type": "object",
 				"properties": {
 					"category": {
 						"type": "string",
 						"enum": ["frames", "vtx", "flight_controllers", "esc", "aio", "stacks", "motors", "propellers", "receivers", "batteries", "cameras", "antennas", "gps", "accessories"],
-						"description": "Equipment category to browse"
+						"description": "Equipment category to browse."
 					},
 					"limit": {
 						"type": "integer",
-						"description": "Maximum number of results (default: 20)"
+						"description": "Maximum number of results to return (default: 20)."
 					},
 					"offset": {
 						"type": "integer",
-						"description": "Offset for pagination"
+						"description": "Pagination offset."
 					}
 				},
 				"required": ["category"]
 			}`),
+			SecuritySchemes: []SecurityScheme{{Type: "noauth"}},
+			Annotations:     &ToolAnnotations{ReadOnlyHint: true},
 		},
 		{
-			Name:        "get_sellers",
-			Description: "Get available equipment data sources.",
-			InputSchema: json.RawMessage(`{
-				"type": "object",
-				"properties": {}
-			}`),
-		},
-		{
-			Name:        "sync_seller_products",
-			Description: "Compatibility no-op. External seller sync is disabled because equipment comes from the moderated gear catalog.",
-			InputSchema: json.RawMessage(`{
-				"type": "object",
-				"properties": {
-					"seller": {
-						"type": "string",
-						"description": "Source ID to sync (currently ignored)"
-					},
-					"category": {
-						"type": "string",
-						"enum": ["frames", "vtx", "flight_controllers", "esc", "aio", "stacks", "motors", "propellers", "receivers", "batteries", "cameras", "antennas", "gps", "accessories"],
-						"description": "Category to sync"
-					}
-				},
-				"required": ["seller", "category"]
-			}`),
-		},
-		// Inventory tools
-		{
-			Name:        "add_inventory_item",
-			Description: "Add an item to your personal drone equipment inventory. Can add manually or from a searched equipment item.",
-			InputSchema: json.RawMessage(`{
-				"type": "object",
-				"properties": {
-					"name": {
-						"type": "string",
-						"description": "Name of the item"
-					},
-					"category": {
-						"type": "string",
-						"enum": ["frames", "vtx", "flight_controllers", "esc", "aio", "stacks", "motors", "propellers", "receivers", "batteries", "cameras", "antennas", "gps", "accessories"],
-						"description": "Equipment category"
-					},
-					"manufacturer": {
-						"type": "string",
-						"description": "Manufacturer/brand name"
-					},
-					"quantity": {
-						"type": "integer",
-						"description": "Quantity owned (default: 1)"
-					},
-					"notes": {
-						"type": "string",
-						"description": "Personal notes about this item"
-					},
-					"buildId": {
-						"type": "string",
-						"description": "ID of the drone build this item belongs to"
-					},
-					"purchasePrice": {
-						"type": "number",
-						"description": "Purchase price"
-					},
-					"purchaseDate": {
-						"type": "string",
-						"description": "Purchase date (YYYY-MM-DD format)"
-					},
-					"purchaseSeller": {
-						"type": "string",
-						"description": "Where the item was purchased"
-					},
-					"sourceEquipmentId": {
-						"type": "string",
-						"description": "ID of the equipment item if adding from search results"
-					}
-				},
-				"required": ["name", "category"]
-			}`),
-		},
-		{
-			Name:        "get_inventory",
-			Description: "Get your personal drone equipment inventory with optional filtering.",
-			InputSchema: json.RawMessage(`{
-				"type": "object",
-				"properties": {
-					"category": {
-						"type": "string",
-						"enum": ["frames", "vtx", "flight_controllers", "esc", "aio", "stacks", "motors", "propellers", "receivers", "batteries", "cameras", "antennas", "gps", "accessories"],
-						"description": "Filter by category"
-					},
-					"buildId": {
-						"type": "string",
-						"description": "Filter by build ID"
-					},
-					"query": {
-						"type": "string",
-						"description": "Search query to filter items"
-					},
-					"limit": {
-						"type": "integer",
-						"description": "Maximum number of results (default: 50)"
-					},
-					"offset": {
-						"type": "integer",
-						"description": "Offset for pagination"
-					}
-				}
-			}`),
-		},
-		{
-			Name:        "update_inventory_item",
-			Description: "Update an existing item in your inventory (quantity, notes, etc.).",
-			InputSchema: json.RawMessage(`{
-				"type": "object",
-				"properties": {
-					"id": {
-						"type": "string",
-						"description": "ID of the inventory item to update"
-					},
-					"quantity": {
-						"type": "integer",
-						"description": "New quantity"
-					},
-					"notes": {
-						"type": "string",
-						"description": "Updated notes"
-					},
-					"buildId": {
-						"type": "string",
-						"description": "Assign to a build (or empty string to unassign)"
-					}
-				},
-				"required": ["id"]
-			}`),
-		},
-		{
-			Name:        "remove_inventory_item",
-			Description: "Remove an item from your personal inventory.",
-			InputSchema: json.RawMessage(`{
-				"type": "object",
-				"properties": {
-					"id": {
-						"type": "string",
-						"description": "ID of the inventory item to remove"
-					}
-				},
-				"required": ["id"]
-			}`),
+			Name:            "get_sellers",
+			Title:           "List equipment sellers",
+			Description:     "List the available FlyingForge equipment data sources.",
+			InputSchema:     json.RawMessage(`{"type":"object","properties":{}}`),
+			SecuritySchemes: []SecurityScheme{{Type: "noauth"}},
+			Annotations:     &ToolAnnotations{ReadOnlyHint: true},
 		},
 	}
 }
 
-// HandleToolCall handles MCP tool calls for equipment and inventory
+// HandleToolCall handles public equipment tool calls.
 func (h *EquipmentHandler) HandleToolCall(ctx context.Context, name string, arguments json.RawMessage) (interface{}, error) {
+	if h == nil {
+		return nil, nil
+	}
+
 	switch name {
-	// Equipment tools
 	case "search_equipment":
 		return h.handleSearchEquipment(ctx, arguments)
 	case "get_equipment_by_category":
 		return h.handleGetEquipmentByCategory(ctx, arguments)
 	case "get_sellers":
 		return h.handleGetSellers(ctx)
-	case "sync_seller_products":
-		return h.handleSyncSellerProducts(ctx, arguments)
-
-	// Inventory tools
-	case "add_inventory_item":
-		return h.handleAddInventoryItem(ctx, arguments)
-	case "get_inventory":
-		return h.handleGetInventory(ctx, arguments)
-	case "update_inventory_item":
-		return h.handleUpdateInventoryItem(ctx, arguments)
-	case "remove_inventory_item":
-		return h.handleRemoveInventoryItem(ctx, arguments)
-
 	default:
-		return nil, nil // Not handled by this handler
+		return nil, nil
 	}
 }
-
-// Equipment handlers
 
 func (h *EquipmentHandler) handleSearchEquipment(ctx context.Context, arguments json.RawMessage) (interface{}, error) {
 	var params struct {
@@ -283,32 +148,47 @@ func (h *EquipmentHandler) handleSearchEquipment(ctx context.Context, arguments 
 		MaxPrice    *float64 `json:"maxPrice"`
 		InStockOnly bool     `json:"inStockOnly"`
 		Limit       int      `json:"limit"`
+		Offset      int      `json:"offset"`
+		Sort        string   `json:"sort"`
 	}
 
-	if err := json.Unmarshal(arguments, &params); err != nil {
-		return nil, &ToolError{Message: "Invalid arguments: " + err.Error()}
+	if len(arguments) > 0 {
+		if err := json.Unmarshal(arguments, &params); err != nil {
+			return nil, &ToolError{Message: "Invalid arguments: " + err.Error()}
+		}
 	}
 
 	if params.Limit == 0 {
 		params.Limit = 20
 	}
 
-	searchParams := models.EquipmentSearchParams{
-		Query:       params.Query,
-		Category:    models.EquipmentCategory(params.Category),
-		Seller:      params.Seller,
+	response, err := h.equipmentSvc.Search(ctx, models.EquipmentSearchParams{
+		Query:       strings.TrimSpace(params.Query),
+		Category:    models.EquipmentCategory(strings.TrimSpace(params.Category)),
+		Seller:      strings.TrimSpace(params.Seller),
 		MinPrice:    params.MinPrice,
 		MaxPrice:    params.MaxPrice,
 		InStockOnly: params.InStockOnly,
 		Limit:       params.Limit,
-	}
-
-	response, err := h.equipmentSvc.Search(ctx, searchParams)
+		Offset:      params.Offset,
+		Sort:        strings.TrimSpace(params.Sort),
+	})
 	if err != nil {
 		return nil, &ToolError{Message: "Search failed: " + err.Error()}
 	}
+	if response == nil {
+		response = &models.EquipmentSearchResponse{}
+	}
 
-	return response, nil
+	query := strings.TrimSpace(params.Query)
+	if query == "" {
+		query = "catalog"
+	}
+
+	return ToolResultData{
+		StructuredContent: response,
+		Text:              fmt.Sprintf("Found %d equipment items for %q.", response.TotalCount, query),
+	}, nil
 }
 
 func (h *EquipmentHandler) handleGetEquipmentByCategory(ctx context.Context, arguments json.RawMessage) (interface{}, error) {
@@ -322,131 +202,37 @@ func (h *EquipmentHandler) handleGetEquipmentByCategory(ctx context.Context, arg
 		return nil, &ToolError{Message: "Invalid arguments: " + err.Error()}
 	}
 
+	category := models.EquipmentCategory(strings.TrimSpace(params.Category))
+	if category == "" {
+		return nil, &ToolError{Message: "category is required"}
+	}
 	if params.Limit == 0 {
 		params.Limit = 20
 	}
 
-	response, err := h.equipmentSvc.GetByCategory(ctx, models.EquipmentCategory(params.Category), params.Limit, params.Offset)
+	response, err := h.equipmentSvc.GetByCategory(ctx, category, params.Limit, params.Offset)
 	if err != nil {
-		return nil, &ToolError{Message: "Failed to get category: " + err.Error()}
+		return nil, &ToolError{Message: "Browse failed: " + err.Error()}
+	}
+	if response == nil {
+		response = &models.EquipmentSearchResponse{}
 	}
 
-	return response, nil
+	return ToolResultData{
+		StructuredContent: response,
+		Text:              fmt.Sprintf("Found %d %s items.", response.TotalCount, category),
+	}, nil
 }
 
 func (h *EquipmentHandler) handleGetSellers(ctx context.Context) (interface{}, error) {
-	return h.equipmentSvc.GetSellers(), nil
-}
-
-func (h *EquipmentHandler) handleSyncSellerProducts(ctx context.Context, arguments json.RawMessage) (interface{}, error) {
-	var params struct {
-		Seller string `json:"seller"`
+	sellers := h.equipmentSvc.GetSellers()
+	payload := map[string]any{
+		"sellers": sellers,
+		"count":   len(sellers),
 	}
 
-	if len(arguments) > 0 {
-		if err := json.Unmarshal(arguments, &params); err != nil {
-			return nil, &ToolError{Message: "Invalid arguments: " + err.Error()}
-		}
-	}
-
-	if err := h.equipmentSvc.SyncProducts(ctx); err != nil {
-		return nil, &ToolError{Message: "Sync failed: " + err.Error()}
-	}
-
-	return map[string]interface{}{
-		"status":  "success",
-		"message": "No external seller sync configured",
-	}, nil
-}
-
-// Inventory handlers
-
-func (h *EquipmentHandler) handleAddInventoryItem(ctx context.Context, arguments json.RawMessage) (interface{}, error) {
-	var params models.AddInventoryParams
-
-	if err := json.Unmarshal(arguments, &params); err != nil {
-		return nil, &ToolError{Message: "Invalid arguments: " + err.Error()}
-	}
-
-	// MCP mode operates without user authentication - use empty userID for system/admin access
-	item, err := h.inventorySvc.AddItem(ctx, "", params)
-	if err != nil {
-		return nil, &ToolError{Message: "Failed to add item: " + err.Error()}
-	}
-
-	return map[string]interface{}{
-		"status": "success",
-		"item":   item,
-	}, nil
-}
-
-func (h *EquipmentHandler) handleGetInventory(ctx context.Context, arguments json.RawMessage) (interface{}, error) {
-	var params struct {
-		Category string `json:"category"`
-		BuildID  string `json:"buildId"`
-		Query    string `json:"query"`
-		Limit    int    `json:"limit"`
-		Offset   int    `json:"offset"`
-	}
-
-	if len(arguments) > 0 {
-		if err := json.Unmarshal(arguments, &params); err != nil {
-			return nil, &ToolError{Message: "Invalid arguments: " + err.Error()}
-		}
-	}
-
-	filterParams := models.InventoryFilterParams{
-		Category: models.EquipmentCategory(params.Category),
-		BuildID:  params.BuildID,
-		Query:    params.Query,
-		Limit:    params.Limit,
-		Offset:   params.Offset,
-	}
-
-	// MCP mode operates without user authentication - use empty userID
-	response, err := h.inventorySvc.GetInventory(ctx, "", filterParams)
-	if err != nil {
-		return nil, &ToolError{Message: "Failed to get inventory: " + err.Error()}
-	}
-
-	return response, nil
-}
-
-func (h *EquipmentHandler) handleUpdateInventoryItem(ctx context.Context, arguments json.RawMessage) (interface{}, error) {
-	var params models.UpdateInventoryParams
-
-	if err := json.Unmarshal(arguments, &params); err != nil {
-		return nil, &ToolError{Message: "Invalid arguments: " + err.Error()}
-	}
-
-	// MCP mode operates without user authentication - use empty userID
-	item, err := h.inventorySvc.UpdateItem(ctx, "", params)
-	if err != nil {
-		return nil, &ToolError{Message: "Failed to update item: " + err.Error()}
-	}
-
-	return map[string]interface{}{
-		"status": "success",
-		"item":   item,
-	}, nil
-}
-
-func (h *EquipmentHandler) handleRemoveInventoryItem(ctx context.Context, arguments json.RawMessage) (interface{}, error) {
-	var params struct {
-		ID string `json:"id"`
-	}
-
-	if err := json.Unmarshal(arguments, &params); err != nil {
-		return nil, &ToolError{Message: "Invalid arguments: " + err.Error()}
-	}
-
-	// MCP mode operates without user authentication - use empty userID
-	if err := h.inventorySvc.RemoveItem(ctx, params.ID, ""); err != nil {
-		return nil, &ToolError{Message: "Failed to remove item: " + err.Error()}
-	}
-
-	return map[string]interface{}{
-		"status":  "success",
-		"message": "Item removed from inventory",
+	return ToolResultData{
+		StructuredContent: payload,
+		Text:              fmt.Sprintf("Found %d equipment data source(s).", len(sellers)),
 	}, nil
 }

@@ -5,32 +5,64 @@ import (
 	"encoding/json"
 
 	"github.com/johnrirwin/flyingforge/internal/aggregator"
-	"github.com/johnrirwin/flyingforge/internal/equipment"
-	"github.com/johnrirwin/flyingforge/internal/inventory"
 	"github.com/johnrirwin/flyingforge/internal/logging"
 	"github.com/johnrirwin/flyingforge/internal/models"
 )
 
+type EquipmentReader interface {
+	Search(ctx context.Context, params models.EquipmentSearchParams) (*models.EquipmentSearchResponse, error)
+	GetByCategory(ctx context.Context, category models.EquipmentCategory, limit, offset int) (*models.EquipmentSearchResponse, error)
+	GetSellers() []models.SellerInfo
+}
+
+type AircraftReader interface {
+	List(ctx context.Context, userID string, params models.AircraftListParams) (*models.AircraftListResponse, error)
+	GetDetails(ctx context.Context, id string, userID string) (*models.AircraftDetailsResponse, error)
+	GetReceiverSettings(ctx context.Context, aircraftID string, userID string) (*models.AircraftReceiverSettings, error)
+}
+
+type RadioReader interface {
+	ListRadios(ctx context.Context, userID string, params models.RadioListParams) (*models.RadioListResponse, error)
+	GetRadio(ctx context.Context, id string, userID string) (*models.Radio, error)
+	ListBackups(ctx context.Context, radioID string, userID string, params models.RadioBackupListParams) (*models.RadioBackupListResponse, error)
+}
+
+type AircraftTuningReader interface {
+	GetLatestTuningSnapshot(ctx context.Context, aircraftID string, userID string) (*models.AircraftTuningSnapshot, error)
+}
+
 type Handler struct {
-	agg          *aggregator.Aggregator
-	equipmentSvc *equipment.Service
-	inventorySvc inventory.InventoryManager
-	logger       *logging.Logger
+	agg           *aggregator.Aggregator
+	equipmentSvc  EquipmentReader
+	aircraftSvc   AircraftReader
+	radioSvc      RadioReader
+	tuningReader  AircraftTuningReader
+	privateScopes []string
+	logger        *logging.Logger
 }
 
-func NewHandler(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, logger *logging.Logger) *Handler {
-	return &Handler{
-		agg:          agg,
-		equipmentSvc: equipmentSvc,
-		inventorySvc: inventorySvc,
-		logger:       logger,
+func NewHandler(
+	agg *aggregator.Aggregator,
+	equipmentSvc EquipmentReader,
+	aircraftSvc AircraftReader,
+	radioSvc RadioReader,
+	tuningReader AircraftTuningReader,
+	privateScopes []string,
+	logger *logging.Logger,
+) *Handler {
+	if len(privateScopes) == 0 {
+		privateScopes = []string{"flyingforge.read"}
 	}
-}
 
-type ToolDefinition struct {
-	Name        string          `json:"name"`
-	Description string          `json:"description"`
-	InputSchema json.RawMessage `json:"inputSchema"`
+	return &Handler{
+		agg:           agg,
+		equipmentSvc:  equipmentSvc,
+		aircraftSvc:   aircraftSvc,
+		radioSvc:      radioSvc,
+		tuningReader:  tuningReader,
+		privateScopes: append([]string(nil), privateScopes...),
+		logger:        logger,
+	}
 }
 
 type GetNewsParams struct {
@@ -41,11 +73,11 @@ type GetNewsParams struct {
 }
 
 func (h *Handler) GetTools() []ToolDefinition {
-	// Get news tools
 	tools := []ToolDefinition{
 		{
 			Name:        "get_drone_news",
-			Description: "Get the latest drone news and community posts from various sources including news sites, Reddit, and forums.",
+			Title:       "Get drone news",
+			Description: "Get the latest drone news and community posts from FlyingForge news sources.",
 			InputSchema: json.RawMessage(`{
 				"type": "object",
 				"properties": {
@@ -53,64 +85,75 @@ func (h *Handler) GetTools() []ToolDefinition {
 						"type": "integer",
 						"description": "Maximum number of items to return (default: 20)"
 					},
-					"source": {
-						"type": "string",
-						"description": "Filter by source name"
+					"sources": {
+						"type": "array",
+						"items": { "type": "string" },
+						"description": "Filter by source IDs"
 					},
 					"tag": {
 						"type": "string",
-						"description": "Filter by tag (e.g., DJI, FPV, FAA)"
+						"description": "Filter by tag (for example DJI, FPV, or FAA)"
 					},
-					"search": {
+					"query": {
 						"type": "string",
 						"description": "Search query to filter items"
 					}
 				}
 			}`),
+			SecuritySchemes: []SecurityScheme{{Type: "noauth"}},
+			Annotations:     &ToolAnnotations{ReadOnlyHint: true},
 		},
 		{
-			Name:        "get_drone_news_sources",
-			Description: "Get a list of all available drone news sources being aggregated.",
-			InputSchema: json.RawMessage(`{
-				"type": "object",
-				"properties": {}
-			}`),
-		},
-		{
-			Name:        "refresh_drone_news",
-			Description: "Manually refresh the drone news feed from all sources.",
-			InputSchema: json.RawMessage(`{
-				"type": "object",
-				"properties": {}
-			}`),
+			Name:            "get_drone_news_sources",
+			Title:           "List drone news sources",
+			Description:     "Get all available FlyingForge drone news sources.",
+			InputSchema:     json.RawMessage(`{"type":"object","properties":{}}`),
+			SecuritySchemes: []SecurityScheme{{Type: "noauth"}},
+			Annotations:     &ToolAnnotations{ReadOnlyHint: true},
 		},
 	}
 
-	// Add equipment/inventory tools
-	equipmentHandler := NewEquipmentHandler(h.equipmentSvc, h.inventorySvc, h.logger)
+	equipmentHandler := NewEquipmentHandler(h.equipmentSvc, h.logger)
 	tools = append(tools, equipmentHandler.GetTools()...)
+	tools = append(tools, h.getPrivateReadOnlyTools()...)
 
 	return tools
 }
 
 func (h *Handler) HandleToolCall(ctx context.Context, name string, arguments json.RawMessage) (interface{}, error) {
-	// Try equipment/inventory tools first
-	equipmentHandler := NewEquipmentHandler(h.equipmentSvc, h.inventorySvc, h.logger)
-	result, err := equipmentHandler.HandleToolCall(ctx, name, arguments)
-	if result != nil || err != nil {
+	if equipmentHandler := NewEquipmentHandler(h.equipmentSvc, h.logger); equipmentHandler != nil {
+		result, err := equipmentHandler.HandleToolCall(ctx, name, arguments)
+		if result != nil || err != nil {
+			return result, err
+		}
+	}
+
+	if result, err := h.handlePrivateToolCall(ctx, name, arguments); result != nil || err != nil {
 		return result, err
 	}
 
-	// Handle news tools
 	switch name {
 	case "get_drone_news":
 		return h.handleGetNews(ctx, arguments)
 	case "get_drone_news_sources":
 		return h.handleGetSources(ctx)
-	case "refresh_drone_news":
-		return h.handleRefresh(ctx)
 	default:
 		return nil, &ToolError{Message: "Unknown tool: " + name}
+	}
+}
+
+func (h *Handler) IsPrivateTool(name string) bool {
+	switch name {
+	case "list_my_aircraft",
+		"get_aircraft_details",
+		"get_aircraft_receiver_summary",
+		"get_aircraft_tuning",
+		"list_my_radios",
+		"get_radio_details",
+		"list_radio_backups":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -134,25 +177,22 @@ func (h *Handler) handleGetNews(ctx context.Context, arguments json.RawMessage) 
 	}
 
 	response := h.agg.GetItems(ctx, filterParams)
-	return response, nil
+	return ToolResultData{
+		StructuredContent: response,
+		Text:              "Fetched the latest FlyingForge drone news items.",
+	}, nil
 }
 
 func (h *Handler) handleGetSources(ctx context.Context) (interface{}, error) {
 	sources := h.agg.GetSources()
-	return map[string]interface{}{
+	payload := map[string]interface{}{
 		"sources": sources,
 		"count":   len(sources),
-	}, nil
-}
-
-func (h *Handler) handleRefresh(ctx context.Context) (interface{}, error) {
-	if err := h.agg.Refresh(ctx); err != nil {
-		return nil, &ToolError{Message: "Failed to refresh: " + err.Error()}
 	}
 
-	return map[string]interface{}{
-		"status":  "success",
-		"message": "Feed refreshed successfully",
+	return ToolResultData{
+		StructuredContent: payload,
+		Text:              "Fetched the available FlyingForge drone news sources.",
 	}, nil
 }
 
