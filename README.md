@@ -118,7 +118,7 @@ The web app will be available at `http://localhost:5173`.
 | `MCP_MODE` | `false` | Run in MCP stdio mode |
 | `MCP_PUBLIC_BASE_URL` | (empty) | Public HTTPS base URL used for MCP protected-resource metadata |
 | `MCP_ALLOWED_ORIGINS` | `https://chatgpt.com,https://chat.openai.com` | Allowed browser origins for the HTTP MCP endpoint |
-| `MCP_AUTH_ISSUER` | (empty) | OIDC issuer for ChatGPT-linked MCP OAuth |
+| `MCP_AUTH_ISSUER` | (empty) | OIDC issuer for linked-user MCP OAuth |
 | `MCP_AUTH_AUDIENCE` | (empty) | Expected audience for MCP access tokens |
 | `MCP_AUTH_RESOURCE` | `MCP_PUBLIC_BASE_URL` | Protected resource identifier for MCP OAuth |
 | `MCP_AUTH_SCOPES` | `flyingforge.read` | Comma-separated scopes required for private MCP tools |
@@ -233,7 +233,7 @@ The server exposes MCP over:
 - **stdio** when running `go run ./cmd/server -mcp`
 - **HTTP** at `/mcp` when running the normal HTTP server
 
-The HTTP endpoint is designed for ChatGPT developer-mode connectors and supports OAuth-protected private tools.
+The HTTP endpoint is designed for hosted browser-based MCP connectors and supports OAuth-protected private tools.
 
 #### Public read-only tools
 
@@ -405,7 +405,7 @@ npm run build
 
 ### MCP Integration
 
-#### Local stdio MCP (Claude Desktop / Codex / local clients)
+#### Local stdio MCP (any stdio-compatible client)
 
 Add to your MCP client configuration:
 
@@ -437,7 +437,7 @@ Or using `go run`:
 }
 ```
 
-#### ChatGPT developer-mode connector
+#### Hosted HTTPS MCP connectors
 
 1. Run the normal HTTP server:
    ```bash
@@ -460,9 +460,9 @@ Or using `go run`:
    export MCP_AUTH_RESOURCE="https://your-public-host.example.com/mcp"
    export MCP_AUTH_SCOPES="flyingforge.read"
    ```
-4. In ChatGPT developer mode, create a custom connector pointing at:
+4. In your hosted MCP client, create a connector pointing at:
    - MCP URL: `https://your-public-host.example.com/mcp`
-5. Confirm ChatGPT can complete a linked-user prompt such as:
+5. Confirm the client can complete a linked-user prompt such as:
    - “Show my aircraft and latest tuning settings.”
 
 The MCP host also serves protected-resource discovery at:
