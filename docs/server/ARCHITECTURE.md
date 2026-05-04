@@ -352,8 +352,10 @@ HTTP_ADDR=:8080 ./server
 The server:
 1. Starts HTTP server on specified address
 2. Registers API endpoints
-3. Begins background pre-fetch of all sources
-4. Serves requests via REST API
+3. Registers the HTTP MCP endpoint at `/mcp`
+4. Serves OAuth protected-resource metadata at `/.well-known/oauth-protected-resource` when MCP OAuth is configured
+5. Begins background pre-fetch of all sources
+6. Serves requests via REST API and HTTP MCP
 
 ### MCP Mode
 
@@ -714,9 +716,16 @@ Find similar items that might be duplicates before creating a new entry.
 
 The server implements the [Model Context Protocol](https://modelcontextprotocol.io/) for AI assistant integration.
 
+### Transports
+
+- **stdio** for local MCP clients when running `./server -mcp`
+- **HTTP** at `/mcp` when running the normal HTTP server
+
+The HTTP transport is intended for ChatGPT developer-mode connectors and supports OAuth-protected private tools.
+
 ### Protocol Version
 
-`2024-11-05`
+`2025-06-18`
 
 ### Supported Methods
 
@@ -730,83 +739,44 @@ The server implements the [Model Context Protocol](https://modelcontextprotocol.
 
 ### Available Tools
 
-#### `get_drone_news`
+#### Public read-only tools
 
-Retrieves drone news and community posts.
+- `get_drone_news`
+- `get_drone_news_sources`
+- `search_equipment`
+- `get_equipment_by_category`
+- `get_sellers`
 
-**Input Schema:**
+These tools use `securitySchemes: [{ "type": "noauth" }]`.
 
-```json
-{
-  "type": "object",
-  "properties": {
-    "limit": {
-      "type": "integer",
-      "description": "Maximum number of items to return (default: 20)"
-    },
-    "sources": {
-      "type": "array",
-      "items": { "type": "string" },
-      "description": "Filter by source IDs"
-    },
-    "tag": {
-      "type": "string",
-      "description": "Filter by tag (e.g., DJI, FPV, FAA)"
-    },
-    "query": {
-      "type": "string",
-      "description": "Search query to filter items"
-    }
-  }
-}
-```
+#### Private read-only tools
 
-**Example Usage (JSON-RPC):**
+- `list_my_aircraft`
+- `get_aircraft_details`
+- `get_aircraft_receiver_summary`
+- `get_aircraft_tuning`
+- `list_my_radios`
+- `get_radio_details`
+- `list_radio_backups`
 
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "tools/call",
-  "params": {
-    "name": "get_drone_news",
-    "arguments": {
-      "limit": 5,
-      "tag": "DJI"
-    }
-  }
-}
-```
+These tools use `securitySchemes: [{ "type": "oauth2", "scopes": ["flyingforge.read"] }]`.
 
-#### `get_drone_news_sources`
+### OAuth Discovery and Authentication
 
-Lists all available news sources.
+When MCP OAuth is enabled, the HTTP server publishes:
 
-**Input Schema:**
+- `/.well-known/oauth-protected-resource`
 
-```json
-{
-  "type": "object",
-  "properties": {}
-}
-```
+Unauthorized private tool calls return:
 
-#### `refresh_drone_news`
+- `WWW-Authenticate: Bearer ...`
+- tool-level `_meta["mcp/www_authenticate"]`
 
-Manually refreshes the feed from all sources.
-
-**Input Schema:**
-
-```json
-{
-  "type": "object",
-  "properties": {}
-}
-```
+This lets ChatGPT prompt the user to link their FlyingForge account.
 
 ### MCP Response Format
 
-All tool responses are wrapped in a content array:
+Tool responses include both human-readable text and structured content:
 
 ```json
 {
@@ -816,9 +786,18 @@ All tool responses are wrapped in a content array:
     "content": [
       {
         "type": "text",
-        "text": "{ ... JSON result ... }"
+        "text": "Fetched the latest parsed tuning snapshot for aircraft air-1."
       }
     ],
+    "structuredContent": {
+      "aircraftId": "air-1",
+      "hasTuning": true
+    },
+    "_meta": {
+      "mcp/www_authenticate": [
+        "Bearer resource_metadata=\"https://example.com/.well-known/oauth-protected-resource\""
+      ]
+    },
     "isError": false
   }
 }
@@ -1002,6 +981,14 @@ HTML scraping fetcher for web forums. Currently configured but no active sources
 |----------|---------|-------------|
 | `HTTP_ADDR` | `:8080` | HTTP server address |
 | `MCP_MODE` | `false` | Set to `true` or `1` for MCP mode |
+| `MCP_PUBLIC_BASE_URL` | (empty) | Public HTTPS base URL for the HTTP MCP endpoint |
+| `MCP_ALLOWED_ORIGINS` | `https://chatgpt.com,https://chat.openai.com` | Allowed browser origins for `/mcp` |
+| `MCP_AUTH_ISSUER` | (empty) | OIDC issuer for private MCP tools |
+| `MCP_AUTH_AUDIENCE` | (empty) | Expected audience for MCP access tokens |
+| `MCP_AUTH_RESOURCE` | `MCP_PUBLIC_BASE_URL` | Protected resource identifier for MCP OAuth |
+| `MCP_AUTH_SCOPES` | `flyingforge.read` | Comma-separated scopes required for private MCP tools |
+| `MCP_AUTH_DISCOVERY_URL` | (empty) | Optional OIDC discovery override |
+| `MCP_AUTH_JWKS_URL` | (empty) | Optional JWKS override |
 | `LOG_LEVEL` | `info` | Log level (debug/info/warn/error) |
 | `RATE_LIMIT` | `1s` | Rate limit interval between requests |
 | `CORS_ORIGIN` | `*` | Allowed CORS origins |

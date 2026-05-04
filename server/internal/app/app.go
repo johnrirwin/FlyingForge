@@ -42,7 +42,9 @@ type App struct {
 	BatterySvc       *battery.Service
 	AuthService      *auth.Service
 	AuthMiddleware   *auth.Middleware
+	MCPAuthService   *auth.MCPAuthService
 	HTTPServer       *httpapi.Server
+	MCPHTTPHandler   *mcp.HTTPHandler
 	MCPServer        *mcp.Server
 	db               *database.DB
 	userStore        *database.UserStore
@@ -277,12 +279,42 @@ func (a *App) initDatabaseServices() {
 }
 
 func (a *App) initServers() {
-	// Initialize HTTP server with auth, aircraft, radio, battery, fc-config, gear-catalog, and profile/pilot support
-	a.HTTPServer = httpapi.New(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.AircraftSvc, a.BuildSvc, a.RadioSvc, a.BatterySvc, a.AuthService, a.AuthMiddleware, a.userStore, a.aircraftStore, a.fcConfigStore, a.inventoryStore, a.gearCatalogStore, a.imageSvc, a.refreshLimiter, a.Config.Server.EnableManualRefresh, a.Logger)
+	mcpHandler := mcp.NewHandler(
+		a.Aggregator,
+		a.EquipmentSvc,
+		a.AircraftSvc,
+		a.RadioSvc,
+		a.fcConfigStore,
+		a.Config.MCP.Auth.RequiredScopes,
+		a.Logger,
+	)
+	mcpProtocol := mcp.NewProtocol(mcpHandler, a.Logger)
+	a.MCPServer = mcp.NewServer(mcpProtocol, a.Logger)
+	a.MCPAuthService = auth.NewMCPAuthService(a.Config.MCP, a.userStore, a.Logger)
+	a.MCPHTTPHandler = mcp.NewHTTPHandler(mcpProtocol, a.MCPAuthService, a.Config.MCP.AllowedOrigins, a.Logger)
 
-	// Initialize MCP server
-	mcpHandler := mcp.NewHandler(a.Aggregator, a.EquipmentSvc, a.InventorySvc, a.Logger)
-	a.MCPServer = mcp.NewServer(mcpHandler, a.Logger)
+	// Initialize HTTP server with auth, aircraft, radio, battery, fc-config, gear-catalog, and MCP support.
+	a.HTTPServer = httpapi.New(
+		a.Aggregator,
+		a.EquipmentSvc,
+		a.InventorySvc,
+		a.AircraftSvc,
+		a.BuildSvc,
+		a.RadioSvc,
+		a.BatterySvc,
+		a.AuthService,
+		a.AuthMiddleware,
+		a.MCPHTTPHandler,
+		a.userStore,
+		a.aircraftStore,
+		a.fcConfigStore,
+		a.inventoryStore,
+		a.gearCatalogStore,
+		a.imageSvc,
+		a.refreshLimiter,
+		a.Config.Server.EnableManualRefresh,
+		a.Logger,
+	)
 }
 
 func (a *App) newModerationService() (images.Moderator, error) {

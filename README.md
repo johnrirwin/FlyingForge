@@ -89,7 +89,7 @@ go run ./cmd/server
 go run ./cmd/server -mcp
 ```
 
-The server will start on `http://localhost:8080` by default.
+The server will start on `http://localhost:8080` by default. In HTTP mode it also exposes the MCP endpoint at `http://localhost:8080/mcp`.
 
 ### 2. Start the React App
 
@@ -116,6 +116,14 @@ The web app will be available at `http://localhost:5173`.
 |----------|---------|-------------|
 | `HTTP_ADDR` | `:8080` | HTTP server address |
 | `MCP_MODE` | `false` | Run in MCP stdio mode |
+| `MCP_PUBLIC_BASE_URL` | (empty) | Public HTTPS base URL used for MCP protected-resource metadata |
+| `MCP_ALLOWED_ORIGINS` | `https://chatgpt.com,https://chat.openai.com` | Allowed browser origins for the HTTP MCP endpoint |
+| `MCP_AUTH_ISSUER` | (empty) | OIDC issuer for linked-user MCP OAuth |
+| `MCP_AUTH_AUDIENCE` | (empty) | Expected audience for MCP access tokens |
+| `MCP_AUTH_RESOURCE` | `MCP_PUBLIC_BASE_URL` | Protected resource identifier for MCP OAuth |
+| `MCP_AUTH_SCOPES` | `flyingforge.read` | Comma-separated scopes required for private MCP tools |
+| `MCP_AUTH_DISCOVERY_URL` | (empty) | Optional OIDC discovery override |
+| `MCP_AUTH_JWKS_URL` | (empty) | Optional JWKS override |
 | `CACHE_TTL` | `5m` | Cache TTL for feed items |
 | `RATE_LIMIT` | `1s` | Min delay between requests to same host |
 | `LOG_LEVEL` | `info` | Log level (debug, info, warn, error) |
@@ -220,47 +228,41 @@ Health check endpoint.
 
 ### MCP Tools
 
-The server exposes these MCP tools:
+The server exposes MCP over:
 
-#### get_latest
-Get the latest drone news and community posts.
-```json
-{
-  "limit": 20,
-  "sources": ["dronelife"],
-  "sourceType": "news",
-  "since": "2024-01-01T00:00:00Z"
-}
-```
+- **stdio** when running `go run ./cmd/server -mcp`
+- **HTTP** at `/mcp` when running the normal HTTP server
 
-#### search
-Search for items by keyword.
-```json
-{
-  "query": "DJI Mini",
-  "limit": 20,
-  "fromDate": "2024-01-01T00:00:00Z"
-}
-```
+The HTTP endpoint is designed for hosted browser-based MCP connectors and supports OAuth-protected private tools.
 
-#### get_item
-Get a single item by ID.
-```json
-{
-  "id": "abc123..."
-}
-```
+#### Public read-only tools
 
-#### list_sources
-List all available sources.
+- `get_drone_news`
+- `get_drone_news_sources`
+- `search_equipment`
+- `get_equipment_by_category`
+- `get_sellers`
 
-#### refresh
-Force refresh of feeds.
-```json
-{
-  "sources": ["dronelife", "dronedj"]
-}
-```
+These tools work without authentication.
+
+#### Private read-only tools
+
+- `list_my_aircraft`
+- `get_aircraft_details`
+- `get_aircraft_receiver_summary`
+- `get_aircraft_tuning`
+- `list_my_radios`
+- `get_radio_details`
+- `list_radio_backups`
+
+These tools require a linked OAuth identity with the `flyingforge.read` scope.
+
+#### Private tool data boundaries
+
+- `get_aircraft_details` returns aircraft metadata plus component assignments, but not raw receiver JSON.
+- `get_aircraft_receiver_summary` returns only sanitized receiver settings.
+- `get_aircraft_tuning` returns parsed/latest tuning metadata, but not raw CLI dumps or `diffBackup`.
+- `list_radio_backups` returns backup metadata only, never file bytes.
 
 ## Image Moderation Notes
 
@@ -403,12 +405,14 @@ npm run build
 
 ### MCP Integration
 
-Add to your MCP client configuration (e.g., Claude Desktop):
+#### Local stdio MCP (any stdio-compatible client)
+
+Add to your MCP client configuration:
 
 ```json
 {
   "mcpServers": {
-    "drone-news-feed": {
+    "flyingforge": {
       "command": "/path/to/flyingforge",
       "args": ["-mcp"],
       "env": {
@@ -424,7 +428,7 @@ Or using `go run`:
 ```json
 {
   "mcpServers": {
-    "drone-news-feed": {
+    "flyingforge": {
       "command": "go",
       "args": ["run", "./cmd/server", "-mcp"],
       "cwd": "/path/to/flyingforge/server"
@@ -432,6 +436,38 @@ Or using `go run`:
   }
 }
 ```
+
+#### Hosted HTTPS MCP connectors
+
+1. Run the normal HTTP server:
+   ```bash
+   cd server
+   go run ./cmd/server
+   ```
+2. Expose it over **public HTTPS**. For local dogfooding, either of these works:
+   ```bash
+   ngrok http 8080
+   ```
+   or
+   ```bash
+   cloudflared tunnel --url http://localhost:8080
+   ```
+3. Set MCP environment variables so the public base URL matches the tunnel:
+   ```bash
+   export MCP_PUBLIC_BASE_URL="https://your-public-host.example.com"
+   export MCP_AUTH_ISSUER="https://your-oidc-issuer.example.com"
+   export MCP_AUTH_AUDIENCE="your-audience"
+   export MCP_AUTH_RESOURCE="https://your-public-host.example.com/mcp"
+   export MCP_AUTH_SCOPES="flyingforge.read"
+   ```
+4. In your hosted MCP client, create a connector pointing at:
+   - MCP URL: `https://your-public-host.example.com/mcp`
+5. Confirm the client can complete a linked-user prompt such as:
+   - “Show my aircraft and latest tuning settings.”
+
+The MCP host also serves protected-resource discovery at:
+
+- `https://your-public-host.example.com/.well-known/oauth-protected-resource`
 
 ## Normalized Item Schema
 

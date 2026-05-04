@@ -86,6 +86,13 @@ docker-compose up --build
 cd server && go run ./cmd/server -mcp
 ```
 
+## Agent Workflow Expectations
+
+- Enter a planning workflow for non-trivial work before implementation.
+- When a task involves broad research, codebase exploration, comparing alternatives, or independent analysis streams, proactively use subagents to parallelize the work.
+- Prefer one focused task per subagent, then synthesize the results into a single plan or recommendation before making changes.
+- Do not mark work done until you have verified it with the relevant tests, logs, or direct behavior checks.
+
 ## API Endpoints
 
 | Method | Endpoint | Description |

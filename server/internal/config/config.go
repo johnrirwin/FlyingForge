@@ -11,6 +11,7 @@ import (
 // Config holds all application configuration
 type Config struct {
 	Server     ServerConfig
+	MCP        MCPConfig
 	Cache      CacheConfig
 	Database   DatabaseConfig
 	Logging    LoggingConfig
@@ -27,6 +28,24 @@ type ServerConfig struct {
 	EnableManualRefresh bool
 	RateLimitDur        time.Duration
 	FeedRetentionDays   int
+}
+
+// MCPConfig holds ChatGPT-compatible MCP HTTP and OAuth configuration.
+type MCPConfig struct {
+	PublicBaseURL  string
+	AllowedOrigins []string
+	Auth           MCPAuthConfig
+}
+
+// MCPAuthConfig holds OAuth/OIDC settings for private MCP tools.
+type MCPAuthConfig struct {
+	Issuer         string
+	Audience       string
+	Resource       string
+	RequiredScopes []string
+	DiscoveryURL   string
+	JWKSURL        string
+	Enabled        bool
 }
 
 // CacheConfig holds cache configuration
@@ -123,6 +142,8 @@ func Load() *Config {
 		FeedRetentionDays:   *feedRetentionDays,
 	}
 
+	cfg.MCP = loadMCPConfig()
+
 	cfg.Cache = CacheConfig{
 		Backend:   *cacheBackend,
 		TTL:       *cacheTTL,
@@ -152,6 +173,49 @@ func Load() *Config {
 	cfg.Moderation = loadModerationConfig()
 
 	return cfg
+}
+
+func loadMCPConfig() MCPConfig {
+	publicBaseURL := strings.TrimSpace(os.Getenv("MCP_PUBLIC_BASE_URL"))
+	defaultResource := ""
+	if publicBaseURL != "" {
+		defaultResource = strings.TrimRight(publicBaseURL, "/") + "/mcp"
+	}
+	resource := strings.TrimSpace(os.Getenv("MCP_AUTH_RESOURCE"))
+	if resource == "" {
+		resource = defaultResource
+	}
+
+	requiredScopes := []string{"flyingforge.read"}
+	if raw := strings.TrimSpace(os.Getenv("MCP_AUTH_SCOPES")); raw != "" {
+		requiredScopes = splitAndTrim(raw)
+	}
+
+	allowedOrigins := []string{
+		"https://chatgpt.com",
+		"https://chat.openai.com",
+	}
+	if raw := strings.TrimSpace(os.Getenv("MCP_ALLOWED_ORIGINS")); raw != "" {
+		if parsed := splitAndTrim(raw); len(parsed) > 0 {
+			allowedOrigins = parsed
+		}
+	}
+
+	authCfg := MCPAuthConfig{
+		Issuer:         strings.TrimSpace(os.Getenv("MCP_AUTH_ISSUER")),
+		Audience:       strings.TrimSpace(os.Getenv("MCP_AUTH_AUDIENCE")),
+		Resource:       resource,
+		RequiredScopes: requiredScopes,
+		DiscoveryURL:   strings.TrimSpace(os.Getenv("MCP_AUTH_DISCOVERY_URL")),
+		JWKSURL:        strings.TrimSpace(os.Getenv("MCP_AUTH_JWKS_URL")),
+	}
+	authCfg.Enabled = authCfg.Issuer != ""
+
+	return MCPConfig{
+		PublicBaseURL:  publicBaseURL,
+		AllowedOrigins: allowedOrigins,
+		Auth:           authCfg,
+	}
 }
 
 func loadAuthConfig() AuthConfig {
@@ -237,6 +301,18 @@ func getEnvOrDefault(key, defaultValue string) string {
 		return v
 	}
 	return defaultValue
+}
+
+func splitAndTrim(value string) []string {
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }
 
 func applyEnvOverrides(

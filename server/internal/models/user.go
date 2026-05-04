@@ -21,7 +21,8 @@ const (
 type AuthProvider string
 
 const (
-	AuthProviderGoogle AuthProvider = "google"
+	AuthProviderGoogle   AuthProvider = "google"
+	AuthProviderMCPOAuth AuthProvider = "mcp_oauth"
 )
 
 // AvatarType represents which avatar to use

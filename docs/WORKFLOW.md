@@ -1,129 +1,104 @@
 # AI-Augmented Product Development Workflow
 
-A comprehensive guide to building products with AI agents across the entire development lifecycle.
+A practical guide to building products with AI assistance across the full development lifecycle while keeping the workflow portable across tools and vendors.
 
 ---
 
 ## Overview
 
-This workflow transforms how teams build products by leveraging AI agents at every stage—from vision to deployment. The key principle: **code documents every state and interaction better than humans ever could**, so we use working prototypes as the source of truth.
+This workflow uses working software as the source of truth and applies AI help at each stage of product development.
 
-```
-Vision → Prototype → PRD → Tickets → Design → Planning → Implementation → Ship
-           ↓           ↓        ↓         ↓          ↓            ↓
-          v0      ChatPRD   Linear    Figma    Claude Code    GitHub
-                  + Notion    MCP      MCP        + MCPs       Actions
+### Core Principle
+
+> Code documents real states, interactions, and edge cases better than static prose alone.
+
+### Subagent Principle
+
+Default to subagents for research-heavy or exploratory work. If multiple questions can be investigated independently—such as product research, codebase discovery, risk analysis, option comparison, or root-cause investigation—run them in parallel via subagents and merge the results before planning or implementation.
+
+```text
+Vision → Prototype → Requirements → Tickets → Design → Planning → Implementation → Ship
 ```
 
 ---
 
 ## Stage 1: Vision → Prototype
 
-**Owner:** Executive / Product  
-**Goal:** Validate the value proposition with a working prototype
+**Owner:** Product / Founder / Engineering lead
+**Goal:** Validate the value proposition quickly with something people can try.
 
-### Tools
-| Tool | Purpose | Link |
-|------|---------|------|
-| **v0.dev** | AI UI generation from natural language | vercel.com/v0 |
-| **Bolt.new** | Full-stack app generation | bolt.new |
-| **Lovable.dev** | Rapid prototyping | lovable.dev |
-| **Replit Agent** | Interactive app building | replit.com |
+### Typical Tools
+
+| Tool Category | Purpose |
+|---------------|---------|
+| UI prototyping tool | Generate an interface from natural-language requirements |
+| App sandbox or full-stack prototyper | Stand up an interactive prototype quickly |
+| Source control hosting | Save iterations early and preserve the source of truth |
 
 ### Process
-1. Write a clear vision statement (1-2 paragraphs)
-2. Prompt v0/Bolt iteratively until the prototype feels right
-3. Export code to GitHub repo early
-4. Conduct customer discovery using the prototype
-5. Iterate based on feedback
+
+1. Write a short problem statement.
+2. Build a rough prototype as quickly as possible.
+3. Export the code to version control early.
+4. Get the prototype in front of users.
+5. Iterate based on real feedback.
 
 ### Best Practices
-- Save every v0 iteration with version notes in commit messages
-- The prototype code becomes your "source of truth" for states/interactions
-- Don't over-polish—focus on validating core value prop
-- Record user sessions with the prototype for later analysis
+
+- Save prototype iterations with clear notes.
+- Prefer working flows over polished visuals early.
+- Capture the actual states and transitions the prototype supports.
+- Use feedback from real sessions to shape the next iteration.
 
 ---
 
-## Stage 2: Prototype → PRD
+## Stage 2: Prototype → Requirements / PRD
 
 **Owner:** Product  
-**Goal:** Generate comprehensive PRD from working code
+**Goal:** Turn working behavior into structured requirements.
 
-### Tools
-| Tool | Purpose |
-|------|---------|
-| **ChatPRD** | AI PRD generation (chatprd.ai) |
-| **Notion** | PRD hosting and collaboration |
-| **Notion MCP** | Agent access to documentation |
-| **GitHub MCP** | Agent access to prototype code |
+### Typical Tools
 
-### The Key Insight
+| Tool Category | Purpose |
+|---------------|---------|
+| Documentation workspace | Store specs and collaborate on them |
+| Repository connector | Let the model inspect the prototype code directly |
+| Optional docs connector | Let the model write or update requirements in your docs system |
 
-> "Code documents every state interaction better than a human ever could"
+### Key Insight
 
-Feed your prototype code to an LLM to extract a complete PRD.
+Feed the working code to an LLM to extract a more complete PRD than you would usually get from memory alone.
 
-### PRD Generation Prompt
+### Requirements Generation Prompt
 
 ```markdown
-Analyze this React/TypeScript codebase and generate a PRD that documents:
+Analyze this codebase and generate a product requirements document that captures:
 
 ## Required Sections
 
-1. **User-Facing States & Interactions**
-   - Every screen/view in the application
-   - All user actions and their outcomes
-   - Navigation flows between screens
-
-2. **Data Models & Relationships**
-   - All TypeScript interfaces/types
-   - API request/response shapes
-   - State management patterns
-
-3. **Edge Cases Handled**
-   - Error states and error messages
-   - Loading states
-   - Empty states
-   - Offline behavior (if any)
-
-4. **Authentication & Authorization**
-   - Login/signup flows
-   - Protected routes
-   - Permission levels
-
-5. **User Stories**
-   - Format: "As a [user], I want to [action] so that [benefit]"
-   - Derive from actual implemented features
-
-6. **Acceptance Criteria**
-   - Derived from actual code behavior
-   - Testable and specific
+1. User-facing states and interactions
+2. Data models and relationships
+3. Error, loading, and empty states
+4. Authentication and authorization rules
+5. User stories derived from real behavior
+6. Testable acceptance criteria derived from the implementation
 
 ## Output Format
-- Notion-compatible markdown
-- Mermaid diagrams for flows
-- Tables for data models
+- Markdown suitable for a shared documentation workspace
+- Mermaid diagrams where useful
+- Tables for important data models and flows
 ```
 
-### MCP Configuration for PRD Generation
+### Example Generic MCP Configuration
 
 ```json
 {
   "mcpServers": {
-    "notion": {
-      "command": "npx",
-      "args": ["-y", "@notionhq/notion-mcp-server"],
-      "env": {
-        "NOTION_API_KEY": "your-notion-api-key"
-      }
+    "docs": {
+      "command": "your-docs-connector-command"
     },
-    "github": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": {
-        "GITHUB_TOKEN": "your-github-token"
-      }
+    "repo": {
+      "command": "your-repo-connector-command"
     }
   }
 }
@@ -131,431 +106,206 @@ Analyze this React/TypeScript codebase and generate a PRD that documents:
 
 ---
 
-## Stage 3: PRD → Tickets
+## Stage 3: Requirements → Tickets
 
 **Owner:** Product / Engineering  
-**Goal:** Break PRD into implementable work items
+**Goal:** Break the requirements into implementable work items.
 
-### Tools
-| Tool | Purpose |
-|------|---------|
-| **Linear** | Issue tracking (superior API/MCP support) |
-| **Linear MCP** | Automated ticket creation |
-| **GitHub Projects** | Alternative if already invested |
+### Typical Tools
+
+| Tool Category | Purpose |
+|---------------|---------|
+| Issue tracker | Store execution-ready work items |
+| Issue tracker connector | Let the model create and update tickets |
 
 ### Ticket Generation Prompt
 
 ```markdown
 You have access to:
-- The PRD at Notion page [ID] via Notion MCP
-- The codebase via GitHub MCP
+- The requirements document in the docs workspace
+- The codebase
 
-For each feature in the PRD:
+For each feature:
 
-1. **Create Linear Project**
-   - Name matching the epic/feature area
-   - Link to Notion PRD
+1. Create or update an epic/project grouping
+2. Break work into small, independently shippable issues
+3. Add acceptance criteria and technical notes
+4. Record dependencies and sequencing
+5. Add labels such as frontend, backend, infra, or design
 
-2. **Break Into Issues**
-   - Maximum 4 hours of work each
-   - Clear title: "[Area] Verb + noun"
-   - Example: "[API] Add aircraft CRUD endpoints"
-
-3. **Issue Content**
-   - Acceptance criteria from PRD
-   - Technical notes referencing existing code patterns
-   - Links to relevant prototype code files
-
-4. **Metadata**
-   - Labels: frontend, backend, infra, design
-   - Priority based on PRD feature priority
-   - Dependencies between issues
-
-5. **Sequencing**
-   - Infrastructure first
-   - Backend before frontend
-   - Core features before enhancements
-
-Use our monorepo structure for file references:
-- /apps/web - Frontend
-- /apps/api or /server - Backend
-- /packages/shared - Shared code
-- /infra - Infrastructure as code
+Prefer issues that can be completed in a few hours rather than many days.
 ```
 
-### Linear MCP Configuration
+### Best Practices
 
-```json
-{
-  "mcpServers": {
-    "linear": {
-      "command": "npx",
-      "args": ["-y", "@linear/mcp-server"],
-      "env": {
-        "LINEAR_API_KEY": "your-linear-api-key"
-      }
-    }
-  }
-}
-```
+- Keep issues small and testable.
+- Sequence backend/platform work before dependent frontend work.
+- Link every ticket back to the underlying requirement.
 
 ---
 
 ## Stage 4: Design Validation
 
 **Owner:** Design  
-**Goal:** Create final mocks and validate against PRD
+**Goal:** Validate that designs cover all required states and interactions.
 
-### Tools
-| Tool | Purpose |
-|------|---------|
-| **Figma** | Design tool |
-| **Figma MCP** | Agent access to designs |
-| **Claude Workspace** | Team AI with MCP access |
-| **Anima/Locofy** | Figma to code (optional) |
+### Typical Tools
 
-### Workflow
-
-```
-v0 Prototype 
-    ↓
-Designer creates Figma mocks using design system
-    ↓
-Agent validates against PRD acceptance criteria
-    ↓
-Agent flags gaps/inconsistencies
-    ↓
-Agent updates Linear tickets with design links
-    ↓
-Design review with stakeholders
-```
+| Tool Category | Purpose |
+|---------------|---------|
+| Design tool | Produce final mocks and flows |
+| Design connector | Let the model inspect design frames and components |
+| Shared review workspace | Capture gaps and decisions |
 
 ### Design Validation Prompt
 
 ```markdown
 You have access to:
-- Figma file [ID] via Figma MCP
-- PRD in Notion [page ID] via Notion MCP
-- Linear project [ID] via Linear MCP
+- The design file
+- The requirements document
+- The issue tracker
 
-For each screen in Figma:
+For each screen:
 
-1. **Map to PRD**
-   - Which user story does this screen fulfill?
-   - Which acceptance criteria are addressed?
-
-2. **State Coverage**
-   - [ ] Empty state
-   - [ ] Loading state
-   - [ ] Error state
-   - [ ] Success/populated state
-   - [ ] Edge cases (long text, missing data, etc.)
-
-3. **Design System Compliance**
-   - Correct color tokens used?
-   - Typography scale followed?
-   - Spacing system applied?
-   - Component library used correctly?
-
-4. **Gap Analysis**
-   - PRD requirements missing from designs
-   - Interactions not specified
-   - Responsive breakpoints needed
-
-5. **Update Linear**
-   - Add Figma frame links to relevant tickets
-   - Create new tickets for missing designs
-   - Flag blocked tickets
+1. Map it to the relevant user story
+2. Confirm loading, empty, error, and success states exist
+3. Check responsive behavior and edge cases
+4. Identify missing interactions or ambiguous flows
+5. Update related tickets with design references and gaps
 ```
 
-### Figma MCP Configuration
+### Best Practices
 
-```json
-{
-  "mcpServers": {
-    "figma": {
-      "command": "npx",
-      "args": ["-y", "@anthropic/figma-mcp"],
-      "env": {
-        "FIGMA_ACCESS_TOKEN": "your-figma-token"
-      }
-    }
-  }
-}
-```
+- Validate the full state space, not just the happy path.
+- Make design links discoverable from the corresponding tickets.
+- Treat missing states as implementation blockers, not polish items.
 
 ---
 
 ## Stage 5: Technical Planning
 
-**Owner:** Engineering Leads  
-**Goal:** Plan implementation with COTS selection and sequencing
+**Owner:** Engineering leads
+**Goal:** Decide implementation sequence, architecture fit, and constraints.
 
-### Tools
-| Tool | Purpose |
-|------|---------|
-| **Claude Code** | Planning and implementation |
-| **Devin** | Autonomous multi-file changes |
-| **Factory** | Enterprise coding agents |
-| **Cursor** | AI-native IDE |
+### Typical Tools
 
-### The "Agent Harness" Concept
+| Tool Category | Purpose |
+|---------------|---------|
+| Local coding assistant | Planning and codebase analysis |
+| Autonomous coding agent | Multi-file implementation support |
+| Repository guidance file | Constrain implementation patterns |
 
-Agent harnesses are guidance documents that constrain and direct AI agents. They are critical for consistent, high-quality output.
+### The Repository Guidance Concept
 
-#### Example: AGENT.md
+Repository guidance files such as `AGENTS.md` help keep AI assistance consistent by documenting architectural patterns, testing expectations, naming conventions, and non-goals.
 
-```markdown
-# Agent Guidance for [Project Name]
+### Example `AGENTS.md` Topics
 
-## Tech Stack Decisions (COTS)
-
-| Category | Choice | Notes |
-|----------|--------|-------|
-| Database | PostgreSQL 16 | Primary data store |
-| Cache | Redis 7 | Session, rate limiting |
-| Queue | AWS MSK (Kafka) | Event streaming |
-| Search | OpenSearch | Full-text search |
-| Auth | Custom JWT | See /server/internal/auth |
-| Monitoring | Prometheus + Grafana | Metrics and dashboards |
-
-## Architecture Patterns
-
-### Backend
-- Clean architecture: handlers → services → stores
-- Dependency injection via constructors
-- Repository pattern for data access
-- Domain events for cross-service communication
-
-### Frontend
-- React with functional components
-- TanStack Query for server state
-- Context API for UI state (no Redux)
-- Optimistic updates where appropriate
-
-### API Design
-- RESTful with OpenAPI 3.0 spec
-- Consistent error response format
-- Pagination via cursor, not offset
-
-## Code Standards
-
-### Go
-- Follow /server/docs/ARCHITECTURE.md
-- Table-driven tests
-- Structured logging with slog
-- No ORM—use sqlc for type-safe SQL
-
-### TypeScript
-- Strict mode enabled
-- Functional components only
-- Co-locate tests with components
-- Use TypeScript interfaces, not classes
-
-## What NOT To Do
-
-- ❌ Don't introduce new ORMs
-- ❌ Don't add state management libraries
-- ❌ Don't create new services without ADR
-- ❌ Don't bypass the service layer from handlers
-- ❌ Don't use `any` type in TypeScript
-```
+- Tech stack and approved infrastructure choices
+- Backend and frontend architecture patterns
+- API conventions
+- Testing requirements
+- Code review expectations
+- Explicit anti-patterns and non-goals
 
 ### Technical Planning Prompt
 
 ```markdown
 You have access to:
-- Codebase via GitHub MCP
-- PRD via Notion MCP
-- Design specs via Figma MCP
-- Tickets via Linear MCP
-- AGENT.md guidance in the repository
+- The codebase
+- The requirements document
+- The design file
+- The issue tracker
+- AGENTS.md in the repository
 
-For Linear project [ID], create an implementation plan:
+For the selected workstream:
 
-1. **Analyze Requirements**
-   - Read each ticket's acceptance criteria
-   - Cross-reference with PRD and designs
-   - Identify implicit requirements
-
-2. **Map to Existing Code**
-   - Find similar patterns already implemented
-   - Identify reusable components/services
-   - Note code that needs refactoring
-
-3. **Infrastructure Needs**
-   - New database tables/migrations
-   - New API endpoints
-   - New background jobs/queues
-   - Third-party integrations
-
-4. **Sequence Work**
-   - Database migrations first
-   - Backend services second
-   - API endpoints third
-   - Frontend last
-   - Account for dependencies
-
-5. **Estimate Complexity**
-   - S: < 2 hours, straightforward
-   - M: 2-4 hours, some complexity
-   - L: 4-8 hours, significant work
-   - XL: > 8 hours, should be split
-
-6. **Document on Tickets**
-   - Add implementation notes
-   - Link related tickets
-   - Flag architectural decisions for review
-
-7. **Human Review Triggers**
-   - New external dependencies
-   - Security-sensitive changes
-   - Breaking API changes
-   - Performance-critical paths
+1. Analyze requirements and implicit constraints
+2. Map the work to existing code patterns
+3. Identify infrastructure, schema, and API changes
+4. Sequence implementation safely
+5. Call out review triggers such as security, performance, or breaking changes
 ```
 
 ---
 
 ## Stage 6: Autonomous Implementation
 
-**Owner:** Engineering (with AI agents)  
-**Goal:** Ship code with human oversight at key points
+**Owner:** Engineering
+**Goal:** Ship code with strong verification and targeted human oversight.
 
-### Tools
-| Tool | Purpose |
-|------|---------|
-| **Claude Code** | Implementation with MCP access |
-| **Devin** | Complex multi-file autonomous work |
-| **GitHub Actions** | CI/CD pipeline |
-| **CodeRabbit** | AI PR review |
+### Typical Tools
+
+| Tool Category | Purpose |
+|---------------|---------|
+| Coding assistant or agent | Implement changes with tests |
+| CI/CD pipeline | Run automated verification |
+| PR review automation | Surface review findings quickly |
 
 ### Execution Loop
 
-```
-For each ticket in priority order:
-    │
-    ├─→ Agent reads ticket + PRD + Figma
-    │
-    ├─→ Agent creates feature branch
-    │
-    ├─→ Agent implements with tests
-    │       │
-    │       └─→ Follows AGENT.md patterns
-    │
-    ├─→ Agent opens PR with context
-    │       │
-    │       ├─→ Links to Linear ticket
-    │       ├─→ Describes changes
-    │       └─→ Notes any deviations
-    │
-    ├─→ CI runs
-    │       │
-    │       ├─→ Pass → Continue
-    │       └─→ Fail → Agent fixes
-    │
-    ├─→ Human reviews
-    │       │
-    │       ├─→ Approve → Merge
-    │       └─→ Request changes → Agent addresses
-    │
-    └─→ Merge triggers Linear ticket closure
+```text
+For each ticket:
+  1. Gather context from requirements, design, and AGENTS.md
+  2. Create a focused branch
+  3. Write or update tests first when practical
+  4. Implement the change
+  5. Run checks and fix failures
+  6. Open a focused PR with context
+  7. Address review feedback
+  8. Merge once verified
 ```
 
 ### Implementation Prompt
 
 ```markdown
-Implement Linear ticket [ID].
+Implement the selected ticket.
 
 ## Context Gathering
-1. Read the ticket description and acceptance criteria
-2. Check linked PRD sections via Notion MCP
-3. Review Figma designs via Figma MCP
-4. Read AGENT.md for patterns and constraints
+1. Read the ticket and acceptance criteria
+2. Review the relevant requirements sections
+3. Review the design states and interactions
+4. Read AGENTS.md for patterns and constraints
 
 ## Implementation Steps
-1. Create branch: feature/[ticket-id]-short-description
-2. Write failing tests for acceptance criteria
-3. Implement the feature following existing patterns
-4. Ensure tests pass
-5. Run linter and fix issues
-6. Commit with conventional commit message
+1. Create a focused branch
+2. Add or update tests for acceptance criteria
+3. Implement the feature using existing patterns
+4. Run verification checks
+5. Commit with a clear conventional-style message
 
-## PR Description Template
-```
-## Summary
-[One paragraph describing what this PR does]
-
-## Linear Ticket
-[Link to ticket]
-
-## Changes
-- [Bullet list of changes]
-
-## Testing
-- [How to test manually]
-- [Automated test coverage]
-
-## Screenshots (if UI)
-[Before/after or new screens]
-```
-
-## Quality Checklist
-- [ ] Tests cover acceptance criteria
-- [ ] No TypeScript errors
-- [ ] No linter warnings
-- [ ] Follows AGENT.md patterns
-- [ ] PR is focused (single concern)
+## PR Checklist
+- [ ] Acceptance criteria covered
+- [ ] Tests updated or added
+- [ ] Build/lint/test checks passed
+- [ ] Change is focused and low-risk
+- [ ] Follows AGENTS.md guidance
 ```
 
 ---
 
-## Complete MCP Configuration
+## Example Generic MCP Configuration
 
 ```json
 {
   "mcpServers": {
-    "github": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": {
-        "GITHUB_TOKEN": "ghp_..."
-      }
+    "docs": {
+      "command": "your-docs-connector-command"
     },
-    "linear": {
-      "command": "npx",
-      "args": ["-y", "@linear/mcp-server"],
-      "env": {
-        "LINEAR_API_KEY": "lin_api_..."
-      }
+    "repo": {
+      "command": "your-repo-connector-command"
     },
-    "notion": {
-      "command": "npx",
-      "args": ["-y", "@notionhq/notion-mcp-server"],
-      "env": {
-        "NOTION_API_KEY": "secret_..."
-      }
+    "tracker": {
+      "command": "your-issue-tracker-connector-command"
     },
-    "figma": {
-      "command": "npx",
-      "args": ["-y", "@anthropic/figma-mcp"],
-      "env": {
-        "FIGMA_ACCESS_TOKEN": "figd_..."
-      }
+    "design": {
+      "command": "your-design-connector-command"
     },
-    "postgres": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres"],
-      "env": {
-        "DATABASE_URL": "postgresql://..."
-      }
+    "database": {
+      "command": "your-database-connector-command"
     },
     "filesystem": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-filesystem",
-        "/path/to/monorepo"
-      ]
+      "command": "your-filesystem-connector-command"
     }
   }
 }
@@ -567,60 +317,51 @@ Implement Linear ticket [ID].
 
 | Factor | Why It Matters |
 |--------|----------------|
-| **Monorepo** | Single source of truth; agents see full context |
-| **Strong markdown docs** | AGENT.md, ARCHITECTURE.md guide agent behavior |
-| **Atomic tickets** | 2-4 hour chunks agents can complete autonomously |
-| **Design system** | Constrained choices = better agent output |
-| **Type safety** | TypeScript/Go give agents compile-time feedback |
-| **Good tests** | Agents can verify their own work |
-| **CI/CD pipeline** | Automated quality gates catch issues early |
-| **Conventional commits** | Consistent history agents can learn from |
+| Clear repository guidance | Keeps assistants aligned with your patterns |
+| Atomic tickets | Makes autonomous execution safer |
+| Strong tests | Lets assistants verify their own work |
+| Type safety | Creates fast feedback loops |
+| Good documentation | Reduces ambiguity and repeated mistakes |
+| CI/CD quality gates | Prevents broken changes from shipping |
 
 ---
 
 ## Team Role Evolution
 
-Every team member becomes a "thinker" who guides AI agents:
+AI-assisted development shifts work from manual repetition toward direction, review, and systems thinking.
 
-| Role | Traditional | AI-Augmented |
-|------|-------------|--------------|
-| **PM** | Write specs manually | Write prompts that extract PRDs from prototypes |
-| **Designer** | Create mockups | Create structured Figma files + validation prompts |
-| **Tech Lead** | Review all code | Write AGENT.md, review agent PRs, handle edge cases |
-| **Engineer** | Write all code | Write implementation guidance, pair with agents |
-| **QA** | Manual testing | Write test generation prompts, validate coverage |
+| Role | Traditional Focus | AI-Augmented Focus |
+|------|-------------------|--------------------|
+| Product | Write specs manually | Drive clearer requirements and decision logs |
+| Design | Produce mockups only | Produce state-complete, validation-friendly designs |
+| Tech Lead | Write critical paths personally | Define guidance, review risks, shape architecture |
+| Engineer | Implement everything directly | Direct, verify, and refine assisted implementation |
+| QA | Manual regression | Expand coverage, validate edge cases, improve testability |
 
-### Key Mindset Shifts
+### Mindset Shifts
 
-1. **From writing to reviewing** - You'll review more code than you write
-2. **From doing to directing** - Clear instructions beat implicit knowledge
-3. **From silos to systems** - Everyone contributes to the agent harness
-4. **From perfection to iteration** - Ship fast, fix with agents
+1. From writing everything to reviewing and directing.
+2. From implicit knowledge to explicit guidance.
+3. From large batches to small verified increments.
+4. From one-path execution to parallel investigation and synthesis.
 
 ---
 
 ## Getting Started Checklist
 
-- [ ] Set up Linear with API access
-- [ ] Configure GitHub MCP in your development environment
-- [ ] Write your first AGENT.md with tech stack decisions
-- [ ] Create a Notion workspace for PRDs
-- [ ] Document your design system for agent consumption
-- [ ] Set up CI/CD with quality gates
-- [ ] Try the prototype → PRD flow with one feature
-- [ ] Iterate on prompts and save what works
+- [ ] Put clear guidance in `AGENTS.md`
+- [ ] Choose connectors for docs, repo, tracker, and design if needed
+- [ ] Break work into small independently verifiable tickets
+- [ ] Set up CI/CD quality gates
+- [ ] Test the prototype → requirements → tickets flow on one feature
+- [ ] Iterate on prompts and preserve what works
 
 ---
 
 ## Resources
 
 - [Model Context Protocol](https://modelcontextprotocol.io/)
-- [Linear API Documentation](https://developers.linear.app/)
-- [Notion API Documentation](https://developers.notion.com/)
-- [Figma API Documentation](https://www.figma.com/developers/api)
-- [v0.dev](https://v0.dev/)
-- [ChatPRD](https://chatprd.ai/)
 
 ---
 
-*Last updated: February 2026*
+*Last updated: May 2026*

@@ -33,6 +33,5 @@ docs/
 ---
 
 See also:
-- [AGENT.md](../AGENT.md) - Agent guidance for AI coding assistants
-- [CLAUDE.md](../CLAUDE.md) - Project context and coding standards
+- [AGENTS.md](../AGENTS.md) - Agent guidance for AI coding assistants
 - [README.md](../README.md) - Project overview and setup

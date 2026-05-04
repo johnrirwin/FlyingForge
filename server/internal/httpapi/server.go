@@ -18,6 +18,7 @@ import (
 	"github.com/johnrirwin/flyingforge/internal/images"
 	"github.com/johnrirwin/flyingforge/internal/inventory"
 	"github.com/johnrirwin/flyingforge/internal/logging"
+	"github.com/johnrirwin/flyingforge/internal/mcp"
 	"github.com/johnrirwin/flyingforge/internal/models"
 	"github.com/johnrirwin/flyingforge/internal/radio"
 	"github.com/johnrirwin/flyingforge/internal/ratelimit"
@@ -33,6 +34,7 @@ type Server struct {
 	batterySvc          *battery.Service
 	authSvc             *auth.Service
 	authMiddleware      *auth.Middleware
+	mcpHandler          *mcp.HTTPHandler
 	userStore           *database.UserStore
 	aircraftStore       *database.AircraftStore
 	fcConfigStore       *database.FCConfigStore
@@ -46,7 +48,7 @@ type Server struct {
 	enableManualRefresh bool
 }
 
-func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, buildSvc *builds.Service, radioSvc *radio.Service, batterySvc *battery.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, userStore *database.UserStore, aircraftStore *database.AircraftStore, fcConfigStore *database.FCConfigStore, inventoryStore *database.InventoryStore, gearCatalogStore *database.GearCatalogStore, imageSvc *images.Service, refreshLimiter ratelimit.RateLimiter, enableManualRefresh bool, logger *logging.Logger) *Server {
+func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, buildSvc *builds.Service, radioSvc *radio.Service, batterySvc *battery.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, mcpHandler *mcp.HTTPHandler, userStore *database.UserStore, aircraftStore *database.AircraftStore, fcConfigStore *database.FCConfigStore, inventoryStore *database.InventoryStore, gearCatalogStore *database.GearCatalogStore, imageSvc *images.Service, refreshLimiter ratelimit.RateLimiter, enableManualRefresh bool, logger *logging.Logger) *Server {
 	return &Server{
 		agg:                 agg,
 		equipmentSvc:        equipmentSvc,
@@ -57,6 +59,7 @@ func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventoryS
 		batterySvc:          batterySvc,
 		authSvc:             authSvc,
 		authMiddleware:      authMiddleware,
+		mcpHandler:          mcpHandler,
 		userStore:           userStore,
 		aircraftStore:       aircraftStore,
 		fcConfigStore:       fcConfigStore,
@@ -158,6 +161,11 @@ func (s *Server) Start(addr string) error {
 
 	// Health check
 	mux.HandleFunc("/health", s.handleHealth)
+
+	if s.mcpHandler != nil {
+		mux.Handle("/mcp", s.mcpHandler)
+		mux.HandleFunc("/.well-known/oauth-protected-resource", s.mcpHandler.HandleProtectedResourceMetadata)
+	}
 
 	s.server = &http.Server{
 		Addr:         addr,
