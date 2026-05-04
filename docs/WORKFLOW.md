@@ -307,7 +307,7 @@ For each screen in Figma:
 
 Agent harnesses are guidance documents that constrain and direct AI agents. They are critical for consistent, high-quality output.
 
-#### Example: AGENT.md
+#### Example: AGENTS.md
 
 ```markdown
 # Agent Guidance for [Project Name]
@@ -373,7 +373,7 @@ You have access to:
 - PRD via Notion MCP
 - Design specs via Figma MCP
 - Tickets via Linear MCP
-- AGENT.md guidance in the repository
+- AGENTS.md guidance in the repository
 
 For Linear project [ID], create an implementation plan:
 
@@ -444,7 +444,7 @@ For each ticket in priority order:
     │
     ├─→ Agent implements with tests
     │       │
-    │       └─→ Follows AGENT.md patterns
+    │       └─→ Follows AGENTS.md patterns
     │
     ├─→ Agent opens PR with context
     │       │
@@ -474,7 +474,7 @@ Implement Linear ticket [ID].
 1. Read the ticket description and acceptance criteria
 2. Check linked PRD sections via Notion MCP
 3. Review Figma designs via Figma MCP
-4. Read AGENT.md for patterns and constraints
+4. Read AGENTS.md for patterns and constraints
 
 ## Implementation Steps
 1. Create branch: feature/[ticket-id]-short-description
@@ -507,7 +507,7 @@ Implement Linear ticket [ID].
 - [ ] Tests cover acceptance criteria
 - [ ] No TypeScript errors
 - [ ] No linter warnings
-- [ ] Follows AGENT.md patterns
+- [ ] Follows AGENTS.md patterns
 - [ ] PR is focused (single concern)
 ```
 
@@ -572,7 +572,7 @@ Implement Linear ticket [ID].
 | Factor | Why It Matters |
 |--------|----------------|
 | **Monorepo** | Single source of truth; agents see full context |
-| **Strong markdown docs** | AGENT.md, ARCHITECTURE.md guide agent behavior |
+| **Strong markdown docs** | AGENTS.md, ARCHITECTURE.md guide agent behavior |
 | **Atomic tickets** | 2-4 hour chunks agents can complete autonomously |
 | **Design system** | Constrained choices = better agent output |
 | **Type safety** | TypeScript/Go give agents compile-time feedback |
@@ -590,7 +590,7 @@ Every team member becomes a "thinker" who guides AI agents:
 |------|-------------|--------------|
 | **PM** | Write specs manually | Write prompts that extract PRDs from prototypes |
 | **Designer** | Create mockups | Create structured Figma files + validation prompts |
-| **Tech Lead** | Review all code | Write AGENT.md, review agent PRs, handle edge cases |
+| **Tech Lead** | Review all code | Write AGENTS.md, review agent PRs, handle edge cases |
 | **Engineer** | Write all code | Write implementation guidance, pair with agents |
 | **QA** | Manual testing | Write test generation prompts, validate coverage |
 
@@ -607,7 +607,7 @@ Every team member becomes a "thinker" who guides AI agents:
 
 - [ ] Set up Linear with API access
 - [ ] Configure GitHub MCP in your development environment
-- [ ] Write your first AGENT.md with tech stack decisions
+- [ ] Write your first AGENTS.md with tech stack decisions
 - [ ] Create a Notion workspace for PRDs
 - [ ] Document your design system for agent consumption
 - [ ] Set up CI/CD with quality gates

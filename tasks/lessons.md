@@ -22,3 +22,8 @@ Review this file at the start of each session and apply any relevant rules befor
 - Context: workflow guidance and orchestration expectations for non-trivial work.
 - Correction from user: make subagent usage explicit when work benefits from research, exploration, or parallel analysis.
 - Rule to follow next time: proactively kick off focused subagents for bounded research/exploration tasks instead of keeping all investigation in the main context.
+
+### 2026-05-04 — Use the standard AGENTS filename
+- Context: repository-scoped instruction files for generic LLM/agent tooling.
+- Correction from user: rename `AGENT.md` to `AGENTS.md` rather than removing generic agent guidance.
+- Rule to follow next time: use `AGENTS.md` as the canonical repository instruction filename unless the user explicitly asks for a different convention.
