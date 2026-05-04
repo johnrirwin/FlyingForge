@@ -70,3 +70,44 @@ func TestLoad_RefreshOnceMode_FromFlag(t *testing.T) {
 		t.Fatalf("expected RefreshOnceMode=true when -refresh-once is provided")
 	}
 }
+
+func TestLoadMCPConfig_AuthEnabledRequiresIssuer(t *testing.T) {
+	tests := []struct {
+		name         string
+		issuer       string
+		discoveryURL string
+		jwksURL      string
+		wantEnabled  bool
+	}{
+		{
+			name:         "disabled when only discovery url is set",
+			discoveryURL: "https://issuer.example/.well-known/openid-configuration",
+			wantEnabled:  false,
+		},
+		{
+			name:        "disabled when only jwks url is set",
+			jwksURL:     "https://issuer.example/.well-known/jwks.json",
+			wantEnabled: false,
+		},
+		{
+			name:         "enabled when issuer is set",
+			issuer:       "https://issuer.example",
+			discoveryURL: "https://issuer.example/.well-known/openid-configuration",
+			jwksURL:      "https://issuer.example/.well-known/jwks.json",
+			wantEnabled:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("MCP_AUTH_ISSUER", tt.issuer)
+			t.Setenv("MCP_AUTH_DISCOVERY_URL", tt.discoveryURL)
+			t.Setenv("MCP_AUTH_JWKS_URL", tt.jwksURL)
+
+			cfg := loadMCPConfig()
+			if cfg.Auth.Enabled != tt.wantEnabled {
+				t.Fatalf("expected Auth.Enabled=%t, got %t", tt.wantEnabled, cfg.Auth.Enabled)
+			}
+		})
+	}
+}

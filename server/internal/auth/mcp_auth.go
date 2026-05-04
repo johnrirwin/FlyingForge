@@ -97,7 +97,12 @@ type MCPAuthService struct {
 	mu            sync.Mutex
 	discovery     *oidcDiscoveryDocument
 	discoveryTime time.Time
+	discoveryLoad chan struct{}
 	signingKeys   cachedSigningKeys
+	signingLoad   chan struct{}
+
+	getIdentityByProvider func(context.Context, models.AuthProvider, string) (*models.UserIdentity, error)
+	createIdentity        func(context.Context, string, models.AuthProvider, string, string) (*models.UserIdentity, error)
 }
 
 func NewMCPAuthService(cfg config.MCPConfig, userStore *database.UserStore, logger *logging.Logger) *MCPAuthService {
@@ -307,14 +312,79 @@ func (s *MCPAuthService) verifyToken(ctx context.Context, tokenString string) (j
 }
 
 func (s *MCPAuthService) getSigningKeys(ctx context.Context) (map[string]interface{}, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	for {
+		s.mu.Lock()
+		if len(s.signingKeys.keys) > 0 && time.Since(s.signingKeys.fetchedAt) < jwksCacheTTL {
+			keys := s.signingKeys.keys
+			s.mu.Unlock()
+			return keys, nil
+		}
+		if wait := s.signingLoad; wait != nil {
+			s.mu.Unlock()
+			if err := waitForCacheLoad(ctx, wait); err != nil {
+				return nil, err
+			}
+			continue
+		}
 
-	if len(s.signingKeys.keys) > 0 && time.Since(s.signingKeys.fetchedAt) < jwksCacheTTL {
-		return s.signingKeys.keys, nil
+		wait := make(chan struct{})
+		s.signingLoad = wait
+		s.mu.Unlock()
+
+		keys, err := s.fetchSigningKeys(ctx)
+
+		s.mu.Lock()
+		if err == nil {
+			s.signingKeys = cachedSigningKeys{
+				keys:      keys,
+				fetchedAt: time.Now(),
+			}
+		}
+		close(wait)
+		s.signingLoad = nil
+		s.mu.Unlock()
+
+		return keys, err
 	}
+}
 
-	discovery, err := s.getDiscoveryDocumentLocked(ctx)
+func (s *MCPAuthService) getDiscoveryDocument(ctx context.Context) (*oidcDiscoveryDocument, error) {
+	for {
+		s.mu.Lock()
+		if s.discovery != nil && time.Since(s.discoveryTime) < jwksCacheTTL {
+			discovery := s.discovery
+			s.mu.Unlock()
+			return discovery, nil
+		}
+		if wait := s.discoveryLoad; wait != nil {
+			s.mu.Unlock()
+			if err := waitForCacheLoad(ctx, wait); err != nil {
+				return nil, err
+			}
+			continue
+		}
+
+		wait := make(chan struct{})
+		s.discoveryLoad = wait
+		s.mu.Unlock()
+
+		discovery, err := s.fetchDiscoveryDocument(ctx)
+
+		s.mu.Lock()
+		if err == nil && discovery != nil {
+			s.discovery = discovery
+			s.discoveryTime = time.Now()
+		}
+		close(wait)
+		s.discoveryLoad = nil
+		s.mu.Unlock()
+
+		return discovery, err
+	}
+}
+
+func (s *MCPAuthService) fetchSigningKeys(ctx context.Context) (map[string]interface{}, error) {
+	discovery, err := s.getDiscoveryDocument(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -367,19 +437,10 @@ func (s *MCPAuthService) getSigningKeys(ctx context.Context) (map[string]interfa
 		return nil, fmt.Errorf("no usable signing keys found")
 	}
 
-	s.signingKeys = cachedSigningKeys{
-		keys:      keys,
-		fetchedAt: time.Now(),
-	}
-
 	return keys, nil
 }
 
-func (s *MCPAuthService) getDiscoveryDocumentLocked(ctx context.Context) (*oidcDiscoveryDocument, error) {
-	if s.discovery != nil && time.Since(s.discoveryTime) < jwksCacheTTL {
-		return s.discovery, nil
-	}
-
+func (s *MCPAuthService) fetchDiscoveryDocument(ctx context.Context) (*oidcDiscoveryDocument, error) {
 	urls := []string{}
 	if configured := strings.TrimSpace(s.cfg.Auth.DiscoveryURL); configured != "" {
 		urls = append(urls, configured)
@@ -413,9 +474,10 @@ func (s *MCPAuthService) getDiscoveryDocumentLocked(ctx context.Context) (*oidcD
 			err = json.NewDecoder(response.Body).Decode(&doc)
 			response.Body.Close()
 			if err == nil && doc.JWKSURI != "" {
-				s.discovery = &doc
-				s.discoveryTime = time.Now()
-				return s.discovery, nil
+				return &oidcDiscoveryDocument{
+					Issuer:  strings.TrimSpace(doc.Issuer),
+					JWKSURI: strings.TrimSpace(doc.JWKSURI),
+				}, nil
 			}
 			lastErr = err
 			continue
@@ -441,7 +503,7 @@ func (s *MCPAuthService) getDiscoveryDocumentLocked(ctx context.Context) (*oidcD
 func (s *MCPAuthService) resolveUser(ctx context.Context, identity *mcpIdentity) (string, error) {
 	subjectKey := identity.Issuer + "|" + identity.Subject
 
-	linkedIdentity, err := s.userStore.GetIdentityByProvider(ctx, models.AuthProviderMCPOAuth, subjectKey)
+	linkedIdentity, err := s.lookupIdentityByProvider(ctx, models.AuthProviderMCPOAuth, subjectKey)
 	if err != nil {
 		return "", err
 	}
@@ -494,11 +556,50 @@ func (s *MCPAuthService) resolveUser(ctx context.Context, identity *mcpIdentity)
 		}
 	}
 
-	if _, err := s.userStore.CreateIdentity(ctx, user.ID, models.AuthProviderMCPOAuth, subjectKey, email); err != nil && !strings.Contains(err.Error(), "identity already linked") {
+	if _, err := s.linkIdentity(ctx, user.ID, models.AuthProviderMCPOAuth, subjectKey, email); err != nil && !isIdentityAlreadyLinkedError(err) {
 		return "", err
+	} else if err != nil {
+		linkedIdentity, lookupErr := s.lookupIdentityByProvider(ctx, models.AuthProviderMCPOAuth, subjectKey)
+		if lookupErr != nil {
+			return "", lookupErr
+		}
+		if linkedIdentity == nil || linkedIdentity.UserID != user.ID {
+			return "", &MCPAuthError{
+				Code:    "invalid_token",
+				Message: "Authentication failed: this MCP identity is already linked to another FlyingForge account",
+				Scope:   strings.Join(s.RequiredScopes(), " "),
+			}
+		}
 	}
 
 	return user.ID, nil
+}
+
+func (s *MCPAuthService) lookupIdentityByProvider(ctx context.Context, provider models.AuthProvider, subject string) (*models.UserIdentity, error) {
+	if s.getIdentityByProvider != nil {
+		return s.getIdentityByProvider(ctx, provider, subject)
+	}
+	return s.userStore.GetIdentityByProvider(ctx, provider, subject)
+}
+
+func (s *MCPAuthService) linkIdentity(ctx context.Context, userID string, provider models.AuthProvider, subject, email string) (*models.UserIdentity, error) {
+	if s.createIdentity != nil {
+		return s.createIdentity(ctx, userID, provider, subject, email)
+	}
+	return s.userStore.CreateIdentity(ctx, userID, provider, subject, email)
+}
+
+func waitForCacheLoad(ctx context.Context, wait <-chan struct{}) error {
+	select {
+	case <-wait:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func isIdentityAlreadyLinkedError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "identity already linked")
 }
 
 func extractMCPIdentity(claims jwt.MapClaims) (*mcpIdentity, error) {

@@ -207,7 +207,7 @@ func loadMCPConfig() MCPConfig {
 		DiscoveryURL:   strings.TrimSpace(os.Getenv("MCP_AUTH_DISCOVERY_URL")),
 		JWKSURL:        strings.TrimSpace(os.Getenv("MCP_AUTH_JWKS_URL")),
 	}
-	authCfg.Enabled = authCfg.Issuer != "" || authCfg.DiscoveryURL != "" || authCfg.JWKSURL != ""
+	authCfg.Enabled = authCfg.Issuer != ""
 
 	return MCPConfig{
 		PublicBaseURL:  publicBaseURL,
