@@ -120,7 +120,7 @@ The web app will be available at `http://localhost:5173`.
 | `MCP_ALLOWED_ORIGINS` | `https://chatgpt.com,https://chat.openai.com` | Allowed browser origins for the HTTP MCP endpoint |
 | `MCP_AUTH_ISSUER` | (empty) | OIDC issuer for linked-user MCP OAuth |
 | `MCP_AUTH_AUDIENCE` | (empty) | Expected audience for MCP access tokens |
-| `MCP_AUTH_RESOURCE` | `MCP_PUBLIC_BASE_URL` | Protected resource identifier for MCP OAuth |
+| `MCP_AUTH_RESOURCE` | `MCP_PUBLIC_BASE_URL + /mcp` | Protected resource identifier for MCP OAuth |
 | `MCP_AUTH_SCOPES` | `flyingforge.read` | Comma-separated scopes required for private MCP tools |
 | `MCP_AUTH_DISCOVERY_URL` | (empty) | Optional OIDC discovery override |
 | `MCP_AUTH_JWKS_URL` | (empty) | Optional JWKS override |
@@ -139,6 +139,8 @@ The web app will be available at `http://localhost:5173`.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `VITE_API_BASE_URL` | (empty) | API base URL (uses Vite proxy in dev) |
+| `VITE_API_URL` | `http://localhost:8080` | Backend origin used by the Google OAuth redirect flow |
+| `VITE_GOOGLE_CLIENT_ID` | (required for Google sign-in) | Google OAuth client ID used by the web frontend |
 
 ## API Reference
 
@@ -460,6 +462,10 @@ Or using `go run`:
    export MCP_AUTH_RESOURCE="https://your-public-host.example.com/mcp"
    export MCP_AUTH_SCOPES="flyingforge.read"
    ```
+   Recommended path: use an external OIDC provider that federates Google sign-in.
+   Users can still authenticate with the same Google account they use on the
+   FlyingForge frontend, but the MCP access token should come from the OIDC
+   provider rather than directly from the frontend Google OAuth app.
 4. In your hosted MCP client, create a connector pointing at:
    - MCP URL: `https://your-public-host.example.com/mcp`
 5. Confirm the client can complete a linked-user prompt such as:
@@ -479,6 +485,29 @@ For production deployments behind the bundled Terraform/CloudFront stack:
   - `MCP_AUTH_AUDIENCE`
   - optional `MCP_AUTH_DISCOVERY_URL`
   - optional `MCP_AUTH_JWKS_URL`
+
+### Recommended Google-backed MCP OAuth setup
+
+For the cleanest production setup:
+
+1. Keep the existing frontend Google sign-in for the web app.
+2. Add an external OIDC provider for MCP OAuth (for example Auth0, WorkOS, or Clerk).
+3. Configure that provider to use Google as the upstream identity provider.
+4. Point FlyingForge MCP at the provider via:
+   - `MCP_AUTH_ISSUER`
+   - `MCP_AUTH_AUDIENCE`
+   - optional discovery/JWKS overrides
+
+In practice, this usually means creating a **separate Google OAuth client in GCP**
+for the OIDC provider to use. Users still sign in with the same Google account,
+and FlyingForge maps MCP access to the same local user by:
+
+1. existing linked MCP identity (`issuer|sub`)
+2. otherwise verified email match
+3. otherwise new user creation
+
+The same verified-email fallback is also enforced for frontend Google sign-in, so
+web sign-in and MCP sign-in stay consistent.
 
 ## Normalized Item Schema
 

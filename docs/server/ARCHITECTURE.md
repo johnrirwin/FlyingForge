@@ -985,7 +985,7 @@ HTML scraping fetcher for web forums. Currently configured but no active sources
 | `MCP_ALLOWED_ORIGINS` | `https://chatgpt.com,https://chat.openai.com` | Allowed browser origins for `/mcp` |
 | `MCP_AUTH_ISSUER` | (empty) | OIDC issuer for private MCP tools |
 | `MCP_AUTH_AUDIENCE` | (empty) | Expected audience for MCP access tokens |
-| `MCP_AUTH_RESOURCE` | `MCP_PUBLIC_BASE_URL` | Protected resource identifier for MCP OAuth |
+| `MCP_AUTH_RESOURCE` | `MCP_PUBLIC_BASE_URL + /mcp` | Protected resource identifier for MCP OAuth |
 | `MCP_AUTH_SCOPES` | `flyingforge.read` | Comma-separated scopes required for private MCP tools |
 | `MCP_AUTH_DISCOVERY_URL` | (empty) | Optional OIDC discovery override |
 | `MCP_AUTH_JWKS_URL` | (empty) | Optional JWKS override |
@@ -1026,6 +1026,28 @@ HTML scraping fetcher for web forums. Currently configured but no active sources
 | `GOOGLE_CLIENT_ID` | (required for OAuth) | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | (required for OAuth) | Google OAuth client secret |
 | `GOOGLE_REDIRECT_URI` | (required for OAuth) | OAuth callback URL |
+
+#### Recommended hosted MCP OAuth pattern
+
+For production MCP connectors, prefer an external OIDC provider that federates
+Google sign-in over using the frontend Google OAuth client directly. This keeps
+the MCP token contract provider-agnostic while still letting users authenticate
+with the same Google account they use on the web frontend.
+
+FlyingForge resolves accounts in this order:
+
+1. linked provider identity
+2. verified email match to an existing user
+3. create a new user and link the identity
+
+The MCP access token should provide at least these claims for first-time linking:
+
+- `iss`
+- `sub`
+- `email`
+- `email_verified`
+- `scope` or `scp` containing `flyingforge.read`
+- plus `aud` and/or `resource` if you configure those checks
 
 ### Adding New Sources
 

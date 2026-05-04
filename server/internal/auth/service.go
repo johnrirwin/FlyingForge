@@ -55,71 +55,9 @@ func (s *Service) LoginWithGoogle(ctx context.Context, params models.GoogleLogin
 		return nil, fmt.Errorf("failed to validate Google credentials: %w", err)
 	}
 
-	email := strings.ToLower(strings.TrimSpace(claims.Email))
-	isNewUser := false
-	isLinked := false
-
-	// Check if identity already exists
-	identity, err := s.userStore.GetIdentityByProvider(ctx, models.AuthProviderGoogle, claims.Subject)
+	user, isNewUser, isLinked, err := s.resolveGoogleUser(ctx, claims)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check identity: %w", err)
-	}
-
-	var user *models.User
-
-	if identity != nil {
-		// Identity exists - get the user
-		user, err = s.userStore.GetByID(ctx, identity.UserID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get user: %w", err)
-		}
-		if user == nil {
-			return nil, &AuthError{Code: "user_not_found", Message: "user not found"}
-		}
-	} else {
-		// Identity doesn't exist - check if user exists by email
-		user, err = s.userStore.GetByEmail(ctx, email)
-		if err != nil {
-			return nil, fmt.Errorf("failed to check user: %w", err)
-		}
-
-		if user != nil {
-			// User exists - link the Google identity
-			_, err = s.userStore.CreateIdentity(ctx, user.ID, models.AuthProviderGoogle, claims.Subject, email)
-			if err != nil {
-				return nil, fmt.Errorf("failed to link identity: %w", err)
-			}
-			isLinked = true
-			s.logger.Info("Linked Google identity to existing user", logging.WithFields(map[string]interface{}{
-				"userId":    user.ID,
-				"googleSub": claims.Subject,
-			}))
-		} else {
-			// Create new user - don't auto-populate displayName for privacy
-			// Store Google info separately, user can choose to set displayName later
-			user, err = s.userStore.Create(ctx, models.CreateUserParams{
-				Email:       email,
-				DisplayName: "", // Don't auto-populate from Google for privacy
-				AvatarURL:   claims.Picture,
-				Status:      models.UserStatusActive,
-				GoogleName:  claims.Name, // Store Google name separately
-			})
-			if err != nil {
-				return nil, fmt.Errorf("failed to create user: %w", err)
-			}
-
-			// Link Google identity
-			_, err = s.userStore.CreateIdentity(ctx, user.ID, models.AuthProviderGoogle, claims.Subject, email)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create identity: %w", err)
-			}
-
-			isNewUser = true
-			s.logger.Info("Created new user via Google", logging.WithFields(map[string]interface{}{
-				"userId":    user.ID,
-				"googleSub": claims.Subject,
-			}))
-		}
+		return nil, err
 	}
 
 	// Check status
@@ -144,6 +82,77 @@ func (s *Service) LoginWithGoogle(ctx context.Context, params models.GoogleLogin
 		IsNewUser: isNewUser,
 		IsLinked:  isLinked,
 	}, nil
+}
+
+func (s *Service) resolveGoogleUser(ctx context.Context, claims *models.GoogleClaims) (*models.User, bool, bool, error) {
+	email := strings.ToLower(strings.TrimSpace(claims.Email))
+	isNewUser := false
+	isLinked := false
+
+	identity, err := s.userStore.GetIdentityByProvider(ctx, models.AuthProviderGoogle, claims.Subject)
+	if err != nil {
+		return nil, false, false, fmt.Errorf("failed to check identity: %w", err)
+	}
+
+	if identity != nil {
+		user, err := s.userStore.GetByID(ctx, identity.UserID)
+		if err != nil {
+			return nil, false, false, fmt.Errorf("failed to get user: %w", err)
+		}
+		if user == nil {
+			return nil, false, false, &AuthError{Code: "user_not_found", Message: "user not found"}
+		}
+		return user, false, false, nil
+	}
+
+	if !claims.EmailVerified || email == "" {
+		return nil, false, false, &AuthError{
+			Code:    "invalid_credentials",
+			Message: "google account must have a verified email address",
+		}
+	}
+
+	user, err := s.userStore.GetByEmail(ctx, email)
+	if err != nil {
+		return nil, false, false, fmt.Errorf("failed to check user: %w", err)
+	}
+
+	if user != nil {
+		_, err = s.userStore.CreateIdentity(ctx, user.ID, models.AuthProviderGoogle, claims.Subject, email)
+		if err != nil {
+			return nil, false, false, fmt.Errorf("failed to link identity: %w", err)
+		}
+		isLinked = true
+		s.logger.Info("Linked Google identity to existing user", logging.WithFields(map[string]interface{}{
+			"userId":    user.ID,
+			"googleSub": claims.Subject,
+		}))
+		return user, false, isLinked, nil
+	}
+
+	user, err = s.userStore.Create(ctx, models.CreateUserParams{
+		Email:       email,
+		DisplayName: "",
+		AvatarURL:   claims.Picture,
+		Status:      models.UserStatusActive,
+		GoogleName:  claims.Name,
+	})
+	if err != nil {
+		return nil, false, false, fmt.Errorf("failed to create user: %w", err)
+	}
+
+	_, err = s.userStore.CreateIdentity(ctx, user.ID, models.AuthProviderGoogle, claims.Subject, email)
+	if err != nil {
+		return nil, false, false, fmt.Errorf("failed to create identity: %w", err)
+	}
+
+	isNewUser = true
+	s.logger.Info("Created new user via Google", logging.WithFields(map[string]interface{}{
+		"userId":    user.ID,
+		"googleSub": claims.Subject,
+	}))
+
+	return user, isNewUser, false, nil
 }
 
 // RefreshTokens refreshes the access token using a refresh token
