@@ -469,6 +469,17 @@ The MCP host also serves protected-resource discovery at:
 
 - `https://your-public-host.example.com/.well-known/oauth-protected-resource`
 
+For production deployments behind the bundled Terraform/CloudFront stack:
+
+- Route both `/mcp` and `/.well-known/oauth-protected-resource` to the backend service rather than the SPA origin.
+- Set `MCP_AUTH_ISSUER` to enable hosted MCP OAuth at all.
+- Set `MCP_PUBLIC_BASE_URL` so the OAuth challenge can advertise the correct protected-resource metadata URL.
+- If you use the included GitHub Actions deploy workflow, configure these repository variables:
+  - `MCP_AUTH_ISSUER`
+  - `MCP_AUTH_AUDIENCE`
+  - optional `MCP_AUTH_DISCOVERY_URL`
+  - optional `MCP_AUTH_JWKS_URL`
+
 ## Normalized Item Schema
 
 All items from all sources are normalized to this schema:

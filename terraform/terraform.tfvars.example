@@ -44,6 +44,12 @@ enable_kms_vpc_endpoint = true
 domain_name       = ""
 create_dns_record = false
 
+# Hosted MCP OAuth (optional; required for linked-user ChatGPT connectors)
+# mcp_auth_issuer        = "https://your-oidc-issuer.example.com"
+# mcp_auth_audience      = "your-audience"
+# mcp_auth_discovery_url = ""
+# mcp_auth_jwks_url      = ""
+
 # Secrets (set via environment variables or -var flag, NOT in this file)
 # google_client_id     = ""
 # google_client_secret = ""

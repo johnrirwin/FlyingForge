@@ -166,6 +166,26 @@ resource "aws_cloudfront_distribution" "web" {
   }
 
   ordered_cache_behavior {
+    path_pattern             = "/mcp"
+    target_origin_id         = "alb-api"
+    viewer_protocol_policy   = "redirect-to-https"
+    allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods           = ["GET", "HEAD", "OPTIONS"]
+    cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
+    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+  }
+
+  ordered_cache_behavior {
+    path_pattern             = "/.well-known/oauth-protected-resource"
+    target_origin_id         = "alb-api"
+    viewer_protocol_policy   = "redirect-to-https"
+    allowed_methods          = ["GET", "HEAD", "OPTIONS"]
+    cached_methods           = ["GET", "HEAD", "OPTIONS"]
+    cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
+    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+  }
+
+  ordered_cache_behavior {
     path_pattern             = "/health"
     target_origin_id         = "alb-api"
     viewer_protocol_policy   = "redirect-to-https"

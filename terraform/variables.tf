@@ -197,3 +197,27 @@ variable "encryption_key" {
   type        = string
   sensitive   = true
 }
+
+variable "mcp_auth_issuer" {
+  description = "OIDC issuer for hosted MCP OAuth"
+  type        = string
+  default     = ""
+}
+
+variable "mcp_auth_audience" {
+  description = "Expected audience for hosted MCP OAuth access tokens"
+  type        = string
+  default     = ""
+}
+
+variable "mcp_auth_discovery_url" {
+  description = "Optional discovery URL override for hosted MCP OAuth"
+  type        = string
+  default     = ""
+}
+
+variable "mcp_auth_jwks_url" {
+  description = "Optional JWKS URL override for hosted MCP OAuth"
+  type        = string
+  default     = ""
+}

@@ -189,6 +189,38 @@ resource "aws_ecs_task_definition" "server" {
           value = var.domain_name != "" ? "https://${var.domain_name}" : "http://${aws_lb.main.dns_name}"
         },
         {
+          name  = "MCP_PUBLIC_BASE_URL"
+          value = var.domain_name != "" ? "https://${var.domain_name}" : ""
+        },
+        {
+          name  = "MCP_ALLOWED_ORIGINS"
+          value = "https://chatgpt.com,https://chat.openai.com"
+        },
+        {
+          name  = "MCP_AUTH_ISSUER"
+          value = var.mcp_auth_issuer
+        },
+        {
+          name  = "MCP_AUTH_AUDIENCE"
+          value = var.mcp_auth_audience
+        },
+        {
+          name  = "MCP_AUTH_RESOURCE"
+          value = var.domain_name != "" ? "https://${var.domain_name}/mcp" : ""
+        },
+        {
+          name  = "MCP_AUTH_SCOPES"
+          value = "flyingforge.read"
+        },
+        {
+          name  = "MCP_AUTH_DISCOVERY_URL"
+          value = var.mcp_auth_discovery_url
+        },
+        {
+          name  = "MCP_AUTH_JWKS_URL"
+          value = var.mcp_auth_jwks_url
+        },
+        {
           name  = "DB_HOST"
           value = aws_db_instance.main.address
         },
