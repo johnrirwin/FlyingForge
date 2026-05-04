@@ -65,6 +65,16 @@ output "web_url" {
   value       = var.domain_name != "" ? "https://${var.domain_name}" : "https://${aws_cloudfront_distribution.web.domain_name}"
 }
 
+output "mcp_url" {
+  description = "Hosted HTTPS MCP endpoint URL"
+  value       = var.domain_name != "" ? "https://${var.domain_name}/mcp" : "https://${aws_cloudfront_distribution.web.domain_name}/mcp"
+}
+
+output "mcp_protected_resource_metadata_url" {
+  description = "Protected-resource discovery URL for hosted MCP OAuth"
+  value       = var.domain_name != "" ? "https://${var.domain_name}/.well-known/oauth-protected-resource" : "https://${aws_cloudfront_distribution.web.domain_name}/.well-known/oauth-protected-resource"
+}
+
 output "vpc_endpoint_ids" {
   description = "VPC endpoint IDs used to keep private subnet AWS traffic off NAT"
   value = var.enable_vpc_endpoints ? merge(

@@ -163,6 +163,10 @@ jobs:
             -var="google_client_id=${{ secrets.GOOGLE_CLIENT_ID }}" \
             -var="google_client_secret=${{ secrets.GOOGLE_CLIENT_SECRET }}" \
             -var="encryption_key=${{ secrets.ENCRYPTION_KEY }}" \
+            -var="mcp_auth_issuer=${{ vars.MCP_AUTH_ISSUER }}" \
+            -var="mcp_auth_audience=${{ vars.MCP_AUTH_AUDIENCE }}" \
+            -var="mcp_auth_discovery_url=${{ vars.MCP_AUTH_DISCOVERY_URL }}" \
+            -var="mcp_auth_jwks_url=${{ vars.MCP_AUTH_JWKS_URL }}" \
             -var="domain_name=flyingforge.com" \
             -var="create_dns_record=true" \
             -var="enable_vpc_endpoints=false" \
@@ -178,6 +182,10 @@ jobs:
             -var="google_client_id=${{ secrets.GOOGLE_CLIENT_ID }}" \
             -var="google_client_secret=${{ secrets.GOOGLE_CLIENT_SECRET }}" \
             -var="encryption_key=${{ secrets.ENCRYPTION_KEY }}" \
+            -var="mcp_auth_issuer=${{ vars.MCP_AUTH_ISSUER }}" \
+            -var="mcp_auth_audience=${{ vars.MCP_AUTH_AUDIENCE }}" \
+            -var="mcp_auth_discovery_url=${{ vars.MCP_AUTH_DISCOVERY_URL }}" \
+            -var="mcp_auth_jwks_url=${{ vars.MCP_AUTH_JWKS_URL }}" \
             -var="domain_name=flyingforge.com" \
             -var="create_dns_record=true" \
             -var="enable_vpc_endpoints=false" \

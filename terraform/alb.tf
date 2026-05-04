@@ -82,7 +82,7 @@ resource "aws_lb_listener_rule" "api_http" {
 
   condition {
     path_pattern {
-      values = ["/api", "/api/*", "/health"]
+      values = ["/api", "/api/*", "/mcp", "/.well-known/oauth-protected-resource", "/health"]
     }
   }
 }
@@ -120,7 +120,7 @@ resource "aws_lb_listener_rule" "api_https" {
 
   condition {
     path_pattern {
-      values = ["/api", "/api/*", "/health"]
+      values = ["/api", "/api/*", "/mcp", "/.well-known/oauth-protected-resource", "/health"]
     }
   }
 }
