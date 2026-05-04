@@ -196,7 +196,9 @@ func loadMCPConfig() MCPConfig {
 		"https://chat.openai.com",
 	}
 	if raw := strings.TrimSpace(os.Getenv("MCP_ALLOWED_ORIGINS")); raw != "" {
-		allowedOrigins = splitAndTrim(raw)
+		if parsed := splitAndTrim(raw); len(parsed) > 0 {
+			allowedOrigins = parsed
+		}
 	}
 
 	authCfg := MCPAuthConfig{

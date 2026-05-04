@@ -111,3 +111,38 @@ func TestLoadMCPConfig_AuthEnabledRequiresIssuer(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadMCPConfig_AllowedOriginsDefaultsWhenConfiguredListIsEffectivelyEmpty(t *testing.T) {
+	t.Setenv("MCP_ALLOWED_ORIGINS", ",")
+
+	cfg := loadMCPConfig()
+
+	want := []string{
+		"https://chatgpt.com",
+		"https://chat.openai.com",
+	}
+	if len(cfg.AllowedOrigins) != len(want) {
+		t.Fatalf("expected %d default allowed origins, got %d (%v)", len(want), len(cfg.AllowedOrigins), cfg.AllowedOrigins)
+	}
+	for i, expected := range want {
+		if cfg.AllowedOrigins[i] != expected {
+			t.Fatalf("expected default allowed origin %q at index %d, got %q", expected, i, cfg.AllowedOrigins[i])
+		}
+	}
+}
+
+func TestLoadMCPConfig_AllowedOriginsUsesConfiguredListWhenNonEmpty(t *testing.T) {
+	t.Setenv("MCP_ALLOWED_ORIGINS", "https://example.com, https://chatgpt.com")
+
+	cfg := loadMCPConfig()
+
+	want := []string{"https://example.com", "https://chatgpt.com"}
+	if len(cfg.AllowedOrigins) != len(want) {
+		t.Fatalf("expected %d allowed origins, got %d (%v)", len(want), len(cfg.AllowedOrigins), cfg.AllowedOrigins)
+	}
+	for i, expected := range want {
+		if cfg.AllowedOrigins[i] != expected {
+			t.Fatalf("expected allowed origin %q at index %d, got %q", expected, i, cfg.AllowedOrigins[i])
+		}
+	}
+}
