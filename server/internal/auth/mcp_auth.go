@@ -598,15 +598,6 @@ func claimBool(value interface{}) bool {
 	}
 }
 
-func claimString(value interface{}) string {
-	switch v := value.(type) {
-	case string:
-		return v
-	default:
-		return ""
-	}
-}
-
 func claimStrings(value interface{}) []string {
 	switch v := value.(type) {
 	case string:
