@@ -8,6 +8,10 @@ A comprehensive guide to building products with AI agents across the entire deve
 
 This workflow transforms how teams build products by leveraging AI agents at every stage—from vision to deployment. The key principle: **code documents every state and interaction better than humans ever could**, so we use working prototypes as the source of truth.
 
+### Subagent Principle
+
+Default to subagents for research-heavy or exploratory work. If multiple questions can be investigated independently—such as product research, codebase discovery, risk analysis, option comparison, or root-cause investigation—run them in parallel via subagents and merge the results before planning or implementation.
+
 ```
 Vision → Prototype → PRD → Tickets → Design → Planning → Implementation → Ship
            ↓           ↓        ↓         ↓          ↓            ↓

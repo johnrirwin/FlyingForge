@@ -13,6 +13,13 @@ Follow [`docs/AGENT_WORKFLOW.md`](docs/AGENT_WORKFLOW.md) as the repository sour
 ## Project Context
 This is a Drone News Aggregator with a Go MCP server backend and React TypeScript frontend.
 
+## Workflow Expectations
+
+- Plan non-trivial work before implementation.
+- When supported, use subagents for multi-file research, exploratory investigation, and parallel analysis.
+- Break work into focused subproblems, gather findings independently, then return a synthesized conclusion before implementing changes.
+- Verify builds, tests, or direct behavior before considering the work complete.
+
 ## Allowed Terminal Commands
 
 The following commands are safe to run without confirmation:

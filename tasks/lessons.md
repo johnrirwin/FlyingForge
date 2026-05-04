@@ -17,4 +17,8 @@ Review this file at the start of each session and apply any relevant rules befor
 ```
 
 ## Lessons
-- None recorded yet.
+
+### 2026-05-03 — Use subagents for parallel investigation
+- Context: workflow guidance and orchestration expectations for non-trivial work.
+- Correction from user: make subagent usage explicit when work benefits from research, exploration, or parallel analysis.
+- Rule to follow next time: proactively kick off focused subagents for bounded research/exploration tasks instead of keeping all investigation in the main context.
