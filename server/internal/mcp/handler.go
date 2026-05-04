@@ -113,8 +113,9 @@ func (h *Handler) GetTools() []ToolDefinition {
 		},
 	}
 
-	equipmentHandler := NewEquipmentHandler(h.equipmentSvc, h.logger)
-	tools = append(tools, equipmentHandler.GetTools()...)
+	if equipmentHandler := NewEquipmentHandler(h.equipmentSvc, h.logger); equipmentHandler != nil {
+		tools = append(tools, equipmentHandler.GetTools()...)
+	}
 	tools = append(tools, h.getPrivateReadOnlyTools()...)
 
 	return tools

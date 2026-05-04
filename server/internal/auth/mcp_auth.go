@@ -554,10 +554,10 @@ func hasRequiredScopes(claims jwt.MapClaims, required []string) bool {
 	}
 
 	scopeValues := map[string]struct{}{}
-	for _, scope := range strings.Fields(strings.TrimSpace(claimString(claims["scope"]))) {
+	for _, scope := range claimScopeStrings(claims["scope"]) {
 		scopeValues[scope] = struct{}{}
 	}
-	for _, scope := range claimStrings(claims["scp"]) {
+	for _, scope := range claimScopeStrings(claims["scp"]) {
 		scopeValues[scope] = struct{}{}
 	}
 
@@ -568,6 +568,23 @@ func hasRequiredScopes(claims jwt.MapClaims, required []string) bool {
 	}
 
 	return true
+}
+
+func claimScopeStrings(value interface{}) []string {
+	rawValues := claimStrings(value)
+	if len(rawValues) == 0 {
+		return nil
+	}
+
+	scopes := make([]string, 0, len(rawValues))
+	for _, rawValue := range rawValues {
+		scopes = append(scopes, strings.Fields(rawValue)...)
+	}
+	if len(scopes) == 0 {
+		return nil
+	}
+
+	return scopes
 }
 
 func claimBool(value interface{}) bool {

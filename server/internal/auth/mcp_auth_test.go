@@ -172,6 +172,63 @@ func TestMCPAuthVerifyTokenAudienceAndScopeValidation(t *testing.T) {
 	}
 }
 
+func TestMCPAuthVerifyTokenAcceptsScopeAndScpClaimFormats(t *testing.T) {
+	provider := newTestOIDCProvider(t)
+	service := newTestMCPAuthService(provider)
+
+	ctx := context.Background()
+
+	tests := []struct {
+		name   string
+		claims jwt.MapClaims
+	}{
+		{
+			name: "scope string",
+			claims: func() jwt.MapClaims {
+				claims := baseClaims(provider.server.URL)
+				claims["scope"] = "flyingforge.read profile"
+				return claims
+			}(),
+		},
+		{
+			name: "scope array",
+			claims: func() jwt.MapClaims {
+				claims := baseClaims(provider.server.URL)
+				claims["scope"] = []string{"flyingforge.read", "profile"}
+				return claims
+			}(),
+		},
+		{
+			name: "scp string",
+			claims: func() jwt.MapClaims {
+				claims := baseClaims(provider.server.URL)
+				delete(claims, "scope")
+				claims["scp"] = "flyingforge.read profile"
+				return claims
+			}(),
+		},
+		{
+			name: "scp array",
+			claims: func() jwt.MapClaims {
+				claims := baseClaims(provider.server.URL)
+				delete(claims, "scope")
+				claims["scp"] = []string{"flyingforge.read", "profile"}
+				return claims
+			}(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			token := provider.signToken(t, tt.claims)
+
+			if _, err := service.verifyToken(ctx, token); err != nil {
+				t.Fatalf("expected token with %s to verify, got %v", tt.name, err)
+			}
+		})
+	}
+}
+
 func TestMCPAuthAuthenticateBearerTokenLinksVerifiedEmail(t *testing.T) {
 	testDB := testutil.NewTestDB(t)
 	defer testDB.Close()
