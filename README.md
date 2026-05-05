@@ -125,6 +125,7 @@ The web app will be available at `http://localhost:5173`.
 | `MCP_AUTH_SCOPES` | `flyingforge.read` | Comma-separated scopes required for private MCP tools |
 | `MCP_AUTH_DISCOVERY_URL` | (empty) | Optional OIDC discovery override |
 | `MCP_AUTH_JWKS_URL` | (empty) | Optional JWKS override |
+| `MCP_AUTH_ALLOW_EPHEMERAL_KEY` | `false` | Explicitly allow an ephemeral self-hosted OAuth signing key for local/dev testing only |
 | `MCP_AUTH_PRIVATE_KEY_PEM` | (empty) | PEM-encoded RSA or ECDSA private key for self-hosted OAuth JWT signing |
 | `MCP_AUTH_KEY_ID` | `ff-self-hosted` | JWK key ID advertised by the self-hosted JWKS endpoint |
 | `MCP_AUTH_GOOGLE_REDIRECT_URI` | `MCP_PUBLIC_BASE_URL + /oauth/google/callback` | Google redirect URI used by the self-hosted OAuth login flow |
@@ -511,10 +512,14 @@ Or using `go run`:
 6. Confirm the client can complete a linked-user prompt such as:
    - “Show my aircraft and latest tuning settings.”
 
-The MCP host also serves protected-resource discovery at:
+When any MCP OAuth mode is enabled, the MCP host serves protected-resource discovery at:
 
 - `https://your-public-host.example.com/.well-known/oauth-protected-resource`
+
+When self-hosted OAuth is enabled, it also serves:
+
 - `https://your-public-host.example.com/.well-known/openid-configuration`
+- `https://your-public-host.example.com/.well-known/oauth-authorization-server`
 - `https://your-public-host.example.com/oauth/jwks.json`
 
 For AWS production, the included Terraform config routes these paths through CloudFront + the ALB, and the ECS task injects:

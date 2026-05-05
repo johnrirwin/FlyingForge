@@ -46,6 +46,7 @@ type MCPAuthConfig struct {
 	DiscoveryURL         string
 	JWKSURL              string
 	SelfHosted           bool
+	AllowEphemeralKey    bool
 	PrivateKeyPEM        string
 	KeyID                string
 	GoogleRedirectURI    string
@@ -217,6 +218,10 @@ func loadMCPConfig() MCPConfig {
 			issuer = strings.TrimRight(publicBaseURL, "/")
 		}
 	}
+	allowEphemeralKey := false
+	if v := strings.ToLower(strings.TrimSpace(os.Getenv("MCP_AUTH_ALLOW_EPHEMERAL_KEY"))); v == "true" || v == "1" {
+		allowEphemeralKey = true
+	}
 
 	accessTokenTTL := time.Hour
 	if raw := strings.TrimSpace(os.Getenv("MCP_AUTH_ACCESS_TOKEN_TTL")); raw != "" {
@@ -259,6 +264,7 @@ func loadMCPConfig() MCPConfig {
 		DiscoveryURL:         strings.TrimSpace(os.Getenv("MCP_AUTH_DISCOVERY_URL")),
 		JWKSURL:              strings.TrimSpace(os.Getenv("MCP_AUTH_JWKS_URL")),
 		SelfHosted:           selfHosted,
+		AllowEphemeralKey:    allowEphemeralKey,
 		PrivateKeyPEM:        os.Getenv("MCP_AUTH_PRIVATE_KEY_PEM"),
 		KeyID:                strings.TrimSpace(os.Getenv("MCP_AUTH_KEY_ID")),
 		GoogleRedirectURI:    strings.TrimSpace(googleRedirectURI),

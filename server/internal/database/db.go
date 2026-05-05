@@ -227,6 +227,8 @@ CREATE TABLE IF NOT EXISTS oauth_authorization_codes (
 CREATE INDEX IF NOT EXISTS idx_oauth_authorization_codes_hash ON oauth_authorization_codes(code_hash);
 CREATE INDEX IF NOT EXISTS idx_oauth_authorization_codes_client ON oauth_authorization_codes(client_id);
 CREATE INDEX IF NOT EXISTS idx_oauth_authorization_codes_user ON oauth_authorization_codes(user_id);
+CREATE INDEX IF NOT EXISTS idx_oauth_authorization_codes_expires ON oauth_authorization_codes(expires_at);
+CREATE INDEX IF NOT EXISTS idx_oauth_authorization_codes_consumed ON oauth_authorization_codes(consumed_at);
 `
 
 const migrationOAuthRefreshTokens = `
@@ -245,6 +247,8 @@ CREATE TABLE IF NOT EXISTS oauth_refresh_tokens (
 CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_hash ON oauth_refresh_tokens(token_hash);
 CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_user ON oauth_refresh_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_client ON oauth_refresh_tokens(client_id);
+CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_expires ON oauth_refresh_tokens(expires_at);
+CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_revoked ON oauth_refresh_tokens(revoked_at);
 `
 
 const migrationSellers = `

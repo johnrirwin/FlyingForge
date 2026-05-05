@@ -101,6 +101,27 @@ func (s *OAuthStore) CreateAuthorizationCode(ctx context.Context, codeHash, clie
 	return scanOAuthAuthorizationCode(row)
 }
 
+func (s *OAuthStore) GetAuthorizationCodeByHash(ctx context.Context, codeHash string) (*models.OAuthAuthorizationCode, error) {
+	const query = `
+		SELECT id, client_id, user_id, redirect_uri, scope, resource,
+			code_challenge, code_challenge_method, expires_at, created_at, consumed_at
+		FROM oauth_authorization_codes
+		WHERE code_hash = $1
+		  AND consumed_at IS NULL
+		  AND expires_at > NOW()
+	`
+
+	row := s.db.QueryRowContext(ctx, query, codeHash)
+	code, err := scanOAuthAuthorizationCode(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return code, nil
+}
+
 func (s *OAuthStore) ConsumeAuthorizationCode(ctx context.Context, codeHash string) (*models.OAuthAuthorizationCode, error) {
 	const query = `
 		UPDATE oauth_authorization_codes
@@ -121,6 +142,26 @@ func (s *OAuthStore) ConsumeAuthorizationCode(ctx context.Context, codeHash stri
 		return nil, err
 	}
 	return code, nil
+}
+
+func (s *OAuthStore) MarkAuthorizationCodeConsumed(ctx context.Context, codeHash string) (bool, error) {
+	const query = `
+		UPDATE oauth_authorization_codes
+		SET consumed_at = NOW()
+		WHERE code_hash = $1
+		  AND consumed_at IS NULL
+		  AND expires_at > NOW()
+	`
+
+	result, err := s.db.ExecContext(ctx, query, codeHash)
+	if err != nil {
+		return false, err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return rowsAffected > 0, nil
 }
 
 func (s *OAuthStore) CreateRefreshToken(ctx context.Context, userID, clientID, tokenHash, scope, resource string, expiresAt time.Time) (*models.OAuthRefreshToken, error) {
@@ -144,6 +185,26 @@ func (s *OAuthStore) CreateRefreshToken(ctx context.Context, userID, clientID, t
 	return scanOAuthRefreshToken(row)
 }
 
+func (s *OAuthStore) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (*models.OAuthRefreshToken, error) {
+	const query = `
+		SELECT id, user_id, client_id, scope, resource, expires_at, created_at, revoked_at
+		FROM oauth_refresh_tokens
+		WHERE token_hash = $1
+		  AND revoked_at IS NULL
+		  AND expires_at > NOW()
+	`
+
+	row := s.db.QueryRowContext(ctx, query, tokenHash)
+	refreshToken, err := scanOAuthRefreshToken(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return refreshToken, nil
+}
+
 func (s *OAuthStore) ConsumeRefreshToken(ctx context.Context, tokenHash string) (*models.OAuthRefreshToken, error) {
 	const query = `
 		UPDATE oauth_refresh_tokens
@@ -163,6 +224,46 @@ func (s *OAuthStore) ConsumeRefreshToken(ctx context.Context, tokenHash string) 
 		return nil, err
 	}
 	return refreshToken, nil
+}
+
+func (s *OAuthStore) MarkRefreshTokenRevoked(ctx context.Context, tokenHash string) (bool, error) {
+	const query = `
+		UPDATE oauth_refresh_tokens
+		SET revoked_at = NOW()
+		WHERE token_hash = $1
+		  AND revoked_at IS NULL
+		  AND expires_at > NOW()
+	`
+
+	result, err := s.db.ExecContext(ctx, query, tokenHash)
+	if err != nil {
+		return false, err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return rowsAffected > 0, nil
+}
+
+func (s *OAuthStore) CleanupExpiredOAuthState(ctx context.Context) error {
+	if _, err := s.db.ExecContext(ctx, `
+		DELETE FROM oauth_authorization_codes
+		WHERE expires_at <= NOW()
+		   OR consumed_at IS NOT NULL
+	`); err != nil {
+		return fmt.Errorf("cleanup oauth authorization codes: %w", err)
+	}
+
+	if _, err := s.db.ExecContext(ctx, `
+		DELETE FROM oauth_refresh_tokens
+		WHERE expires_at <= NOW()
+		   OR revoked_at IS NOT NULL
+	`); err != nil {
+		return fmt.Errorf("cleanup oauth refresh tokens: %w", err)
+	}
+
+	return nil
 }
 
 func scanOAuthClient(scanner interface {

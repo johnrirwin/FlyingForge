@@ -766,6 +766,9 @@ These tools use `securitySchemes: [{ "type": "oauth2", "scopes": ["flyingforge.r
 When MCP OAuth is enabled, the HTTP server publishes:
 
 - `/.well-known/oauth-protected-resource`
+
+When self-hosted MCP OAuth is enabled, the HTTP server also publishes:
+
 - `/.well-known/openid-configuration`
 - `/.well-known/oauth-authorization-server`
 - `/oauth/jwks.json`

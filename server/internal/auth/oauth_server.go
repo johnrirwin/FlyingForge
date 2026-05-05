@@ -46,6 +46,20 @@ func (e *OAuthError) Error() string {
 	return e.Code
 }
 
+func NormalizeOAuthError(err error) *OAuthError {
+	if err == nil {
+		return &OAuthError{Code: "server_error", Description: "unknown OAuth error", StatusCode: 500}
+	}
+	typed, ok := err.(*OAuthError)
+	if ok {
+		if typed.StatusCode == 0 {
+			typed.StatusCode = 400
+		}
+		return typed
+	}
+	return &OAuthError{Code: "server_error", Description: err.Error(), StatusCode: 500}
+}
+
 type OAuthAuthorizationRequest struct {
 	ResponseType        string
 	ClientID            string
@@ -99,6 +113,14 @@ type OAuthTokenResponse struct {
 	Resource     string `json:"resource,omitempty"`
 }
 
+type OAuthAuthorizationPrompt struct {
+	ClientID    string
+	ClientName  string
+	Scope       string
+	Resource    string
+	RedirectURI string
+}
+
 type oauthPendingStateClaims struct {
 	ReturnTo string `json:"return_to"`
 	State    string `json:"state"`
@@ -116,6 +138,13 @@ type signingKey struct {
 	alg        string
 	privateKey interface{}
 	publicJWK  jwk
+}
+
+type oauthAuthorizationContext struct {
+	client   *models.OAuthClient
+	user     *models.User
+	scope    string
+	resource string
 }
 
 // OAuthServerService implements a self-hosted authorization server for MCP.
@@ -309,48 +338,103 @@ func (s *OAuthServerService) ParseAuthorizationRequest(values url.Values) (*OAut
 	return req, nil
 }
 
-func (s *OAuthServerService) Authorize(ctx context.Context, req *OAuthAuthorizationRequest, userID string) (string, error) {
-	if !s.Enabled() {
-		return "", &OAuthError{Code: "server_error", Description: "self-hosted OAuth is not enabled", StatusCode: 503}
+func (s *OAuthServerService) DescribeAuthorizationRequest(ctx context.Context, req *OAuthAuthorizationRequest, userID string) (*OAuthAuthorizationPrompt, error) {
+	authCtx, err := s.validateAuthorizationRequest(ctx, req, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	clientName := strings.TrimSpace(authCtx.client.ClientName)
+	if clientName == "" {
+		clientName = authCtx.client.ClientID
+	}
+
+	return &OAuthAuthorizationPrompt{
+		ClientID:    authCtx.client.ClientID,
+		ClientName:  clientName,
+		Scope:       authCtx.scope,
+		Resource:    authCtx.resource,
+		RedirectURI: req.RedirectURI,
+	}, nil
+}
+
+func (s *OAuthServerService) AuthorizationErrorRedirect(ctx context.Context, req *OAuthAuthorizationRequest, err error) (string, bool) {
+	if req == nil || strings.TrimSpace(req.ClientID) == "" || strings.TrimSpace(req.RedirectURI) == "" {
+		return "", false
+	}
+
+	client, lookupErr := s.oauthStore.GetClientByClientID(ctx, req.ClientID)
+	if lookupErr != nil || client == nil || !containsString(client.RedirectURIs, req.RedirectURI) {
+		return "", false
+	}
+
+	redirectURL, buildErr := buildAuthorizationErrorRedirect(req.RedirectURI, req.State, NormalizeOAuthError(err))
+	if buildErr != nil {
+		return "", false
+	}
+	return redirectURL, true
+}
+
+func (s *OAuthServerService) validateAuthorizationRequest(ctx context.Context, req *OAuthAuthorizationRequest, userID string) (*oauthAuthorizationContext, error) {
+	if req == nil {
+		return nil, &OAuthError{Code: "invalid_request", Description: "authorization request is required", StatusCode: 400}
 	}
 	if strings.TrimSpace(userID) == "" {
-		return "", &OAuthError{Code: "access_denied", Description: "user session is required", StatusCode: 401}
+		return nil, &OAuthError{Code: "access_denied", Description: "user session is required", StatusCode: 401}
 	}
 
 	client, err := s.oauthStore.GetClientByClientID(ctx, req.ClientID)
 	if err != nil {
-		return "", &OAuthError{Code: "server_error", Description: "failed to load OAuth client", StatusCode: 500}
+		return nil, &OAuthError{Code: "server_error", Description: "failed to load OAuth client", StatusCode: 500}
 	}
 	if client == nil {
-		return "", &OAuthError{Code: "unauthorized_client", Description: "unknown OAuth client", StatusCode: 400}
+		return nil, &OAuthError{Code: "unauthorized_client", Description: "unknown OAuth client", StatusCode: 400}
 	}
 	if !containsString(client.RedirectURIs, req.RedirectURI) {
-		return "", &OAuthError{Code: "invalid_request", Description: "redirect_uri is not registered for this client", StatusCode: 400}
+		return nil, &OAuthError{Code: "invalid_request", Description: "redirect_uri is not registered for this client", StatusCode: 400}
 	}
 	if !containsString(client.ResponseTypes, models.OAuthResponseTypeCode) || !containsString(client.GrantTypes, models.OAuthGrantTypeAuthorizationCode) {
-		return "", &OAuthError{Code: "unauthorized_client", Description: "OAuth client is not allowed to use the authorization-code flow", StatusCode: 400}
+		return nil, &OAuthError{Code: "unauthorized_client", Description: "OAuth client is not allowed to use the authorization-code flow", StatusCode: 400}
 	}
 
 	user, err := s.userStore.GetByID(ctx, userID)
 	if err != nil {
-		return "", &OAuthError{Code: "server_error", Description: "failed to load user", StatusCode: 500}
+		return nil, &OAuthError{Code: "server_error", Description: "failed to load user", StatusCode: 500}
 	}
 	if user == nil || user.Status != models.UserStatusActive {
-		return "", &OAuthError{Code: "access_denied", Description: "user account is unavailable", StatusCode: 403}
+		return nil, &OAuthError{Code: "access_denied", Description: "user account is unavailable", StatusCode: 403}
 	}
 
 	scope, err := s.normalizeRequestedScope(req.Scope)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if client.Scope != "" && scope != client.Scope {
-		return "", &OAuthError{Code: "invalid_scope", Description: "requested scope does not match the registered client scope", StatusCode: 400}
+		return nil, &OAuthError{Code: "invalid_scope", Description: "requested scope does not match the registered client scope", StatusCode: 400}
 	}
 
 	resource := strings.TrimSpace(req.Resource)
 	if resource == "" {
 		resource = strings.TrimSpace(s.mcpCfg.Auth.Resource)
 	}
+
+	return &oauthAuthorizationContext{
+		client:   client,
+		user:     user,
+		scope:    scope,
+		resource: resource,
+	}, nil
+}
+
+func (s *OAuthServerService) Authorize(ctx context.Context, req *OAuthAuthorizationRequest, userID string) (string, error) {
+	if !s.Enabled() {
+		return "", &OAuthError{Code: "server_error", Description: "self-hosted OAuth is not enabled", StatusCode: 503}
+	}
+	authCtx, err := s.validateAuthorizationRequest(ctx, req, userID)
+	if err != nil {
+		return "", err
+	}
+	s.pruneExpiredOAuthState(ctx)
 
 	codeValue, err := s.randomOpaqueToken(32)
 	if err != nil {
@@ -361,10 +445,10 @@ func (s *OAuthServerService) Authorize(ctx context.Context, req *OAuthAuthorizat
 		ctx,
 		hashToken(codeValue),
 		req.ClientID,
-		user.ID,
+		authCtx.user.ID,
 		req.RedirectURI,
-		scope,
-		resource,
+		authCtx.scope,
+		authCtx.resource,
 		req.CodeChallenge,
 		req.CodeChallengeMethod,
 		s.now().Add(s.mcpCfg.Auth.AuthorizationCodeTTL),
@@ -507,7 +591,7 @@ func (s *OAuthServerService) exchangeAuthorizationCode(ctx context.Context, valu
 		return nil, &OAuthError{Code: "unauthorized_client", Description: "OAuth client is not allowed to use the authorization-code flow", StatusCode: 400}
 	}
 
-	authCode, err := s.oauthStore.ConsumeAuthorizationCode(ctx, hashToken(code))
+	authCode, err := s.oauthStore.GetAuthorizationCodeByHash(ctx, hashToken(code))
 	if err != nil {
 		return nil, &OAuthError{Code: "server_error", Description: "failed to load authorization code", StatusCode: 500}
 	}
@@ -522,6 +606,13 @@ func (s *OAuthServerService) exchangeAuthorizationCode(ctx context.Context, valu
 	}
 	if !verifyS256Challenge(codeVerifier, authCode.CodeChallenge) {
 		return nil, &OAuthError{Code: "invalid_grant", Description: "code_verifier does not match the authorization code challenge", StatusCode: 400}
+	}
+	consumed, err := s.oauthStore.MarkAuthorizationCodeConsumed(ctx, hashToken(code))
+	if err != nil {
+		return nil, &OAuthError{Code: "server_error", Description: "failed to consume authorization code", StatusCode: 500}
+	}
+	if !consumed {
+		return nil, &OAuthError{Code: "invalid_grant", Description: "authorization code is invalid, expired, or already used", StatusCode: 400}
 	}
 
 	return s.issueOAuthTokens(ctx, authCode.UserID, clientID, authCode.Scope, authCode.Resource)
@@ -547,7 +638,7 @@ func (s *OAuthServerService) exchangeRefreshToken(ctx context.Context, values ur
 		return nil, &OAuthError{Code: "unauthorized_client", Description: "OAuth client is not allowed to use the refresh-token flow", StatusCode: 400}
 	}
 
-	storedToken, err := s.oauthStore.ConsumeRefreshToken(ctx, hashToken(refreshToken))
+	storedToken, err := s.oauthStore.GetRefreshTokenByHash(ctx, hashToken(refreshToken))
 	if err != nil {
 		return nil, &OAuthError{Code: "server_error", Description: "failed to load refresh token", StatusCode: 500}
 	}
@@ -559,6 +650,13 @@ func (s *OAuthServerService) exchangeRefreshToken(ctx context.Context, values ur
 	}
 	if resource != "" && storedToken.Resource != "" && resource != storedToken.Resource {
 		return nil, &OAuthError{Code: "invalid_target", Description: "resource does not match the refresh token grant", StatusCode: 400}
+	}
+	revoked, err := s.oauthStore.MarkRefreshTokenRevoked(ctx, hashToken(refreshToken))
+	if err != nil {
+		return nil, &OAuthError{Code: "server_error", Description: "failed to rotate refresh token", StatusCode: 500}
+	}
+	if !revoked {
+		return nil, &OAuthError{Code: "invalid_grant", Description: "refresh token is invalid, expired, or already used", StatusCode: 400}
 	}
 
 	return s.issueOAuthTokens(ctx, storedToken.UserID, clientID, storedToken.Scope, storedToken.Resource)
@@ -572,6 +670,7 @@ func (s *OAuthServerService) issueOAuthTokens(ctx context.Context, userID, clien
 	if user == nil || user.Status != models.UserStatusActive {
 		return nil, &OAuthError{Code: "invalid_grant", Description: "user account is unavailable", StatusCode: 400}
 	}
+	s.pruneExpiredOAuthState(ctx)
 
 	accessToken, expiresIn, err := s.signAccessToken(user, clientID, scope, resource)
 	if err != nil {
@@ -683,6 +782,30 @@ func (s *OAuthServerService) signSessionToken(userID string) (string, error) {
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(s.authCfg.JWTSecret))
 }
 
+func (s *OAuthServerService) pruneExpiredOAuthState(ctx context.Context) {
+	if err := s.oauthStore.CleanupExpiredOAuthState(ctx); err != nil {
+		s.logger.Warn("Failed to clean up expired self-hosted OAuth state", logging.WithField("error", err.Error()))
+	}
+}
+
+func buildAuthorizationErrorRedirect(redirectURI, state string, oauthErr *OAuthError) (string, error) {
+	redirectURL, err := url.Parse(redirectURI)
+	if err != nil {
+		return "", err
+	}
+
+	query := redirectURL.Query()
+	query.Set("error", oauthErr.Code)
+	if description := strings.TrimSpace(oauthErr.Description); description != "" {
+		query.Set("error_description", description)
+	}
+	if state != "" {
+		query.Set("state", state)
+	}
+	redirectURL.RawQuery = query.Encode()
+	return redirectURL.String(), nil
+}
+
 func (s *OAuthServerService) normalizeRequestedScope(raw string) (string, error) {
 	requested := strings.Fields(strings.TrimSpace(raw))
 	if len(requested) == 0 {
@@ -765,6 +888,9 @@ func signingMethodForAlg(alg string) jwt.SigningMethod {
 
 func loadOAuthSigningKey(cfg config.MCPAuthConfig, logger *logging.Logger) (*signingKey, error) {
 	if strings.TrimSpace(cfg.PrivateKeyPEM) == "" {
+		if !cfg.AllowEphemeralKey {
+			return nil, errors.New("MCP_AUTH_PRIVATE_KEY_PEM is required unless MCP_AUTH_ALLOW_EPHEMERAL_KEY is explicitly enabled")
+		}
 		logger.Warn("MCP self-hosted OAuth private key is not configured; generating an ephemeral ECDSA key for this process only")
 		privateKey, err := ecdsa.GenerateKey(elliptic.P256(), crand.Reader)
 		if err != nil {

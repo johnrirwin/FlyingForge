@@ -2,12 +2,64 @@ package httpapi
 
 import (
 	"encoding/json"
+	"html/template"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/johnrirwin/flyingforge/internal/auth"
 	"github.com/johnrirwin/flyingforge/internal/logging"
 )
+
+var authorizeConsentTemplate = template.Must(template.New("oauth-authorize-consent").Parse(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Authorize {{.Prompt.ClientName}}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0b1020; color: #e5e7eb; margin: 0; padding: 2rem; }
+    main { max-width: 34rem; margin: 0 auto; background: #111827; border-radius: 16px; padding: 2rem; box-shadow: 0 16px 48px rgba(0,0,0,0.28); }
+    h1 { margin-top: 0; font-size: 1.6rem; }
+    p, li { line-height: 1.5; }
+    ul { padding-left: 1.2rem; }
+    code { background: #1f2937; border-radius: 6px; padding: 0.15rem 0.35rem; }
+    .actions { display: flex; gap: 0.75rem; margin-top: 1.5rem; }
+    button { border: 0; border-radius: 999px; padding: 0.85rem 1.2rem; font-size: 1rem; cursor: pointer; }
+    .approve { background: #2563eb; color: white; }
+    .deny { background: #374151; color: #f3f4f6; }
+    .meta { color: #9ca3af; font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Authorize {{.Prompt.ClientName}}?</h1>
+    <p>This connector is requesting access to your FlyingForge account.</p>
+    <ul>
+      <li><strong>Client ID:</strong> <code>{{.Prompt.ClientID}}</code></li>
+      <li><strong>Redirect URI:</strong> <code>{{.Prompt.RedirectURI}}</code></li>
+      {{if .Prompt.Resource}}<li><strong>Resource:</strong> <code>{{.Prompt.Resource}}</code></li>{{end}}
+      <li><strong>Requested scopes:</strong> {{.Prompt.Scope}}</li>
+    </ul>
+    <p class="meta">Only approve this request if you trust this connector to read your FlyingForge aircraft and radio data.</p>
+    <form method="post" action="/oauth/authorize">
+      <input type="hidden" name="response_type" value="{{.Request.ResponseType}}">
+      <input type="hidden" name="client_id" value="{{.Request.ClientID}}">
+      <input type="hidden" name="redirect_uri" value="{{.Request.RedirectURI}}">
+      <input type="hidden" name="scope" value="{{.Request.Scope}}">
+      <input type="hidden" name="state" value="{{.Request.State}}">
+      <input type="hidden" name="code_challenge" value="{{.Request.CodeChallenge}}">
+      <input type="hidden" name="code_challenge_method" value="{{.Request.CodeChallengeMethod}}">
+      <input type="hidden" name="resource" value="{{.Request.Resource}}">
+      <div class="actions">
+        <button class="approve" type="submit" name="decision" value="approve">Approve</button>
+        <button class="deny" type="submit" name="decision" value="deny">Deny</button>
+      </div>
+    </form>
+  </main>
+</body>
+</html>`))
 
 // OAuthAPI exposes a self-hosted authorization server for MCP.
 type OAuthAPI struct {
@@ -81,38 +133,88 @@ func (api *OAuthAPI) handleRegisterClient(w http.ResponseWriter, r *http.Request
 }
 
 func (api *OAuthAPI) handleAuthorize(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", "GET")
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		w.Header().Set("Allow", "GET, POST")
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	authReq, err := api.oauthService.ParseAuthorizationRequest(r.URL.Query())
-	if err != nil {
-		api.writeOAuthError(w, err)
-		return
-	}
-
-	if sessionCookie, err := r.Cookie(api.oauthService.SessionCookieName()); err == nil {
-		if userID, sessionErr := api.oauthService.ValidateSessionToken(sessionCookie.Value); sessionErr == nil {
-			redirectURL, authorizeErr := api.oauthService.Authorize(r.Context(), authReq, userID)
-			if authorizeErr != nil {
-				api.writeOAuthError(w, authorizeErr)
-				return
-			}
-			http.Redirect(w, r, redirectURL, http.StatusFound)
+	var values url.Values
+	if r.Method == http.MethodPost {
+		if err := r.ParseForm(); err != nil {
+			api.writeOAuthError(w, &auth.OAuthError{Code: "invalid_request", Description: "invalid authorization form body", StatusCode: http.StatusBadRequest})
 			return
 		}
-		api.clearCookie(w, api.oauthService.SessionCookieName())
+		values = r.PostForm
+	} else {
+		values = r.URL.Query()
 	}
 
-	googleURL, pendingToken, err := api.oauthService.BuildGoogleAuthorizationURL(r.URL.RequestURI())
+	authReq, err := api.oauthService.ParseAuthorizationRequest(values)
 	if err != nil {
 		api.writeOAuthError(w, err)
 		return
 	}
-	api.setCookie(w, api.oauthService.PendingCookieName(), pendingToken, api.oauthService.PendingCookieTTL())
-	http.Redirect(w, r, googleURL, http.StatusFound)
+
+	userID := ""
+	if sessionCookie, err := r.Cookie(api.oauthService.SessionCookieName()); err == nil {
+		validatedUserID, sessionErr := api.oauthService.ValidateSessionToken(sessionCookie.Value)
+		if sessionErr == nil {
+			userID = validatedUserID
+		} else {
+			api.clearCookie(w, api.oauthService.SessionCookieName())
+		}
+	}
+
+	if r.Method == http.MethodGet {
+		if userID != "" {
+			prompt, promptErr := api.oauthService.DescribeAuthorizationRequest(r.Context(), authReq, userID)
+			if promptErr != nil {
+				api.redirectOrWriteAuthorizeError(w, r, authReq, promptErr)
+				return
+			}
+			api.renderAuthorizeConsentPage(w, authReq, prompt)
+			return
+		}
+
+		googleURL, pendingToken, err := api.oauthService.BuildGoogleAuthorizationURL(r.URL.RequestURI())
+		if err != nil {
+			api.writeOAuthError(w, err)
+			return
+		}
+		api.setCookie(w, api.oauthService.PendingCookieName(), pendingToken, api.oauthService.PendingCookieTTL())
+		http.Redirect(w, r, googleURL, http.StatusFound)
+		return
+	}
+
+	if userID == "" {
+		api.clearCookie(w, api.oauthService.SessionCookieName())
+		redirectURL := "/oauth/authorize?" + r.PostForm.Encode()
+		http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+		return
+	}
+
+	switch strings.ToLower(strings.TrimSpace(r.PostForm.Get("decision"))) {
+	case "approve":
+		redirectURL, authorizeErr := api.oauthService.Authorize(r.Context(), authReq, userID)
+		if authorizeErr != nil {
+			api.redirectOrWriteAuthorizeError(w, r, authReq, authorizeErr)
+			return
+		}
+		http.Redirect(w, r, redirectURL, http.StatusFound)
+	case "deny":
+		api.redirectOrWriteAuthorizeError(w, r, authReq, &auth.OAuthError{
+			Code:        "access_denied",
+			Description: "user denied the authorization request",
+			StatusCode:  http.StatusUnauthorized,
+		})
+	default:
+		api.redirectOrWriteAuthorizeError(w, r, authReq, &auth.OAuthError{
+			Code:        "invalid_request",
+			Description: "authorization decision is required",
+			StatusCode:  http.StatusBadRequest,
+		})
+	}
 }
 
 func (api *OAuthAPI) handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
@@ -168,7 +270,7 @@ func (api *OAuthAPI) handleToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (api *OAuthAPI) writeOAuthError(w http.ResponseWriter, err error) {
-	oauthErr := normalizeOAuthError(err)
+	oauthErr := auth.NormalizeOAuthError(err)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(oauthErr.StatusCode)
 	_ = json.NewEncoder(w).Encode(map[string]string{
@@ -177,18 +279,25 @@ func (api *OAuthAPI) writeOAuthError(w http.ResponseWriter, err error) {
 	})
 }
 
-func normalizeOAuthError(err error) *auth.OAuthError {
-	if err == nil {
-		return &auth.OAuthError{Code: "server_error", Description: "unknown OAuth error", StatusCode: http.StatusInternalServerError}
+func (api *OAuthAPI) redirectOrWriteAuthorizeError(w http.ResponseWriter, r *http.Request, authReq *auth.OAuthAuthorizationRequest, err error) {
+	if redirectURL, ok := api.oauthService.AuthorizationErrorRedirect(r.Context(), authReq, err); ok {
+		http.Redirect(w, r, redirectURL, http.StatusFound)
+		return
 	}
-	typed, ok := err.(*auth.OAuthError)
-	if ok {
-		if typed.StatusCode == 0 {
-			typed.StatusCode = http.StatusBadRequest
-		}
-		return typed
+	api.writeOAuthError(w, err)
+}
+
+func (api *OAuthAPI) renderAuthorizeConsentPage(w http.ResponseWriter, authReq *auth.OAuthAuthorizationRequest, prompt *auth.OAuthAuthorizationPrompt) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Frame-Options", "DENY")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+	if err := authorizeConsentTemplate.Execute(w, map[string]any{
+		"Prompt":  prompt,
+		"Request": authReq,
+	}); err != nil {
+		http.Error(w, "failed to render authorization prompt", http.StatusInternalServerError)
 	}
-	return &auth.OAuthError{Code: "server_error", Description: err.Error(), StatusCode: http.StatusInternalServerError}
 }
 
 func (api *OAuthAPI) setCookie(w http.ResponseWriter, name, value string, ttl time.Duration) {

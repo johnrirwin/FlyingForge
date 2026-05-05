@@ -204,3 +204,19 @@ func TestLoadMCPConfig_SelfHostedDurationOverrides(t *testing.T) {
 		t.Fatalf("expected session TTL override, got %s", cfg.Auth.SessionTTL)
 	}
 }
+
+func TestLoadMCPConfig_AllowEphemeralKeyRequiresExplicitOptIn(t *testing.T) {
+	t.Setenv("MCP_AUTH_SELF_HOSTED", "true")
+	t.Setenv("MCP_AUTH_ISSUER", "https://issuer.example")
+
+	cfg := loadMCPConfig()
+	if cfg.Auth.AllowEphemeralKey {
+		t.Fatalf("expected ephemeral signing key fallback to be disabled by default")
+	}
+
+	t.Setenv("MCP_AUTH_ALLOW_EPHEMERAL_KEY", "true")
+	cfg = loadMCPConfig()
+	if !cfg.Auth.AllowEphemeralKey {
+		t.Fatalf("expected explicit ephemeral signing key opt-in to be honored")
+	}
+}
