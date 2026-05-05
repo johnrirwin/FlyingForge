@@ -43,11 +43,13 @@ type App struct {
 	AuthService      *auth.Service
 	AuthMiddleware   *auth.Middleware
 	MCPAuthService   *auth.MCPAuthService
+	OAuthService     *auth.OAuthServerService
 	HTTPServer       *httpapi.Server
 	MCPHTTPHandler   *mcp.HTTPHandler
 	MCPServer        *mcp.Server
 	db               *database.DB
 	userStore        *database.UserStore
+	oauthStore       *database.OAuthStore
 	aircraftStore    *database.AircraftStore
 	fcConfigStore    *database.FCConfigStore
 	inventoryStore   *database.InventoryStore
@@ -269,8 +271,10 @@ func (a *App) initDatabaseServices() {
 
 	// Initialize auth
 	a.userStore = database.NewUserStore(db)
+	a.oauthStore = database.NewOAuthStore(db)
 	a.AuthService = auth.NewService(a.userStore, a.Config.Auth, a.Logger)
 	a.AuthMiddleware = auth.NewMiddleware(a.AuthService)
+	a.OAuthService = auth.NewOAuthServerService(a.Config.MCP, a.Config.Auth, a.userStore, a.oauthStore, a.AuthService, a.Logger)
 
 	// Initialize FC config store
 	a.fcConfigStore = database.NewFCConfigStore(db)
@@ -303,6 +307,7 @@ func (a *App) initServers() {
 		a.RadioSvc,
 		a.BatterySvc,
 		a.AuthService,
+		a.OAuthService,
 		a.AuthMiddleware,
 		a.MCPHTTPHandler,
 		a.userStore,

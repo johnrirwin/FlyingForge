@@ -33,6 +33,7 @@ type Server struct {
 	radioSvc            *radio.Service
 	batterySvc          *battery.Service
 	authSvc             *auth.Service
+	oauthSvc            *auth.OAuthServerService
 	authMiddleware      *auth.Middleware
 	mcpHandler          *mcp.HTTPHandler
 	userStore           *database.UserStore
@@ -48,7 +49,7 @@ type Server struct {
 	enableManualRefresh bool
 }
 
-func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, buildSvc *builds.Service, radioSvc *radio.Service, batterySvc *battery.Service, authSvc *auth.Service, authMiddleware *auth.Middleware, mcpHandler *mcp.HTTPHandler, userStore *database.UserStore, aircraftStore *database.AircraftStore, fcConfigStore *database.FCConfigStore, inventoryStore *database.InventoryStore, gearCatalogStore *database.GearCatalogStore, imageSvc *images.Service, refreshLimiter ratelimit.RateLimiter, enableManualRefresh bool, logger *logging.Logger) *Server {
+func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, buildSvc *builds.Service, radioSvc *radio.Service, batterySvc *battery.Service, authSvc *auth.Service, oauthSvc *auth.OAuthServerService, authMiddleware *auth.Middleware, mcpHandler *mcp.HTTPHandler, userStore *database.UserStore, aircraftStore *database.AircraftStore, fcConfigStore *database.FCConfigStore, inventoryStore *database.InventoryStore, gearCatalogStore *database.GearCatalogStore, imageSvc *images.Service, refreshLimiter ratelimit.RateLimiter, enableManualRefresh bool, logger *logging.Logger) *Server {
 	return &Server{
 		agg:                 agg,
 		equipmentSvc:        equipmentSvc,
@@ -58,6 +59,7 @@ func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventoryS
 		radioSvc:            radioSvc,
 		batterySvc:          batterySvc,
 		authSvc:             authSvc,
+		oauthSvc:            oauthSvc,
 		authMiddleware:      authMiddleware,
 		mcpHandler:          mcpHandler,
 		userStore:           userStore,
@@ -87,6 +89,10 @@ func (s *Server) Start(addr string) error {
 	if s.authSvc != nil && s.authMiddleware != nil {
 		authAPI := NewAuthAPI(s.authSvc, s.authMiddleware, s.logger)
 		authAPI.RegisterRoutes(mux, s.corsMiddleware)
+	}
+	if s.oauthSvc != nil && s.oauthSvc.Enabled() {
+		oauthAPI := NewOAuthAPI(s.oauthSvc, s.logger)
+		oauthAPI.RegisterRoutes(mux)
 	}
 
 	// Equipment and inventory routes

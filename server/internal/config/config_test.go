@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"testing"
+	"time"
 )
 
 func loadWithArgs(t *testing.T, args ...string) *Config {
@@ -144,5 +145,62 @@ func TestLoadMCPConfig_AllowedOriginsUsesConfiguredListWhenNonEmpty(t *testing.T
 		if cfg.AllowedOrigins[i] != expected {
 			t.Fatalf("expected allowed origin %q at index %d, got %q", expected, i, cfg.AllowedOrigins[i])
 		}
+	}
+}
+
+func TestLoadMCPConfig_SelfHostedDefaultsFromPublicBaseURL(t *testing.T) {
+	t.Setenv("MCP_PUBLIC_BASE_URL", "https://flyingforge.example")
+	t.Setenv("MCP_AUTH_SELF_HOSTED", "true")
+
+	cfg := loadMCPConfig()
+
+	if !cfg.Auth.SelfHosted {
+		t.Fatalf("expected self-hosted auth to be enabled")
+	}
+	if cfg.Auth.Issuer != "https://flyingforge.example" {
+		t.Fatalf("expected issuer to default from public base URL, got %q", cfg.Auth.Issuer)
+	}
+	if cfg.Auth.GoogleRedirectURI != "https://flyingforge.example/oauth/google/callback" {
+		t.Fatalf("expected Google redirect URI to default from public base URL, got %q", cfg.Auth.GoogleRedirectURI)
+	}
+	if cfg.Auth.AccessTokenTTL != time.Hour {
+		t.Fatalf("expected default access token TTL of 1h, got %s", cfg.Auth.AccessTokenTTL)
+	}
+	if cfg.Auth.AuthorizationCodeTTL != 10*time.Minute {
+		t.Fatalf("expected default auth code TTL of 10m, got %s", cfg.Auth.AuthorizationCodeTTL)
+	}
+	if cfg.Auth.RefreshTokenTTL != 30*24*time.Hour {
+		t.Fatalf("expected default refresh token TTL of 30d, got %s", cfg.Auth.RefreshTokenTTL)
+	}
+	if cfg.Auth.SessionTTL != 24*time.Hour {
+		t.Fatalf("expected default session TTL of 24h, got %s", cfg.Auth.SessionTTL)
+	}
+}
+
+func TestLoadMCPConfig_SelfHostedDurationOverrides(t *testing.T) {
+	t.Setenv("MCP_AUTH_SELF_HOSTED", "true")
+	t.Setenv("MCP_AUTH_ISSUER", "https://issuer.example")
+	t.Setenv("MCP_AUTH_GOOGLE_REDIRECT_URI", "https://issuer.example/custom-google-callback")
+	t.Setenv("MCP_AUTH_ACCESS_TOKEN_TTL", "2h")
+	t.Setenv("MCP_AUTH_CODE_TTL", "15m")
+	t.Setenv("MCP_AUTH_REFRESH_TOKEN_TTL", "720h")
+	t.Setenv("MCP_AUTH_SESSION_TTL", "12h")
+
+	cfg := loadMCPConfig()
+
+	if cfg.Auth.GoogleRedirectURI != "https://issuer.example/custom-google-callback" {
+		t.Fatalf("expected explicit Google redirect URI override, got %q", cfg.Auth.GoogleRedirectURI)
+	}
+	if cfg.Auth.AccessTokenTTL != 2*time.Hour {
+		t.Fatalf("expected access token TTL override, got %s", cfg.Auth.AccessTokenTTL)
+	}
+	if cfg.Auth.AuthorizationCodeTTL != 15*time.Minute {
+		t.Fatalf("expected auth code TTL override, got %s", cfg.Auth.AuthorizationCodeTTL)
+	}
+	if cfg.Auth.RefreshTokenTTL != 720*time.Hour {
+		t.Fatalf("expected refresh token TTL override, got %s", cfg.Auth.RefreshTokenTTL)
+	}
+	if cfg.Auth.SessionTTL != 12*time.Hour {
+		t.Fatalf("expected session TTL override, got %s", cfg.Auth.SessionTTL)
 	}
 }

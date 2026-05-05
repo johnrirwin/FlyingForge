@@ -81,6 +81,9 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationUsers,
 		migrationUserIdentities,
 		migrationRefreshTokens,
+		migrationOAuthClients,
+		migrationOAuthAuthorizationCodes,
+		migrationOAuthRefreshTokens,
 		migrationSellers,
 		migrationEquipmentItems,
 		migrationInventoryItems,
@@ -187,6 +190,61 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash ON refresh_tokens(token_hash);
+`
+
+const migrationOAuthClients = `
+CREATE TABLE IF NOT EXISTS oauth_clients (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id VARCHAR(255) NOT NULL UNIQUE,
+    client_name VARCHAR(255),
+    redirect_uris JSONB NOT NULL DEFAULT '[]'::jsonb,
+    grant_types JSONB NOT NULL DEFAULT '[]'::jsonb,
+    response_types JSONB NOT NULL DEFAULT '[]'::jsonb,
+    token_endpoint_auth_method VARCHAR(50) NOT NULL DEFAULT 'none',
+    scope TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_oauth_clients_client_id ON oauth_clients(client_id);
+`
+
+const migrationOAuthAuthorizationCodes = `
+CREATE TABLE IF NOT EXISTS oauth_authorization_codes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    code_hash VARCHAR(255) NOT NULL UNIQUE,
+    client_id VARCHAR(255) NOT NULL REFERENCES oauth_clients(client_id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    redirect_uri TEXT NOT NULL,
+    scope TEXT NOT NULL,
+    resource TEXT,
+    code_challenge VARCHAR(255) NOT NULL,
+    code_challenge_method VARCHAR(20) NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    consumed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_oauth_authorization_codes_hash ON oauth_authorization_codes(code_hash);
+CREATE INDEX IF NOT EXISTS idx_oauth_authorization_codes_client ON oauth_authorization_codes(client_id);
+CREATE INDEX IF NOT EXISTS idx_oauth_authorization_codes_user ON oauth_authorization_codes(user_id);
+`
+
+const migrationOAuthRefreshTokens = `
+CREATE TABLE IF NOT EXISTS oauth_refresh_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    client_id VARCHAR(255) NOT NULL REFERENCES oauth_clients(client_id) ON DELETE CASCADE,
+    token_hash VARCHAR(255) NOT NULL UNIQUE,
+    scope TEXT NOT NULL,
+    resource TEXT,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    revoked_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_hash ON oauth_refresh_tokens(token_hash);
+CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_user ON oauth_refresh_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_client ON oauth_refresh_tokens(client_id);
 `
 
 const migrationSellers = `

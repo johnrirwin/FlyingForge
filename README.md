@@ -118,12 +118,20 @@ The web app will be available at `http://localhost:5173`.
 | `MCP_MODE` | `false` | Run in MCP stdio mode |
 | `MCP_PUBLIC_BASE_URL` | (empty) | Public HTTPS base URL used for MCP protected-resource metadata |
 | `MCP_ALLOWED_ORIGINS` | `https://chatgpt.com,https://chat.openai.com` | Allowed browser origins for the HTTP MCP endpoint |
-| `MCP_AUTH_ISSUER` | (empty) | OIDC issuer for linked-user MCP OAuth |
+| `MCP_AUTH_SELF_HOSTED` | `false` | Enable FlyingForge as the OAuth authorization server for MCP |
+| `MCP_AUTH_ISSUER` | (empty) | OIDC/OAuth issuer for linked-user MCP OAuth; for self-hosted mode this should be your public HTTPS app base URL |
 | `MCP_AUTH_AUDIENCE` | (empty) | Expected audience for MCP access tokens |
-| `MCP_AUTH_RESOURCE` | `MCP_PUBLIC_BASE_URL` | Protected resource identifier for MCP OAuth |
+| `MCP_AUTH_RESOURCE` | `MCP_PUBLIC_BASE_URL + /mcp` | Protected resource identifier for MCP OAuth |
 | `MCP_AUTH_SCOPES` | `flyingforge.read` | Comma-separated scopes required for private MCP tools |
 | `MCP_AUTH_DISCOVERY_URL` | (empty) | Optional OIDC discovery override |
 | `MCP_AUTH_JWKS_URL` | (empty) | Optional JWKS override |
+| `MCP_AUTH_PRIVATE_KEY_PEM` | (empty) | PEM-encoded RSA or ECDSA private key for self-hosted OAuth JWT signing |
+| `MCP_AUTH_KEY_ID` | `ff-self-hosted` | JWK key ID advertised by the self-hosted JWKS endpoint |
+| `MCP_AUTH_GOOGLE_REDIRECT_URI` | `MCP_PUBLIC_BASE_URL + /oauth/google/callback` | Google redirect URI used by the self-hosted OAuth login flow |
+| `MCP_AUTH_ACCESS_TOKEN_TTL` | `1h` | Self-hosted OAuth access-token lifetime |
+| `MCP_AUTH_CODE_TTL` | `10m` | Self-hosted OAuth authorization-code lifetime |
+| `MCP_AUTH_REFRESH_TOKEN_TTL` | `720h` | Self-hosted OAuth refresh-token lifetime |
+| `MCP_AUTH_SESSION_TTL` | `24h` | Browser login-session lifetime for the self-hosted OAuth flow |
 | `CACHE_TTL` | `5m` | Cache TTL for feed items |
 | `RATE_LIMIT` | `1s` | Min delay between requests to same host |
 | `LOG_LEVEL` | `info` | Log level (debug, info, warn, error) |
@@ -452,22 +460,29 @@ Or using `go run`:
    ```bash
    cloudflared tunnel --url http://localhost:8080
    ```
-3. Set MCP environment variables so the public base URL matches the tunnel:
+3. Set MCP environment variables so the public base URL matches the tunnel. For the self-hosted OAuth path, point the issuer back at FlyingForge itself:
    ```bash
    export MCP_PUBLIC_BASE_URL="https://your-public-host.example.com"
-   export MCP_AUTH_ISSUER="https://your-oidc-issuer.example.com"
-   export MCP_AUTH_AUDIENCE="your-audience"
+   export MCP_AUTH_SELF_HOSTED="true"
+   export MCP_AUTH_ISSUER="https://your-public-host.example.com"
+   export MCP_AUTH_AUDIENCE="https://your-public-host.example.com/mcp"
    export MCP_AUTH_RESOURCE="https://your-public-host.example.com/mcp"
    export MCP_AUTH_SCOPES="flyingforge.read"
+   export MCP_AUTH_GOOGLE_REDIRECT_URI="https://your-public-host.example.com/oauth/google/callback"
+   export MCP_AUTH_PRIVATE_KEY_PEM="$(cat /path/to/private-key.pem)"
    ```
 4. In your hosted MCP client, create a connector pointing at:
    - MCP URL: `https://your-public-host.example.com/mcp`
-5. Confirm the client can complete a linked-user prompt such as:
+5. In Google Cloud Console, add the same public callback URL to the authorized redirect URIs for your existing Google OAuth app:
+   - `https://your-public-host.example.com/oauth/google/callback`
+6. Confirm the client can complete a linked-user prompt such as:
    - “Show my aircraft and latest tuning settings.”
 
 The MCP host also serves protected-resource discovery at:
 
 - `https://your-public-host.example.com/.well-known/oauth-protected-resource`
+- `https://your-public-host.example.com/.well-known/openid-configuration`
+- `https://your-public-host.example.com/oauth/jwks.json`
 
 ## Normalized Item Schema
 

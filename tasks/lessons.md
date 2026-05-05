@@ -32,3 +32,8 @@ Review this file at the start of each session and apply any relevant rules befor
 - Context: repository cleanup for LLM-agnostic tooling.
 - Correction from user: remove vendor-specific instruction files while keeping generic repository guidance like `AGENTS.md`.
 - Rule to follow next time: when asked to make the repo tool-agnostic, delete vendor-specific instruction files but preserve generic guidance unless the user explicitly asks to remove that too.
+
+### 2026-05-05 — Be explicit about whether code changed
+- Context: answering architecture questions mid-implementation.
+- Correction from user: make it clear whether I actually changed the code or was only giving guidance.
+- Rule to follow next time: explicitly state when no repo changes were made, especially after a design-only or clarification response.
