@@ -2,6 +2,8 @@ package httpapi
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -293,6 +295,81 @@ func TestOAuthAPI_AuthorizeErrorsRedirectToRegisteredClient(t *testing.T) {
 	}
 }
 
+func TestOAuthAPI_TokenResponsesDisableCaching(t *testing.T) {
+	api, oauthService, userStore, _, _ := setupTestOAuthAPI(t)
+	ctx := context.Background()
+
+	user, err := userStore.Create(ctx, models.CreateUserParams{
+		Email:  "pilot@example.com",
+		Status: models.UserStatusActive,
+	})
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	registration, err := oauthService.RegisterClient(ctx, auth.OAuthDynamicClientRegistrationRequest{
+		ClientName:   "ChatGPT Test Connector",
+		RedirectURIs: []string{"https://chat.openai.com/a/oauth/callback"},
+	})
+	if err != nil {
+		t.Fatalf("register client: %v", err)
+	}
+
+	verifier := "http-token-cache-verifier-1234567890"
+	authRequest, err := oauthService.ParseAuthorizationRequest(url.Values{
+		"response_type":         []string{"code"},
+		"client_id":             []string{registration.ClientID},
+		"redirect_uri":          []string{registration.RedirectURIs[0]},
+		"scope":                 []string{"flyingforge.read"},
+		"state":                 []string{"opaque-state"},
+		"code_challenge":        []string{codeChallengeForVerifier(verifier)},
+		"code_challenge_method": []string{"S256"},
+		"resource":              []string{"https://flyingforge.example/mcp"},
+	})
+	if err != nil {
+		t.Fatalf("parse auth request: %v", err)
+	}
+	redirectURL, err := oauthService.Authorize(ctx, authRequest, user.ID)
+	if err != nil {
+		t.Fatalf("authorize request: %v", err)
+	}
+	code := mustCodeFromRedirectURL(t, redirectURL)
+
+	form := url.Values{
+		"grant_type":    []string{"authorization_code"},
+		"client_id":     []string{registration.ClientID},
+		"code":          []string{code},
+		"redirect_uri":  []string{registration.RedirectURIs[0]},
+		"code_verifier": []string{verifier},
+		"resource":      []string{"https://flyingforge.example/mcp"},
+	}
+	request := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	responseRecorder := httptest.NewRecorder()
+
+	api.handleToken(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected HTTP 200, got %d with body %s", responseRecorder.Code, responseRecorder.Body.String())
+	}
+	assertNoStoreHeaders(t, responseRecorder.Result())
+}
+
+func TestOAuthAPI_ErrorResponsesDisableCaching(t *testing.T) {
+	api, _, _, _, _ := setupTestOAuthAPI(t)
+
+	request := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader("%%%"))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	responseRecorder := httptest.NewRecorder()
+
+	api.handleToken(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected HTTP 400, got %d with body %s", responseRecorder.Code, responseRecorder.Body.String())
+	}
+	assertNoStoreHeaders(t, responseRecorder.Result())
+}
+
 func makeSessionCookie(t *testing.T, jwtSecret, userID string, expiresAt time.Time) *http.Cookie {
 	t.Helper()
 
@@ -307,4 +384,34 @@ func makeSessionCookie(t *testing.T, jwtSecret, userID string, expiresAt time.Ti
 		t.Fatalf("sign session token: %v", err)
 	}
 	return &http.Cookie{Name: "ff_mcp_oauth_session", Value: signed, Path: "/oauth"}
+}
+
+func mustCodeFromRedirectURL(t *testing.T, redirectURL string) string {
+	t.Helper()
+
+	parsed, err := url.Parse(redirectURL)
+	if err != nil {
+		t.Fatalf("parse redirect URL: %v", err)
+	}
+	code := parsed.Query().Get("code")
+	if code == "" {
+		t.Fatalf("expected code in redirect URL %q", redirectURL)
+	}
+	return code
+}
+
+func assertNoStoreHeaders(t *testing.T, response *http.Response) {
+	t.Helper()
+
+	if got := response.Header.Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("expected Cache-Control no-store, got %q", got)
+	}
+	if got := response.Header.Get("Pragma"); got != "no-cache" {
+		t.Fatalf("expected Pragma no-cache, got %q", got)
+	}
+}
+
+func codeChallengeForVerifier(verifier string) string {
+	sum := sha256.Sum256([]byte(verifier))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
 }

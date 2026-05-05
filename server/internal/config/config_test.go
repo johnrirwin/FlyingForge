@@ -1,6 +1,11 @@
 package config
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/pem"
 	"flag"
 	"io"
 	"os"
@@ -219,4 +224,51 @@ func TestLoadMCPConfig_AllowEphemeralKeyRequiresExplicitOptIn(t *testing.T) {
 	if !cfg.Auth.AllowEphemeralKey {
 		t.Fatalf("expected explicit ephemeral signing key opt-in to be honored")
 	}
+}
+
+func TestLoadMCPConfig_SelfHostedRequiresUsableSigningKeyUnlessEphemeralOptIn(t *testing.T) {
+	t.Setenv("MCP_AUTH_SELF_HOSTED", "true")
+	t.Setenv("MCP_AUTH_ISSUER", "https://issuer.example")
+
+	cfg := loadMCPConfig()
+	if cfg.Auth.Enabled {
+		t.Fatalf("expected self-hosted MCP auth to stay disabled without a signing key or explicit ephemeral opt-in")
+	}
+
+	t.Setenv("MCP_AUTH_PRIVATE_KEY_PEM", generateTestECDSAPrivateKeyPEM(t))
+	cfg = loadMCPConfig()
+	if !cfg.Auth.Enabled {
+		t.Fatalf("expected self-hosted MCP auth to be enabled when a valid signing key is configured")
+	}
+
+	t.Setenv("MCP_AUTH_PRIVATE_KEY_PEM", "not a key")
+	cfg = loadMCPConfig()
+	if cfg.Auth.Enabled {
+		t.Fatalf("expected self-hosted MCP auth to stay disabled when the signing key is invalid")
+	}
+
+	t.Setenv("MCP_AUTH_ALLOW_EPHEMERAL_KEY", "true")
+	cfg = loadMCPConfig()
+	if !cfg.Auth.Enabled {
+		t.Fatalf("expected explicit ephemeral-key opt-in to enable self-hosted MCP auth even without a valid PEM key")
+	}
+}
+
+func generateTestECDSAPrivateKeyPEM(t *testing.T) string {
+	t.Helper()
+
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate test ECDSA key: %v", err)
+	}
+
+	der, err := x509.MarshalECPrivateKey(privateKey)
+	if err != nil {
+		t.Fatalf("marshal test ECDSA key: %v", err)
+	}
+
+	return string(pem.EncodeToMemory(&pem.Block{
+		Type:  "EC PRIVATE KEY",
+		Bytes: der,
+	}))
 }

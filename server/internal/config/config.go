@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/x509"
+	"encoding/pem"
 	"flag"
 	"os"
 	"strconv"
@@ -274,6 +276,9 @@ func loadMCPConfig() MCPConfig {
 		SessionTTL:           sessionTTL,
 	}
 	authCfg.Enabled = authCfg.Issuer != ""
+	if authCfg.Enabled && authCfg.SelfHosted && !authCfg.AllowEphemeralKey {
+		authCfg.Enabled = selfHostedSigningKeyConfigured(authCfg.PrivateKeyPEM)
+	}
 
 	return MCPConfig{
 		PublicBaseURL:  publicBaseURL,
@@ -365,6 +370,30 @@ func getEnvOrDefault(key, defaultValue string) string {
 		return v
 	}
 	return defaultValue
+}
+
+func selfHostedSigningKeyConfigured(privateKeyPEM string) bool {
+	privateKeyPEM = strings.TrimSpace(privateKeyPEM)
+	if privateKeyPEM == "" {
+		return false
+	}
+
+	block, _ := pem.Decode([]byte(privateKeyPEM))
+	if block == nil {
+		return false
+	}
+
+	if _, err := x509.ParsePKCS8PrivateKey(block.Bytes); err == nil {
+		return true
+	}
+	if _, err := x509.ParseECPrivateKey(block.Bytes); err == nil {
+		return true
+	}
+	if _, err := x509.ParsePKCS1PrivateKey(block.Bytes); err == nil {
+		return true
+	}
+
+	return false
 }
 
 func splitAndTrim(value string) []string {

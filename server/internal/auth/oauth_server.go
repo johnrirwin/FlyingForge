@@ -615,7 +615,7 @@ func (s *OAuthServerService) exchangeAuthorizationCode(ctx context.Context, valu
 		return nil, &OAuthError{Code: "invalid_grant", Description: "authorization code is invalid, expired, or already used", StatusCode: 400}
 	}
 
-	return s.issueOAuthTokens(ctx, authCode.UserID, clientID, authCode.Scope, authCode.Resource)
+	return s.issueOAuthTokens(ctx, client, authCode.UserID, clientID, authCode.Scope, authCode.Resource)
 }
 
 func (s *OAuthServerService) exchangeRefreshToken(ctx context.Context, values url.Values) (*OAuthTokenResponse, error) {
@@ -659,10 +659,14 @@ func (s *OAuthServerService) exchangeRefreshToken(ctx context.Context, values ur
 		return nil, &OAuthError{Code: "invalid_grant", Description: "refresh token is invalid, expired, or already used", StatusCode: 400}
 	}
 
-	return s.issueOAuthTokens(ctx, storedToken.UserID, clientID, storedToken.Scope, storedToken.Resource)
+	return s.issueOAuthTokens(ctx, client, storedToken.UserID, clientID, storedToken.Scope, storedToken.Resource)
 }
 
-func (s *OAuthServerService) issueOAuthTokens(ctx context.Context, userID, clientID, scope, resource string) (*OAuthTokenResponse, error) {
+func (s *OAuthServerService) issueOAuthTokens(ctx context.Context, client *models.OAuthClient, userID, clientID, scope, resource string) (*OAuthTokenResponse, error) {
+	if client == nil {
+		return nil, &OAuthError{Code: "server_error", Description: "OAuth client is required", StatusCode: 500}
+	}
+
 	user, err := s.userStore.GetByID(ctx, userID)
 	if err != nil {
 		return nil, &OAuthError{Code: "server_error", Description: "failed to load user", StatusCode: 500}
@@ -677,23 +681,27 @@ func (s *OAuthServerService) issueOAuthTokens(ctx context.Context, userID, clien
 		return nil, err
 	}
 
-	refreshValue, err := s.randomOpaqueToken(32)
-	if err != nil {
-		return nil, &OAuthError{Code: "server_error", Description: "failed to generate refresh token", StatusCode: 500}
-	}
-	_, err = s.oauthStore.CreateRefreshToken(ctx, user.ID, clientID, hashToken(refreshValue), scope, resource, s.now().Add(s.mcpCfg.Auth.RefreshTokenTTL))
-	if err != nil {
-		return nil, &OAuthError{Code: "server_error", Description: "failed to persist refresh token", StatusCode: 500}
+	response := &OAuthTokenResponse{
+		AccessToken: accessToken,
+		TokenType:   "Bearer",
+		ExpiresIn:   expiresIn,
+		Scope:       scope,
+		Resource:    resource,
 	}
 
-	return &OAuthTokenResponse{
-		AccessToken:  accessToken,
-		TokenType:    "Bearer",
-		ExpiresIn:    expiresIn,
-		Scope:        scope,
-		RefreshToken: refreshValue,
-		Resource:     resource,
-	}, nil
+	if containsString(client.GrantTypes, models.OAuthGrantTypeRefreshToken) {
+		refreshValue, err := s.randomOpaqueToken(32)
+		if err != nil {
+			return nil, &OAuthError{Code: "server_error", Description: "failed to generate refresh token", StatusCode: 500}
+		}
+		_, err = s.oauthStore.CreateRefreshToken(ctx, user.ID, clientID, hashToken(refreshValue), scope, resource, s.now().Add(s.mcpCfg.Auth.RefreshTokenTTL))
+		if err != nil {
+			return nil, &OAuthError{Code: "server_error", Description: "failed to persist refresh token", StatusCode: 500}
+		}
+		response.RefreshToken = refreshValue
+	}
+
+	return response, nil
 }
 
 func (s *OAuthServerService) signAccessToken(user *models.User, clientID, scope, resource string) (string, int, error) {

@@ -220,6 +220,64 @@ func TestOAuthServerService_RegisterClientRejectsNonHTTPSRedirectURIs(t *testing
 	}
 }
 
+func TestOAuthServerService_AuthorizationCodeOnlyClientDoesNotReceiveRefreshToken(t *testing.T) {
+	service, userStore := setupTestOAuthServerService(t)
+	ctx := context.Background()
+
+	user, err := userStore.Create(ctx, models.CreateUserParams{
+		Email:  "pilot@example.com",
+		Status: models.UserStatusActive,
+	})
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	registration, err := service.RegisterClient(ctx, OAuthDynamicClientRegistrationRequest{
+		ClientName:   "Auth Code Only Connector",
+		RedirectURIs: []string{"https://chat.openai.com/a/oauth/callback"},
+		GrantTypes:   []string{models.OAuthGrantTypeAuthorizationCode},
+	})
+	if err != nil {
+		t.Fatalf("register client: %v", err)
+	}
+
+	verifier := "auth-code-only-verifier-1234567890"
+	authRequest, err := service.ParseAuthorizationRequest(url.Values{
+		"response_type":         []string{"code"},
+		"client_id":             []string{registration.ClientID},
+		"redirect_uri":          []string{registration.RedirectURIs[0]},
+		"scope":                 []string{"flyingforge.read"},
+		"state":                 []string{"opaque-state"},
+		"code_challenge":        []string{codeChallengeForVerifier(verifier)},
+		"code_challenge_method": []string{"S256"},
+		"resource":              []string{"https://flyingforge.example/mcp"},
+	})
+	if err != nil {
+		t.Fatalf("parse auth request: %v", err)
+	}
+
+	redirectURL, err := service.Authorize(ctx, authRequest, user.ID)
+	if err != nil {
+		t.Fatalf("authorize request: %v", err)
+	}
+	code := mustCodeFromRedirect(t, redirectURL)
+
+	tokenResponse, err := service.ExchangeToken(ctx, url.Values{
+		"grant_type":    []string{"authorization_code"},
+		"client_id":     []string{registration.ClientID},
+		"code":          []string{code},
+		"redirect_uri":  []string{registration.RedirectURIs[0]},
+		"code_verifier": []string{verifier},
+		"resource":      []string{"https://flyingforge.example/mcp"},
+	})
+	if err != nil {
+		t.Fatalf("exchange authorization code: %v", err)
+	}
+	if tokenResponse.RefreshToken != "" {
+		t.Fatalf("expected no refresh token for authorization_code-only client, got %+v", tokenResponse)
+	}
+}
+
 func TestOAuthServerService_InvalidAuthorizationCodeExchangeDoesNotBurnCode(t *testing.T) {
 	service, userStore := setupTestOAuthServerService(t)
 	ctx := context.Background()

@@ -272,6 +272,8 @@ func (api *OAuthAPI) handleToken(w http.ResponseWriter, r *http.Request) {
 func (api *OAuthAPI) writeOAuthError(w http.ResponseWriter, err error) {
 	oauthErr := auth.NormalizeOAuthError(err)
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Pragma", "no-cache")
 	w.WriteHeader(oauthErr.StatusCode)
 	_ = json.NewEncoder(w).Encode(map[string]string{
 		"error":             oauthErr.Code,
@@ -328,6 +330,8 @@ func (api *OAuthAPI) clearCookie(w http.ResponseWriter, name string) {
 
 func writeOAuthJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Pragma", "no-cache")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(data)
 }
