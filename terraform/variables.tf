@@ -197,3 +197,28 @@ variable "encryption_key" {
   type        = string
   sensitive   = true
 }
+
+variable "auth_jwt_secret" {
+  description = "Secret key for signing FlyingForge web and self-hosted OAuth session JWTs"
+  type        = string
+  sensitive   = true
+}
+
+variable "mcp_auth_self_hosted" {
+  description = "Whether to enable FlyingForge as the OAuth authorization server for MCP"
+  type        = bool
+  default     = false
+}
+
+variable "mcp_auth_private_key_pem" {
+  description = "PEM-encoded private key used to sign self-hosted MCP OAuth access tokens"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "mcp_auth_key_id" {
+  description = "JWK key ID advertised for the self-hosted MCP OAuth signing key"
+  type        = string
+  default     = "ff-self-hosted"
+}

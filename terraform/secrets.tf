@@ -11,9 +11,11 @@ resource "aws_secretsmanager_secret" "app_secrets" {
 resource "aws_secretsmanager_secret_version" "app_secrets" {
   secret_id = aws_secretsmanager_secret.app_secrets.id
   secret_string = jsonencode({
-    GOOGLE_CLIENT_ID     = var.google_client_id
-    GOOGLE_CLIENT_SECRET = var.google_client_secret
-    ENCRYPTION_KEY       = var.encryption_key
+    GOOGLE_CLIENT_ID         = var.google_client_id
+    GOOGLE_CLIENT_SECRET     = var.google_client_secret
+    ENCRYPTION_KEY           = var.encryption_key
+    AUTH_JWT_SECRET          = var.auth_jwt_secret
+    MCP_AUTH_PRIVATE_KEY_PEM = var.mcp_auth_private_key_pem
   })
 }
 

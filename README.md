@@ -132,6 +132,7 @@ The web app will be available at `http://localhost:5173`.
 | `MCP_AUTH_CODE_TTL` | `10m` | Self-hosted OAuth authorization-code lifetime |
 | `MCP_AUTH_REFRESH_TOKEN_TTL` | `720h` | Self-hosted OAuth refresh-token lifetime |
 | `MCP_AUTH_SESSION_TTL` | `24h` | Browser login-session lifetime for the self-hosted OAuth flow |
+| `AUTH_JWT_SECRET` | (required) | Secret key for signing the main web auth tokens and self-hosted OAuth browser-session tokens |
 | `CACHE_TTL` | `5m` | Cache TTL for feed items |
 | `RATE_LIMIT` | `1s` | Min delay between requests to same host |
 | `LOG_LEVEL` | `info` | Log level (debug, info, warn, error) |
@@ -411,6 +412,38 @@ npm run build
 # Serve the dist/ folder with any static server
 ```
 
+### AWS Production Deployment
+
+The Terraform + GitHub Actions deployment now supports the self-hosted MCP OAuth flow on the main app domain.
+
+Required production routing:
+
+- `/mcp`
+- `/.well-known/oauth-protected-resource`
+- `/.well-known/openid-configuration`
+- `/.well-known/oauth-authorization-server`
+- `/oauth/*`
+
+Required GitHub Actions secrets:
+
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `ENCRYPTION_KEY`
+- `AUTH_JWT_SECRET`
+- `MCP_AUTH_PRIVATE_KEY_PEM`
+
+Before deploying, make sure your Google OAuth app allows both production callbacks:
+
+- `https://flyingforge.com/api/auth/google/callback`
+- `https://flyingforge.com/oauth/google/callback`
+
+After the Terraform apply finishes, verify these production URLs return JSON instead of the SPA:
+
+- `https://flyingforge.com/.well-known/oauth-protected-resource`
+- `https://flyingforge.com/.well-known/openid-configuration`
+- `https://flyingforge.com/oauth/jwks.json`
+- `https://flyingforge.com/mcp`
+
 ### MCP Integration
 
 #### Local stdio MCP (any stdio-compatible client)
@@ -483,6 +516,17 @@ The MCP host also serves protected-resource discovery at:
 - `https://your-public-host.example.com/.well-known/oauth-protected-resource`
 - `https://your-public-host.example.com/.well-known/openid-configuration`
 - `https://your-public-host.example.com/oauth/jwks.json`
+
+For AWS production, the included Terraform config routes these paths through CloudFront + the ALB, and the ECS task injects:
+
+- `MCP_PUBLIC_BASE_URL=https://flyingforge.com`
+- `MCP_AUTH_SELF_HOSTED=true`
+- `MCP_AUTH_ISSUER=https://flyingforge.com`
+- `MCP_AUTH_AUDIENCE=https://flyingforge.com/mcp`
+- `MCP_AUTH_RESOURCE=https://flyingforge.com/mcp`
+- `MCP_AUTH_GOOGLE_REDIRECT_URI=https://flyingforge.com/oauth/google/callback`
+
+The deploy workflow also expects a stable `MCP_AUTH_PRIVATE_KEY_PEM` GitHub secret so production does not fall back to the ephemeral signing key used in local development.
 
 ## Normalized Item Schema
 

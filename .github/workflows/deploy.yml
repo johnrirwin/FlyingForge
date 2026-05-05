@@ -135,6 +135,9 @@ jobs:
       web_bucket_name: ${{ steps.tf-outputs.outputs.web_bucket_name }}
       cloudfront_distribution_id: ${{ steps.tf-outputs.outputs.cloudfront_distribution_id }}
       web_url: ${{ steps.tf-outputs.outputs.web_url }}
+      mcp_url: ${{ steps.tf-outputs.outputs.mcp_url }}
+      mcp_protected_resource_metadata_url: ${{ steps.tf-outputs.outputs.mcp_protected_resource_metadata_url }}
+      mcp_openid_configuration_url: ${{ steps.tf-outputs.outputs.mcp_openid_configuration_url }}
 
     steps:
       - uses: actions/checkout@v4
@@ -158,11 +161,18 @@ jobs:
       # web target group before Terraform tries to destroy it. Without this, AWS
       # can return ResourceInUse if the destroy runs before the listener update.
       - name: Pre-apply ALB listener updates
+        env:
+          TF_VAR_auth_jwt_secret: ${{ secrets.AUTH_JWT_SECRET }}
+          TF_VAR_mcp_auth_private_key_pem: ${{ secrets.MCP_AUTH_PRIVATE_KEY_PEM }}
         run: |
+          test -n "$TF_VAR_auth_jwt_secret" || { echo "AUTH_JWT_SECRET is required"; exit 1; }
+          test -n "$TF_VAR_mcp_auth_private_key_pem" || { echo "MCP_AUTH_PRIVATE_KEY_PEM is required"; exit 1; }
           terraform apply -auto-approve \
             -var="google_client_id=${{ secrets.GOOGLE_CLIENT_ID }}" \
             -var="google_client_secret=${{ secrets.GOOGLE_CLIENT_SECRET }}" \
             -var="encryption_key=${{ secrets.ENCRYPTION_KEY }}" \
+            -var="mcp_auth_self_hosted=true" \
+            -var="mcp_auth_key_id=ff-self-hosted" \
             -var="domain_name=flyingforge.com" \
             -var="create_dns_record=true" \
             -var="enable_vpc_endpoints=false" \
@@ -172,12 +182,19 @@ jobs:
             -target="aws_lb_listener_rule.api_https[0]"
 
       - name: Terraform Plan
+        env:
+          TF_VAR_auth_jwt_secret: ${{ secrets.AUTH_JWT_SECRET }}
+          TF_VAR_mcp_auth_private_key_pem: ${{ secrets.MCP_AUTH_PRIVATE_KEY_PEM }}
         run: |
+          test -n "$TF_VAR_auth_jwt_secret" || { echo "AUTH_JWT_SECRET is required"; exit 1; }
+          test -n "$TF_VAR_mcp_auth_private_key_pem" || { echo "MCP_AUTH_PRIVATE_KEY_PEM is required"; exit 1; }
           # Cost optimization: disable NAT gateways and VPC endpoints; tasks egress via the internet gateway.
           terraform plan \
             -var="google_client_id=${{ secrets.GOOGLE_CLIENT_ID }}" \
             -var="google_client_secret=${{ secrets.GOOGLE_CLIENT_SECRET }}" \
             -var="encryption_key=${{ secrets.ENCRYPTION_KEY }}" \
+            -var="mcp_auth_self_hosted=true" \
+            -var="mcp_auth_key_id=ff-self-hosted" \
             -var="domain_name=flyingforge.com" \
             -var="create_dns_record=true" \
             -var="enable_vpc_endpoints=false" \
@@ -193,6 +210,9 @@ jobs:
           echo "web_bucket_name=$(terraform output -raw web_bucket_name)" >> "$GITHUB_OUTPUT"
           echo "cloudfront_distribution_id=$(terraform output -raw cloudfront_distribution_id)" >> "$GITHUB_OUTPUT"
           echo "web_url=$(terraform output -raw web_url)" >> "$GITHUB_OUTPUT"
+          echo "mcp_url=$(terraform output -raw mcp_url)" >> "$GITHUB_OUTPUT"
+          echo "mcp_protected_resource_metadata_url=$(terraform output -raw mcp_protected_resource_metadata_url)" >> "$GITHUB_OUTPUT"
+          echo "mcp_openid_configuration_url=$(terraform output -raw mcp_openid_configuration_url)" >> "$GITHUB_OUTPUT"
 
   # Deploy to ECS
   deploy-server:
@@ -274,6 +294,9 @@ jobs:
           echo "🚀 Server deployed successfully!"
           echo "📍 Web: ${{ needs.terraform.outputs.web_url }}"
           echo "📍 API: https://api.flyingforge.com"
+          echo "📍 MCP: ${{ needs.terraform.outputs.mcp_url }}"
+          echo "📍 MCP protected resource metadata: ${{ needs.terraform.outputs.mcp_protected_resource_metadata_url }}"
+          echo "📍 MCP OpenID configuration: ${{ needs.terraform.outputs.mcp_openid_configuration_url }}"
 
   deploy-web:
     needs: terraform

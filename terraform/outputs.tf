@@ -42,7 +42,7 @@ output "redis_endpoint" {
 
 output "app_url" {
   description = "Application URL"
-  value       = var.domain_name != "" ? "https://${var.domain_name}" : "https://${aws_cloudfront_distribution.web.domain_name}"
+  value       = local.public_app_url
 }
 
 output "cloudfront_domain_name" {
@@ -62,7 +62,32 @@ output "web_bucket_name" {
 
 output "web_url" {
   description = "Web frontend URL"
-  value       = var.domain_name != "" ? "https://${var.domain_name}" : "https://${aws_cloudfront_distribution.web.domain_name}"
+  value       = local.public_app_url
+}
+
+output "mcp_url" {
+  description = "Hosted HTTP MCP endpoint URL"
+  value       = local.mcp_resource_url
+}
+
+output "mcp_protected_resource_metadata_url" {
+  description = "Protected-resource metadata URL for MCP OAuth discovery"
+  value       = "${local.public_app_url}/.well-known/oauth-protected-resource"
+}
+
+output "mcp_openid_configuration_url" {
+  description = "OpenID configuration URL for the self-hosted MCP OAuth server"
+  value       = "${local.public_app_url}/.well-known/openid-configuration"
+}
+
+output "mcp_authorization_server_metadata_url" {
+  description = "OAuth authorization server metadata URL for the self-hosted MCP OAuth server"
+  value       = "${local.public_app_url}/.well-known/oauth-authorization-server"
+}
+
+output "mcp_google_callback_url" {
+  description = "Google OAuth callback URL used by the self-hosted MCP OAuth flow"
+  value       = local.mcp_google_callback_url
 }
 
 output "vpc_endpoint_ids" {

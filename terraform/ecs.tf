@@ -186,7 +186,7 @@ resource "aws_ecs_task_definition" "server" {
         },
         {
           name  = "CORS_ALLOWED_ORIGINS"
-          value = var.domain_name != "" ? "https://${var.domain_name}" : "http://${aws_lb.main.dns_name}"
+          value = local.public_app_url
         },
         {
           name  = "DB_HOST"
@@ -222,11 +222,51 @@ resource "aws_ecs_task_definition" "server" {
         },
         {
           name  = "GOOGLE_REDIRECT_URI"
-          value = var.domain_name != "" ? "https://${var.domain_name}/api/auth/google/callback" : "http://${aws_lb.main.dns_name}/api/auth/google/callback"
+          value = "${local.public_app_url}/api/auth/google/callback"
         },
         {
           name  = "AUTH_FRONTEND_URL"
-          value = var.domain_name != "" ? "https://${var.domain_name}" : "http://${aws_lb.main.dns_name}"
+          value = local.public_app_url
+        },
+        {
+          name  = "MCP_PUBLIC_BASE_URL"
+          value = local.public_app_url
+        },
+        {
+          name  = "MCP_AUTH_SELF_HOSTED"
+          value = tostring(var.mcp_auth_self_hosted)
+        },
+        {
+          name  = "MCP_AUTH_ISSUER"
+          value = var.mcp_auth_self_hosted ? local.public_app_url : ""
+        },
+        {
+          name  = "MCP_AUTH_AUDIENCE"
+          value = var.mcp_auth_self_hosted ? local.mcp_resource_url : ""
+        },
+        {
+          name  = "MCP_AUTH_RESOURCE"
+          value = var.mcp_auth_self_hosted ? local.mcp_resource_url : ""
+        },
+        {
+          name  = "MCP_AUTH_SCOPES"
+          value = "flyingforge.read"
+        },
+        {
+          name  = "MCP_AUTH_DISCOVERY_URL"
+          value = var.mcp_auth_self_hosted ? local.mcp_discovery_loopback_url : ""
+        },
+        {
+          name  = "MCP_AUTH_JWKS_URL"
+          value = var.mcp_auth_self_hosted ? local.mcp_authorization_jwks_loopback : ""
+        },
+        {
+          name  = "MCP_AUTH_KEY_ID"
+          value = var.mcp_auth_key_id
+        },
+        {
+          name  = "MCP_AUTH_GOOGLE_REDIRECT_URI"
+          value = var.mcp_auth_self_hosted ? local.mcp_google_callback_url : ""
         }
       ]
 
@@ -246,6 +286,14 @@ resource "aws_ecs_task_definition" "server" {
         {
           name      = "BIND_PHRASE_ENCRYPTION_KEY"
           valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:ENCRYPTION_KEY::"
+        },
+        {
+          name      = "AUTH_JWT_SECRET"
+          valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:AUTH_JWT_SECRET::"
+        },
+        {
+          name      = "MCP_AUTH_PRIVATE_KEY_PEM"
+          valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:MCP_AUTH_PRIVATE_KEY_PEM::"
         }
       ]
 
