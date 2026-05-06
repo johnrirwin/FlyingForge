@@ -24,25 +24,22 @@ var authorizeConsentTemplate = template.Must(template.New("oauth-authorize-conse
     h1 { margin-top: 0; font-size: 1.6rem; }
     p, li { line-height: 1.5; }
     ul { padding-left: 1.2rem; }
-    code { background: #1f2937; border-radius: 6px; padding: 0.15rem 0.35rem; }
     .actions { display: flex; gap: 0.75rem; margin-top: 1.5rem; }
     button { border: 0; border-radius: 999px; padding: 0.85rem 1.2rem; font-size: 1rem; cursor: pointer; }
     .approve { background: #2563eb; color: white; }
     .deny { background: #374151; color: #f3f4f6; }
     .meta { color: #9ca3af; font-size: 0.95rem; }
+    .app-name { color: #93c5fd; }
   </style>
 </head>
 <body>
   <main>
-    <h1>Authorize {{.Prompt.ClientName}}?</h1>
-    <p>This connector is requesting access to your FlyingForge account.</p>
+    <h1>Allow <span class="app-name">{{.Prompt.ClientName}}</span> to access FlyingForge?</h1>
+    <p>{{.Prompt.ClientName}} is requesting read-only access to your FlyingForge account.</p>
     <ul>
-      <li><strong>Client ID:</strong> <code>{{.Prompt.ClientID}}</code></li>
-      <li><strong>Redirect URI:</strong> <code>{{.Prompt.RedirectURI}}</code></li>
-      {{if .Prompt.Resource}}<li><strong>Resource:</strong> <code>{{.Prompt.Resource}}</code></li>{{end}}
-      <li><strong>Requested scopes:</strong> {{.Prompt.Scope}}</li>
+      {{range .AccessDescriptions}}<li>{{.}}</li>{{end}}
     </ul>
-    <p class="meta">Only approve this request if you trust this connector to read your FlyingForge aircraft and radio data.</p>
+    <p class="meta">This app can read your data, but it cannot make changes to your FlyingForge account.</p>
     <form method="post" action="/oauth/authorize">
       <input type="hidden" name="response_type" value="{{.Request.ResponseType}}">
       <input type="hidden" name="client_id" value="{{.Request.ClientID}}">
@@ -162,6 +159,12 @@ func (api *OAuthAPI) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 		if sessionErr == nil {
 			userID = validatedUserID
 		} else {
+			if api.logger != nil {
+				api.logger.Warn("Invalid self-hosted OAuth session cookie", logging.WithFields(map[string]interface{}{
+					"method": r.Method,
+					"error":  sessionErr.Error(),
+				}))
+			}
 			api.clearCookie(w, api.oauthService.SessionCookieName())
 		}
 	}
@@ -188,6 +191,11 @@ func (api *OAuthAPI) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if userID == "" {
+		if api.logger != nil {
+			api.logger.Warn("OAuth consent submission missing valid session; restarting authorization", logging.WithFields(map[string]interface{}{
+				"client_id": authReq.ClientID,
+			}))
+		}
 		api.clearCookie(w, api.oauthService.SessionCookieName())
 		redirectURL := "/oauth/authorize?" + r.PostForm.Encode()
 		http.Redirect(w, r, redirectURL, http.StatusSeeOther)
@@ -201,7 +209,7 @@ func (api *OAuthAPI) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 			api.redirectOrWriteAuthorizeError(w, r, authReq, authorizeErr)
 			return
 		}
-		http.Redirect(w, r, redirectURL, http.StatusFound)
+		http.Redirect(w, r, redirectURL, redirectStatusCode(r))
 	case "deny":
 		api.redirectOrWriteAuthorizeError(w, r, authReq, &auth.OAuthError{
 			Code:        "access_denied",
@@ -283,7 +291,7 @@ func (api *OAuthAPI) writeOAuthError(w http.ResponseWriter, err error) {
 
 func (api *OAuthAPI) redirectOrWriteAuthorizeError(w http.ResponseWriter, r *http.Request, authReq *auth.OAuthAuthorizationRequest, err error) {
 	if redirectURL, ok := api.oauthService.AuthorizationErrorRedirect(r.Context(), authReq, err); ok {
-		http.Redirect(w, r, redirectURL, http.StatusFound)
+		http.Redirect(w, r, redirectURL, redirectStatusCode(r))
 		return
 	}
 	api.writeOAuthError(w, err)
@@ -295,11 +303,47 @@ func (api *OAuthAPI) renderAuthorizeConsentPage(w http.ResponseWriter, authReq *
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
 	if err := authorizeConsentTemplate.Execute(w, map[string]any{
-		"Prompt":  prompt,
-		"Request": authReq,
+		"Prompt":             prompt,
+		"Request":            authReq,
+		"AccessDescriptions": describeAuthorizationAccess(prompt.Scope),
 	}); err != nil {
 		http.Error(w, "failed to render authorization prompt", http.StatusInternalServerError)
 	}
+}
+
+func describeAuthorizationAccess(scope string) []string {
+	scopeSet := map[string]struct{}{}
+	for _, value := range strings.Fields(strings.TrimSpace(scope)) {
+		scopeSet[value] = struct{}{}
+	}
+
+	descriptions := make([]string, 0, len(scopeSet))
+	if _, ok := scopeSet["flyingforge.read"]; ok {
+		descriptions = append(descriptions, "View your aircraft, receiver summaries, tuning, radios, and backup metadata.")
+		descriptions = append(descriptions, "Use read-only access only; this app cannot modify your FlyingForge data.")
+		delete(scopeSet, "flyingforge.read")
+	}
+	for value := range scopeSet {
+		descriptions = append(descriptions, "Access scope: "+value)
+	}
+	if len(descriptions) == 0 {
+		descriptions = append(descriptions, "Read the data you approve for this FlyingForge connection.")
+	}
+	return descriptions
+}
+
+func redirectStatusCode(r *http.Request) int {
+	if r != nil && r.Method == http.MethodPost {
+		return http.StatusSeeOther
+	}
+	return http.StatusFound
+}
+
+func oauthCookieSameSite(secure bool) http.SameSite {
+	if secure {
+		return http.SameSiteNoneMode
+	}
+	return http.SameSiteLaxMode
 }
 
 func (api *OAuthAPI) setCookie(w http.ResponseWriter, name, value string, ttl time.Duration) {
@@ -309,7 +353,7 @@ func (api *OAuthAPI) setCookie(w http.ResponseWriter, name, value string, ttl ti
 		Path:     "/oauth",
 		HttpOnly: true,
 		Secure:   api.oauthService.SecureCookies(),
-		SameSite: http.SameSiteLaxMode,
+		SameSite: oauthCookieSameSite(api.oauthService.SecureCookies()),
 		MaxAge:   int(ttl.Seconds()),
 		Expires:  time.Now().Add(ttl),
 	})
@@ -322,7 +366,7 @@ func (api *OAuthAPI) clearCookie(w http.ResponseWriter, name string) {
 		Path:     "/oauth",
 		HttpOnly: true,
 		Secure:   api.oauthService.SecureCookies(),
-		SameSite: http.SameSiteLaxMode,
+		SameSite: oauthCookieSameSite(api.oauthService.SecureCookies()),
 		MaxAge:   -1,
 		Expires:  time.Unix(0, 0),
 	})

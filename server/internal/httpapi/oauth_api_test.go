@@ -127,6 +127,12 @@ func TestOAuthAPI_AuthorizeRedirectsToGoogleWithoutSession(t *testing.T) {
 			if cookie.Value == "" {
 				t.Fatal("expected pending OAuth cookie to be populated")
 			}
+			if !cookie.Secure {
+				t.Fatal("expected pending OAuth cookie to be secure for HTTPS issuer")
+			}
+			if cookie.SameSite != http.SameSiteNoneMode {
+				t.Fatalf("expected pending OAuth cookie SameSite=None, got %v", cookie.SameSite)
+			}
 		}
 	}
 	if !foundPendingCookie {
@@ -170,8 +176,14 @@ func TestOAuthAPI_AuthorizeShowsConsentPageForSignedInUser(t *testing.T) {
 		t.Fatalf("expected HTML consent page, got content type %q", contentType)
 	}
 	body := responseRecorder.Body.String()
-	if !strings.Contains(body, "Authorize ChatGPT Test Connector?") {
+	if !strings.Contains(body, "Allow <span class=\"app-name\">ChatGPT Test Connector</span> to access FlyingForge?") {
 		t.Fatalf("expected consent prompt to mention client name, got body %q", body)
+	}
+	if strings.Contains(body, "Client ID:") || strings.Contains(body, "Redirect URI:") || strings.Contains(body, "Requested scopes:") {
+		t.Fatalf("expected consent prompt to hide raw client metadata, got body %q", body)
+	}
+	if !strings.Contains(body, "View your aircraft, receiver summaries, tuning, radios, and backup metadata.") {
+		t.Fatalf("expected consent prompt to show human-readable access description, got body %q", body)
 	}
 	if !strings.Contains(body, "name=\"decision\" value=\"approve\"") {
 		t.Fatalf("expected consent form approve button, got body %q", body)
@@ -216,8 +228,8 @@ func TestOAuthAPI_AuthorizeApprovalRedirectsBackToClient(t *testing.T) {
 	responseRecorder := httptest.NewRecorder()
 	api.handleAuthorize(responseRecorder, request)
 
-	if responseRecorder.Code != http.StatusFound {
-		t.Fatalf("expected HTTP 302, got %d with body %s", responseRecorder.Code, responseRecorder.Body.String())
+	if responseRecorder.Code != http.StatusSeeOther {
+		t.Fatalf("expected HTTP 303, got %d with body %s", responseRecorder.Code, responseRecorder.Body.String())
 	}
 	location := responseRecorder.Header().Get("Location")
 	if !strings.HasPrefix(location, registration.RedirectURIs[0]) {
@@ -279,8 +291,8 @@ func TestOAuthAPI_AuthorizeErrorsRedirectToRegisteredClient(t *testing.T) {
 	responseRecorder := httptest.NewRecorder()
 	api.handleAuthorize(responseRecorder, request)
 
-	if responseRecorder.Code != http.StatusFound {
-		t.Fatalf("expected HTTP 302, got %d with body %s", responseRecorder.Code, responseRecorder.Body.String())
+	if responseRecorder.Code != http.StatusSeeOther {
+		t.Fatalf("expected HTTP 303, got %d with body %s", responseRecorder.Code, responseRecorder.Body.String())
 	}
 	location := responseRecorder.Header().Get("Location")
 	parsedLocation, err := url.Parse(location)

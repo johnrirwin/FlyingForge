@@ -346,7 +346,7 @@ func (s *OAuthServerService) DescribeAuthorizationRequest(ctx context.Context, r
 
 	clientName := strings.TrimSpace(authCtx.client.ClientName)
 	if clientName == "" {
-		clientName = authCtx.client.ClientID
+		clientName = "this app"
 	}
 
 	return &OAuthAuthorizationPrompt{
