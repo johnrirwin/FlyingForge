@@ -47,3 +47,8 @@ Review this file at the start of each session and apply any relevant rules befor
 - Context: production ChatGPT MCP auth still failed after the consent-flow fix was merged and deployed.
 - Correction from user: the same blank-popup behavior persisted in production even after the previous fix shipped.
 - Rule to follow next time: when debugging deployed OAuth/browser issues, verify the live HTTP behavior (headers, preflight handling, redirects) against production before assuming the previous hypothesis fully solved the problem.
+
+### 2026-05-06 — Don’t block first-party OAuth form posts with third-party origin rules
+- Context: tightening OAuth endpoint CORS/origin checks for ChatGPT compatibility.
+- Correction from user: after the stricter origin gate shipped, clicking Approve redirected back to FlyingForge instead of completing OAuth.
+- Rule to follow next time: when adding origin restrictions to OAuth endpoints, explicitly allow the app’s own public origin/issuer for first-party browser form submissions in addition to third-party client origins.

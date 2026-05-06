@@ -225,7 +225,16 @@ func (s *OAuthServerService) AllowedOrigins() []string {
 	if s == nil {
 		return nil
 	}
-	return append([]string(nil), s.mcpCfg.AllowedOrigins...)
+	origins := append([]string(nil), s.mcpCfg.AllowedOrigins...)
+	for _, candidate := range []string{
+		strings.TrimSpace(s.mcpCfg.PublicBaseURL),
+		strings.TrimSpace(s.mcpCfg.Auth.Issuer),
+	} {
+		if origin := originFromURL(candidate); origin != "" && !containsString(origins, origin) {
+			origins = append(origins, origin)
+		}
+	}
+	return origins
 }
 
 func (s *OAuthServerService) AuthorizationServerMetadata() *OAuthAuthorizationServerMetadata {
@@ -901,6 +910,19 @@ func buildAuthorizationErrorRedirect(redirectURI, state string, oauthErr *OAuthE
 	}
 	redirectURL.RawQuery = query.Encode()
 	return redirectURL.String(), nil
+}
+
+func originFromURL(raw string) string {
+	if strings.TrimSpace(raw) == "" {
+		return ""
+	}
+
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+
+	return parsed.Scheme + "://" + parsed.Host
 }
 
 func (s *OAuthServerService) normalizeRequestedScope(raw string) (string, error) {
