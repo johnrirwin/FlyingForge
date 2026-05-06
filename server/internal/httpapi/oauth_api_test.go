@@ -40,6 +40,10 @@ func setupTestOAuthAPI(t *testing.T) (*OAuthAPI, *auth.OAuthServerService, *data
 	}
 	mcpCfg := config.MCPConfig{
 		PublicBaseURL: "https://flyingforge.example",
+		AllowedOrigins: []string{
+			"https://chatgpt.com",
+			"https://chat.openai.com",
+		},
 		Auth: config.MCPAuthConfig{
 			Enabled:              true,
 			SelfHosted:           true,
@@ -85,6 +89,21 @@ func TestOAuthAPI_OpenIDConfiguration(t *testing.T) {
 	if metadata.JWKSURI != "https://flyingforge.example/oauth/jwks.json" {
 		t.Fatalf("unexpected JWKS URI: %+v", metadata)
 	}
+}
+
+func TestOAuthAPI_OpenIDConfigurationIncludesCORSForConfiguredOrigin(t *testing.T) {
+	api, _, _, _, _ := setupTestOAuthAPI(t)
+
+	request := httptest.NewRequest(http.MethodGet, "/.well-known/openid-configuration", nil)
+	request.Header.Set("Origin", "https://chatgpt.com")
+	responseRecorder := httptest.NewRecorder()
+
+	api.handleOpenIDConfiguration(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected HTTP 200, got %d", responseRecorder.Code)
+	}
+	assertCORSHeaders(t, responseRecorder.Result(), "https://chatgpt.com", "GET, OPTIONS")
 }
 
 func TestOAuthAPI_AuthorizeRedirectsToGoogleWithoutSession(t *testing.T) {
@@ -452,6 +471,7 @@ func TestOAuthAPI_TokenResponsesDisableCaching(t *testing.T) {
 	}
 	request := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.Header.Set("Origin", "https://chatgpt.com")
 	responseRecorder := httptest.NewRecorder()
 
 	api.handleToken(responseRecorder, request)
@@ -460,6 +480,7 @@ func TestOAuthAPI_TokenResponsesDisableCaching(t *testing.T) {
 		t.Fatalf("expected HTTP 200, got %d with body %s", responseRecorder.Code, responseRecorder.Body.String())
 	}
 	assertNoStoreHeaders(t, responseRecorder.Result())
+	assertCORSHeaders(t, responseRecorder.Result(), "https://chatgpt.com", "POST, OPTIONS")
 }
 
 func TestOAuthAPI_ErrorResponsesDisableCaching(t *testing.T) {
@@ -467,6 +488,7 @@ func TestOAuthAPI_ErrorResponsesDisableCaching(t *testing.T) {
 
 	request := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader("%%%"))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.Header.Set("Origin", "https://chatgpt.com")
 	responseRecorder := httptest.NewRecorder()
 
 	api.handleToken(responseRecorder, request)
@@ -475,6 +497,45 @@ func TestOAuthAPI_ErrorResponsesDisableCaching(t *testing.T) {
 		t.Fatalf("expected HTTP 400, got %d with body %s", responseRecorder.Code, responseRecorder.Body.String())
 	}
 	assertNoStoreHeaders(t, responseRecorder.Result())
+	assertCORSHeaders(t, responseRecorder.Result(), "https://chatgpt.com", "POST, OPTIONS")
+}
+
+func TestOAuthAPI_TokenOptionsPreflightAllowsConfiguredOrigin(t *testing.T) {
+	api, _, _, _, _ := setupTestOAuthAPI(t)
+
+	request := httptest.NewRequest(http.MethodOptions, "/oauth/token", nil)
+	request.Header.Set("Origin", "https://chatgpt.com")
+	request.Header.Set("Access-Control-Request-Method", http.MethodPost)
+	request.Header.Set("Access-Control-Request-Headers", "content-type")
+	responseRecorder := httptest.NewRecorder()
+
+	api.handleToken(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusNoContent {
+		t.Fatalf("expected HTTP 204, got %d with body %s", responseRecorder.Code, responseRecorder.Body.String())
+	}
+	if got := responseRecorder.Header().Get("Allow"); got != "POST, OPTIONS" {
+		t.Fatalf("expected Allow header %q, got %q", "POST, OPTIONS", got)
+	}
+	assertCORSHeaders(t, responseRecorder.Result(), "https://chatgpt.com", "POST, OPTIONS")
+}
+
+func TestOAuthAPI_TokenOptionsPreflightRejectsDisallowedOrigin(t *testing.T) {
+	api, _, _, _, _ := setupTestOAuthAPI(t)
+
+	request := httptest.NewRequest(http.MethodOptions, "/oauth/token", nil)
+	request.Header.Set("Origin", "https://evil.example")
+	request.Header.Set("Access-Control-Request-Method", http.MethodPost)
+	responseRecorder := httptest.NewRecorder()
+
+	api.handleToken(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusForbidden {
+		t.Fatalf("expected HTTP 403, got %d with body %s", responseRecorder.Code, responseRecorder.Body.String())
+	}
+	if got := responseRecorder.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("expected no Access-Control-Allow-Origin header, got %q", got)
+	}
 }
 
 func TestDescribeAuthorizationAccess_SortsUnknownScopes(t *testing.T) {
@@ -534,6 +595,23 @@ func assertNoStoreHeaders(t *testing.T, response *http.Response) {
 	}
 	if got := response.Header.Get("Pragma"); got != "no-cache" {
 		t.Fatalf("expected Pragma no-cache, got %q", got)
+	}
+}
+
+func assertCORSHeaders(t *testing.T, response *http.Response, origin, allowMethods string) {
+	t.Helper()
+
+	if got := response.Header.Get("Access-Control-Allow-Origin"); got != origin {
+		t.Fatalf("expected Access-Control-Allow-Origin %q, got %q", origin, got)
+	}
+	if got := response.Header.Get("Access-Control-Allow-Methods"); got != allowMethods {
+		t.Fatalf("expected Access-Control-Allow-Methods %q, got %q", allowMethods, got)
+	}
+	if got := response.Header.Get("Access-Control-Allow-Headers"); got != "Authorization, Content-Type, Accept" {
+		t.Fatalf("expected Access-Control-Allow-Headers to include OAuth request headers, got %q", got)
+	}
+	if got := response.Header.Get("Vary"); got != "Origin" {
+		t.Fatalf("expected Vary header %q, got %q", "Origin", got)
 	}
 }
 

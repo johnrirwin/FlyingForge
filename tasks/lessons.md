@@ -42,3 +42,8 @@ Review this file at the start of each session and apply any relevant rules befor
 - Context: self-hosted OAuth consent flow for ChatGPT MCP.
 - Correction from user: the consent page exposed raw client metadata and the Approve action did not complete the redirect flow.
 - Rule to follow next time: for third-party OAuth consent screens, show the app name plus human-readable requested access only, and treat approval submits as cross-site/browser-embedded flows by using secure cookie settings and POST-safe redirects.
+
+### 2026-05-06 — Verify deployed OAuth/browser flows at the HTTP boundary
+- Context: production ChatGPT MCP auth still failed after the consent-flow fix was merged and deployed.
+- Correction from user: the same blank-popup behavior persisted in production even after the previous fix shipped.
+- Rule to follow next time: when debugging deployed OAuth/browser issues, verify the live HTTP behavior (headers, preflight handling, redirects) against production before assuming the previous hypothesis fully solved the problem.
