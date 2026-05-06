@@ -478,6 +478,93 @@ func TestNewOAuthServerService_RequiresExplicitEphemeralKeyOptIn(t *testing.T) {
 	}
 }
 
+func TestNewOAuthServerService_RequiresNonDefaultJWTSecret(t *testing.T) {
+	testDB := testutil.NewTestDB(t)
+	t.Cleanup(func() { testDB.Close() })
+	t.Cleanup(func() { testDB.Cleanup(context.Background()) })
+
+	db := &database.DB{DB: testDB.DB}
+	userStore := database.NewUserStore(db)
+	oauthStore := database.NewOAuthStore(db)
+	logger := testutil.NullLogger()
+	authCfg := config.AuthConfig{
+		JWTSecret:          defaultJWTSecret,
+		GoogleClientID:     "google-client-id",
+		GoogleClientSecret: "google-client-secret",
+	}
+	mcpCfg := config.MCPConfig{
+		PublicBaseURL: "https://flyingforge.example",
+		Auth: config.MCPAuthConfig{
+			Enabled:              true,
+			SelfHosted:           true,
+			AllowEphemeralKey:    true,
+			Issuer:               "https://flyingforge.example",
+			Audience:             "https://flyingforge.example/mcp",
+			Resource:             "https://flyingforge.example/mcp",
+			RequiredScopes:       []string{"flyingforge.read"},
+			GoogleRedirectURI:    "https://flyingforge.example/oauth/google/callback",
+			AccessTokenTTL:       time.Hour,
+			AuthorizationCodeTTL: 10 * time.Minute,
+			RefreshTokenTTL:      24 * time.Hour,
+			SessionTTL:           12 * time.Hour,
+		},
+	}
+
+	googleAuth := NewService(userStore, authCfg, logger)
+	if service := NewOAuthServerService(mcpCfg, authCfg, userStore, oauthStore, googleAuth, logger); service != nil {
+		t.Fatal("expected self-hosted OAuth service creation to fail with the default JWT secret")
+	}
+}
+
+func TestOAuthServerService_ConsentTokenValidation(t *testing.T) {
+	service, userStore := setupTestOAuthServerService(t)
+	ctx := context.Background()
+
+	user, err := userStore.Create(ctx, models.CreateUserParams{
+		Email:  "pilot@example.com",
+		Status: models.UserStatusActive,
+	})
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	registration, err := service.RegisterClient(ctx, OAuthDynamicClientRegistrationRequest{
+		ClientName:   "ChatGPT Test Connector",
+		RedirectURIs: []string{"https://chat.openai.com/a/oauth/callback"},
+	})
+	if err != nil {
+		t.Fatalf("register client: %v", err)
+	}
+
+	authRequest, err := service.ParseAuthorizationRequest(url.Values{
+		"response_type":         []string{"code"},
+		"client_id":             []string{registration.ClientID},
+		"redirect_uri":          []string{registration.RedirectURIs[0]},
+		"scope":                 []string{"flyingforge.read"},
+		"state":                 []string{"opaque-state"},
+		"code_challenge":        []string{"testchallenge"},
+		"code_challenge_method": []string{"S256"},
+		"resource":              []string{"https://flyingforge.example/mcp"},
+	})
+	if err != nil {
+		t.Fatalf("parse auth request: %v", err)
+	}
+
+	consentToken, err := service.BuildAuthorizationConsentToken(user.ID, authRequest)
+	if err != nil {
+		t.Fatalf("build consent token: %v", err)
+	}
+	if err := service.ValidateAuthorizationConsentToken(consentToken, user.ID, authRequest); err != nil {
+		t.Fatalf("expected consent token to validate: %v", err)
+	}
+
+	mutatedRequest := *authRequest
+	mutatedRequest.State = "different-state"
+	if err := service.ValidateAuthorizationConsentToken(consentToken, user.ID, &mutatedRequest); err == nil {
+		t.Fatal("expected consent token validation to fail when the request changes")
+	}
+}
+
 func mustCodeFromRedirect(t *testing.T, redirectURL string) string {
 	t.Helper()
 

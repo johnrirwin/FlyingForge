@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -32,14 +33,14 @@ var authorizeConsentTemplate = template.Must(template.New("oauth-authorize-conse
     .app-name { color: #93c5fd; }
   </style>
 </head>
-<body>
+  <body>
   <main>
     <h1>Allow <span class="app-name">{{.Prompt.ClientName}}</span> to access FlyingForge?</h1>
-    <p>{{.Prompt.ClientName}} is requesting read-only access to your FlyingForge account.</p>
+    <p>{{.Prompt.ClientName}} is requesting access to your FlyingForge account.</p>
     <ul>
       {{range .AccessDescriptions}}<li>{{.}}</li>{{end}}
     </ul>
-    <p class="meta">This app can read your data, but it cannot make changes to your FlyingForge account.</p>
+    <p class="meta">Review the requested permissions above before approving this connection.</p>
     <form method="post" action="/oauth/authorize">
       <input type="hidden" name="response_type" value="{{.Request.ResponseType}}">
       <input type="hidden" name="client_id" value="{{.Request.ClientID}}">
@@ -49,6 +50,7 @@ var authorizeConsentTemplate = template.Must(template.New("oauth-authorize-conse
       <input type="hidden" name="code_challenge" value="{{.Request.CodeChallenge}}">
       <input type="hidden" name="code_challenge_method" value="{{.Request.CodeChallengeMethod}}">
       <input type="hidden" name="resource" value="{{.Request.Resource}}">
+      <input type="hidden" name="consent_token" value="{{.ConsentToken}}">
       <div class="actions">
         <button class="approve" type="submit" name="decision" value="approve">Approve</button>
         <button class="deny" type="submit" name="decision" value="deny">Deny</button>
@@ -204,6 +206,10 @@ func (api *OAuthAPI) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 
 	switch strings.ToLower(strings.TrimSpace(r.PostForm.Get("decision"))) {
 	case "approve":
+		if consentErr := api.oauthService.ValidateAuthorizationConsentToken(r.PostForm.Get("consent_token"), userID, authReq); consentErr != nil {
+			api.redirectOrWriteAuthorizeError(w, r, authReq, consentErr)
+			return
+		}
 		redirectURL, authorizeErr := api.oauthService.Authorize(r.Context(), authReq, userID)
 		if authorizeErr != nil {
 			api.redirectOrWriteAuthorizeError(w, r, authReq, authorizeErr)
@@ -298,6 +304,11 @@ func (api *OAuthAPI) redirectOrWriteAuthorizeError(w http.ResponseWriter, r *htt
 }
 
 func (api *OAuthAPI) renderAuthorizeConsentPage(w http.ResponseWriter, authReq *auth.OAuthAuthorizationRequest, prompt *auth.OAuthAuthorizationPrompt) {
+	consentToken, err := api.oauthService.BuildAuthorizationConsentToken(prompt.UserID, authReq)
+	if err != nil {
+		http.Error(w, "failed to prepare authorization prompt", http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Frame-Options", "DENY")
@@ -305,6 +316,7 @@ func (api *OAuthAPI) renderAuthorizeConsentPage(w http.ResponseWriter, authReq *
 	if err := authorizeConsentTemplate.Execute(w, map[string]any{
 		"Prompt":             prompt,
 		"Request":            authReq,
+		"ConsentToken":       consentToken,
 		"AccessDescriptions": describeAuthorizationAccess(prompt.Scope),
 	}); err != nil {
 		http.Error(w, "failed to render authorization prompt", http.StatusInternalServerError)
@@ -323,7 +335,14 @@ func describeAuthorizationAccess(scope string) []string {
 		descriptions = append(descriptions, "Use read-only access only; this app cannot modify your FlyingForge data.")
 		delete(scopeSet, "flyingforge.read")
 	}
+
+	remainingScopes := make([]string, 0, len(scopeSet))
 	for value := range scopeSet {
+		remainingScopes = append(remainingScopes, value)
+	}
+	sort.Strings(remainingScopes)
+
+	for _, value := range remainingScopes {
 		descriptions = append(descriptions, "Access scope: "+value)
 	}
 	if len(descriptions) == 0 {
