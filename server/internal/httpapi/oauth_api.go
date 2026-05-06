@@ -13,6 +13,8 @@ import (
 	"github.com/johnrirwin/flyingforge/internal/logging"
 )
 
+const oauthCORSDefaultAllowedHeaders = "Authorization, Content-Type, Accept, Last-Event-ID, MCP-Session-Id"
+
 var authorizeConsentTemplate = template.Must(template.New("oauth-authorize-consent").Parse(`<!doctype html>
 <html lang="en">
 <head>
@@ -392,11 +394,12 @@ func redirectStatusCode(r *http.Request) int {
 
 func (api *OAuthAPI) handleCORS(w http.ResponseWriter, r *http.Request, allowMethods string) bool {
 	origin := strings.TrimSpace(r.Header.Get("Origin"))
-	if origin != "" && api.originAllowed(origin) {
-		api.setCORSHeaders(w, origin, allowMethods)
-	} else if r.Method == http.MethodOptions && origin != "" {
+	if origin != "" && !api.originAllowed(origin) {
 		http.Error(w, "forbidden origin", http.StatusForbidden)
 		return true
+	}
+	if origin != "" {
+		api.setCORSHeaders(w, r, origin, allowMethods)
 	}
 
 	if r.Method == http.MethodOptions {
@@ -418,16 +421,40 @@ func (api *OAuthAPI) originAllowed(origin string) bool {
 	return ok
 }
 
-func (api *OAuthAPI) setCORSHeaders(w http.ResponseWriter, origin, allowMethods string) {
+func (api *OAuthAPI) setCORSHeaders(w http.ResponseWriter, r *http.Request, origin, allowMethods string) {
 	origin = strings.TrimSpace(origin)
 	if origin == "" {
 		return
 	}
 
 	w.Header().Set("Access-Control-Allow-Origin", origin)
-	w.Header().Set("Vary", "Origin")
+	addVaryHeader(w, "Origin")
 	w.Header().Set("Access-Control-Allow-Methods", allowMethods)
-	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept")
+	w.Header().Set("Access-Control-Allow-Headers", oauthRequestedHeaders(r))
+	if strings.TrimSpace(r.Header.Get("Access-Control-Request-Headers")) != "" {
+		addVaryHeader(w, "Access-Control-Request-Headers")
+	}
+}
+
+func oauthRequestedHeaders(r *http.Request) string {
+	if r == nil {
+		return oauthCORSDefaultAllowedHeaders
+	}
+	if requested := strings.TrimSpace(r.Header.Get("Access-Control-Request-Headers")); requested != "" {
+		return requested
+	}
+	return oauthCORSDefaultAllowedHeaders
+}
+
+func addVaryHeader(w http.ResponseWriter, value string) {
+	for _, existing := range w.Header().Values("Vary") {
+		for _, part := range strings.Split(existing, ",") {
+			if strings.EqualFold(strings.TrimSpace(part), value) {
+				return
+			}
+		}
+	}
+	w.Header().Add("Vary", value)
 }
 
 func oauthCookieSameSite(secure bool) http.SameSite {

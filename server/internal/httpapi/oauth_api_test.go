@@ -103,7 +103,90 @@ func TestOAuthAPI_OpenIDConfigurationIncludesCORSForConfiguredOrigin(t *testing.
 	if responseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected HTTP 200, got %d", responseRecorder.Code)
 	}
-	assertCORSHeaders(t, responseRecorder.Result(), "https://chatgpt.com", "GET, OPTIONS")
+	assertCORSHeaders(t, responseRecorder.Result(), "https://chatgpt.com", "GET, OPTIONS", oauthCORSDefaultAllowedHeaders)
+}
+
+func TestOAuthAPI_OAuthEndpointPreflightAllowsConfiguredOrigin(t *testing.T) {
+	api, _, _, _, _ := setupTestOAuthAPI(t)
+
+	tests := []struct {
+		name         string
+		path         string
+		method       string
+		wantAllow    string
+		handle       func(http.ResponseWriter, *http.Request)
+		requestHeads string
+	}{
+		{name: "openid", path: "/.well-known/openid-configuration", method: http.MethodOptions, wantAllow: "GET, OPTIONS", handle: api.handleOpenIDConfiguration, requestHeads: "authorization, content-type"},
+		{name: "jwks", path: "/oauth/jwks.json", method: http.MethodOptions, wantAllow: "GET, OPTIONS", handle: api.handleJWKS, requestHeads: "authorization, content-type"},
+		{name: "register", path: "/oauth/register", method: http.MethodOptions, wantAllow: "POST, OPTIONS", handle: api.handleRegisterClient, requestHeads: "content-type, x-custom-header"},
+		{name: "authorize", path: "/oauth/authorize", method: http.MethodOptions, wantAllow: "GET, POST, OPTIONS", handle: api.handleAuthorize, requestHeads: "content-type"},
+		{name: "token", path: "/oauth/token", method: http.MethodOptions, wantAllow: "POST, OPTIONS", handle: api.handleToken, requestHeads: "content-type"},
+		{name: "google-callback", path: "/oauth/google/callback", method: http.MethodOptions, wantAllow: "GET, OPTIONS", handle: api.handleGoogleCallback, requestHeads: "content-type"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			request := httptest.NewRequest(tt.method, tt.path, nil)
+			request.Header.Set("Origin", "https://chatgpt.com")
+			request.Header.Set("Access-Control-Request-Method", strings.Split(tt.wantAllow, ",")[0])
+			request.Header.Set("Access-Control-Request-Headers", tt.requestHeads)
+			responseRecorder := httptest.NewRecorder()
+
+			tt.handle(responseRecorder, request)
+
+			if responseRecorder.Code != http.StatusNoContent {
+				t.Fatalf("expected HTTP 204, got %d with body %s", responseRecorder.Code, responseRecorder.Body.String())
+			}
+			if got := responseRecorder.Header().Get("Allow"); got != tt.wantAllow {
+				t.Fatalf("expected Allow header %q, got %q", tt.wantAllow, got)
+			}
+			assertCORSHeaders(t, responseRecorder.Result(), "https://chatgpt.com", tt.wantAllow, tt.requestHeads)
+			if !headerListContains(responseRecorder.Result().Header.Values("Vary"), "Access-Control-Request-Headers") {
+				t.Fatalf("expected Vary to contain %q, got %q", "Access-Control-Request-Headers", responseRecorder.Result().Header.Values("Vary"))
+			}
+		})
+	}
+}
+
+func TestOAuthAPI_OAuthEndpointRejectsDisallowedOrigin(t *testing.T) {
+	api, _, _, _, _ := setupTestOAuthAPI(t)
+
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		body   string
+		handle func(http.ResponseWriter, *http.Request)
+	}{
+		{name: "openid", method: http.MethodGet, path: "/.well-known/openid-configuration", handle: api.handleOpenIDConfiguration},
+		{name: "jwks", method: http.MethodGet, path: "/oauth/jwks.json", handle: api.handleJWKS},
+		{name: "register", method: http.MethodPost, path: "/oauth/register", body: `{"client_name":"x"}`, handle: api.handleRegisterClient},
+		{name: "authorize-get", method: http.MethodGet, path: "/oauth/authorize?response_type=code", handle: api.handleAuthorize},
+		{name: "authorize-post", method: http.MethodPost, path: "/oauth/authorize", body: "decision=approve", handle: api.handleAuthorize},
+		{name: "token", method: http.MethodPost, path: "/oauth/token", body: "grant_type=authorization_code", handle: api.handleToken},
+		{name: "google-callback", method: http.MethodGet, path: "/oauth/google/callback?code=test&state=test", handle: api.handleGoogleCallback},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			request := httptest.NewRequest(tt.method, tt.path, strings.NewReader(tt.body))
+			request.Header.Set("Origin", "https://evil.example")
+			if tt.method == http.MethodPost {
+				request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			}
+			responseRecorder := httptest.NewRecorder()
+
+			tt.handle(responseRecorder, request)
+
+			if responseRecorder.Code != http.StatusForbidden {
+				t.Fatalf("expected HTTP 403, got %d with body %s", responseRecorder.Code, responseRecorder.Body.String())
+			}
+			if got := responseRecorder.Header().Get("Access-Control-Allow-Origin"); got != "" {
+				t.Fatalf("expected no Access-Control-Allow-Origin header, got %q", got)
+			}
+		})
+	}
 }
 
 func TestOAuthAPI_AuthorizeRedirectsToGoogleWithoutSession(t *testing.T) {
@@ -480,7 +563,7 @@ func TestOAuthAPI_TokenResponsesDisableCaching(t *testing.T) {
 		t.Fatalf("expected HTTP 200, got %d with body %s", responseRecorder.Code, responseRecorder.Body.String())
 	}
 	assertNoStoreHeaders(t, responseRecorder.Result())
-	assertCORSHeaders(t, responseRecorder.Result(), "https://chatgpt.com", "POST, OPTIONS")
+	assertCORSHeaders(t, responseRecorder.Result(), "https://chatgpt.com", "POST, OPTIONS", oauthCORSDefaultAllowedHeaders)
 }
 
 func TestOAuthAPI_ErrorResponsesDisableCaching(t *testing.T) {
@@ -497,45 +580,7 @@ func TestOAuthAPI_ErrorResponsesDisableCaching(t *testing.T) {
 		t.Fatalf("expected HTTP 400, got %d with body %s", responseRecorder.Code, responseRecorder.Body.String())
 	}
 	assertNoStoreHeaders(t, responseRecorder.Result())
-	assertCORSHeaders(t, responseRecorder.Result(), "https://chatgpt.com", "POST, OPTIONS")
-}
-
-func TestOAuthAPI_TokenOptionsPreflightAllowsConfiguredOrigin(t *testing.T) {
-	api, _, _, _, _ := setupTestOAuthAPI(t)
-
-	request := httptest.NewRequest(http.MethodOptions, "/oauth/token", nil)
-	request.Header.Set("Origin", "https://chatgpt.com")
-	request.Header.Set("Access-Control-Request-Method", http.MethodPost)
-	request.Header.Set("Access-Control-Request-Headers", "content-type")
-	responseRecorder := httptest.NewRecorder()
-
-	api.handleToken(responseRecorder, request)
-
-	if responseRecorder.Code != http.StatusNoContent {
-		t.Fatalf("expected HTTP 204, got %d with body %s", responseRecorder.Code, responseRecorder.Body.String())
-	}
-	if got := responseRecorder.Header().Get("Allow"); got != "POST, OPTIONS" {
-		t.Fatalf("expected Allow header %q, got %q", "POST, OPTIONS", got)
-	}
-	assertCORSHeaders(t, responseRecorder.Result(), "https://chatgpt.com", "POST, OPTIONS")
-}
-
-func TestOAuthAPI_TokenOptionsPreflightRejectsDisallowedOrigin(t *testing.T) {
-	api, _, _, _, _ := setupTestOAuthAPI(t)
-
-	request := httptest.NewRequest(http.MethodOptions, "/oauth/token", nil)
-	request.Header.Set("Origin", "https://evil.example")
-	request.Header.Set("Access-Control-Request-Method", http.MethodPost)
-	responseRecorder := httptest.NewRecorder()
-
-	api.handleToken(responseRecorder, request)
-
-	if responseRecorder.Code != http.StatusForbidden {
-		t.Fatalf("expected HTTP 403, got %d with body %s", responseRecorder.Code, responseRecorder.Body.String())
-	}
-	if got := responseRecorder.Header().Get("Access-Control-Allow-Origin"); got != "" {
-		t.Fatalf("expected no Access-Control-Allow-Origin header, got %q", got)
-	}
+	assertCORSHeaders(t, responseRecorder.Result(), "https://chatgpt.com", "POST, OPTIONS", oauthCORSDefaultAllowedHeaders)
 }
 
 func TestDescribeAuthorizationAccess_SortsUnknownScopes(t *testing.T) {
@@ -598,7 +643,7 @@ func assertNoStoreHeaders(t *testing.T, response *http.Response) {
 	}
 }
 
-func assertCORSHeaders(t *testing.T, response *http.Response, origin, allowMethods string) {
+func assertCORSHeaders(t *testing.T, response *http.Response, origin, allowMethods, allowHeaders string) {
 	t.Helper()
 
 	if got := response.Header.Get("Access-Control-Allow-Origin"); got != origin {
@@ -607,12 +652,25 @@ func assertCORSHeaders(t *testing.T, response *http.Response, origin, allowMetho
 	if got := response.Header.Get("Access-Control-Allow-Methods"); got != allowMethods {
 		t.Fatalf("expected Access-Control-Allow-Methods %q, got %q", allowMethods, got)
 	}
-	if got := response.Header.Get("Access-Control-Allow-Headers"); got != "Authorization, Content-Type, Accept" {
-		t.Fatalf("expected Access-Control-Allow-Headers to include OAuth request headers, got %q", got)
+	if got := response.Header.Get("Access-Control-Allow-Headers"); got != allowHeaders {
+		t.Fatalf("expected Access-Control-Allow-Headers %q, got %q", allowHeaders, got)
 	}
-	if got := response.Header.Get("Vary"); got != "Origin" {
-		t.Fatalf("expected Vary header %q, got %q", "Origin", got)
+	for _, varyValue := range []string{"Origin"} {
+		if !headerListContains(response.Header.Values("Vary"), varyValue) {
+			t.Fatalf("expected Vary to contain %q, got %q", varyValue, response.Header.Values("Vary"))
+		}
 	}
+}
+
+func headerListContains(values []string, expected string) bool {
+	for _, value := range values {
+		for _, part := range strings.Split(value, ",") {
+			if strings.EqualFold(strings.TrimSpace(part), expected) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func codeChallengeForVerifier(verifier string) string {
