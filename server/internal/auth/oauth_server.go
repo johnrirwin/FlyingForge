@@ -94,17 +94,18 @@ type OAuthDynamicClientRegistrationResponse struct {
 }
 
 type OAuthAuthorizationServerMetadata struct {
-	Issuer                            string   `json:"issuer"`
-	AuthorizationEndpoint             string   `json:"authorization_endpoint"`
-	TokenEndpoint                     string   `json:"token_endpoint"`
-	RegistrationEndpoint              string   `json:"registration_endpoint"`
-	JWKSURI                           string   `json:"jwks_uri"`
-	ScopesSupported                   []string `json:"scopes_supported,omitempty"`
-	ResponseTypesSupported            []string `json:"response_types_supported,omitempty"`
-	ResponseModesSupported            []string `json:"response_modes_supported,omitempty"`
-	GrantTypesSupported               []string `json:"grant_types_supported,omitempty"`
-	TokenEndpointAuthMethodsSupported []string `json:"token_endpoint_auth_methods_supported,omitempty"`
-	CodeChallengeMethodsSupported     []string `json:"code_challenge_methods_supported,omitempty"`
+	Issuer                                     string   `json:"issuer"`
+	AuthorizationEndpoint                      string   `json:"authorization_endpoint"`
+	TokenEndpoint                              string   `json:"token_endpoint"`
+	RegistrationEndpoint                       string   `json:"registration_endpoint"`
+	JWKSURI                                    string   `json:"jwks_uri"`
+	AuthorizationResponseIssParameterSupported bool     `json:"authorization_response_iss_parameter_supported,omitempty"`
+	ScopesSupported                            []string `json:"scopes_supported,omitempty"`
+	ResponseTypesSupported                     []string `json:"response_types_supported,omitempty"`
+	ResponseModesSupported                     []string `json:"response_modes_supported,omitempty"`
+	GrantTypesSupported                        []string `json:"grant_types_supported,omitempty"`
+	TokenEndpointAuthMethodsSupported          []string `json:"token_endpoint_auth_methods_supported,omitempty"`
+	CodeChallengeMethodsSupported              []string `json:"code_challenge_methods_supported,omitempty"`
 }
 
 type OAuthTokenResponse struct {
@@ -246,11 +247,12 @@ func (s *OAuthServerService) AuthorizationServerMetadata() *OAuthAuthorizationSe
 	}
 	issuer := strings.TrimRight(strings.TrimSpace(s.mcpCfg.Auth.Issuer), "/")
 	return &OAuthAuthorizationServerMetadata{
-		Issuer:                            issuer,
-		AuthorizationEndpoint:             issuer + "/oauth/authorize",
-		TokenEndpoint:                     issuer + "/oauth/token",
-		RegistrationEndpoint:              issuer + "/oauth/register",
-		JWKSURI:                           issuer + "/oauth/jwks.json",
+		Issuer:                issuer,
+		AuthorizationEndpoint: issuer + "/oauth/authorize",
+		TokenEndpoint:         issuer + "/oauth/token",
+		RegistrationEndpoint:  issuer + "/oauth/register",
+		JWKSURI:               issuer + "/oauth/jwks.json",
+		AuthorizationResponseIssParameterSupported: true,
 		ScopesSupported:                   append([]string(nil), s.mcpCfg.Auth.RequiredScopes...),
 		ResponseTypesSupported:            []string{models.OAuthResponseTypeCode},
 		ResponseModesSupported:            []string{"query", "web_message", "web_message.opener"},
@@ -414,7 +416,7 @@ func (s *OAuthServerService) AuthorizationErrorRedirect(ctx context.Context, req
 		return "", false
 	}
 
-	redirectURL, buildErr := buildAuthorizationErrorRedirect(req.RedirectURI, req.State, NormalizeOAuthError(err))
+	redirectURL, buildErr := buildAuthorizationErrorRedirect(req.RedirectURI, req.State, strings.TrimSpace(s.mcpCfg.Auth.Issuer), NormalizeOAuthError(err))
 	if buildErr != nil {
 		return "", false
 	}
@@ -511,6 +513,9 @@ func (s *OAuthServerService) Authorize(ctx context.Context, req *OAuthAuthorizat
 	query.Set("code", codeValue)
 	if req.State != "" {
 		query.Set("state", req.State)
+	}
+	if issuer := strings.TrimRight(strings.TrimSpace(s.mcpCfg.Auth.Issuer), "/"); issuer != "" {
+		query.Set("iss", issuer)
 	}
 	redirectURL.RawQuery = query.Encode()
 	return redirectURL.String(), nil
@@ -904,7 +909,7 @@ func (s *OAuthServerService) pruneExpiredOAuthState(ctx context.Context) {
 	}
 }
 
-func buildAuthorizationErrorRedirect(redirectURI, state string, oauthErr *OAuthError) (string, error) {
+func buildAuthorizationErrorRedirect(redirectURI, state, issuer string, oauthErr *OAuthError) (string, error) {
 	redirectURL, err := url.Parse(redirectURI)
 	if err != nil {
 		return "", err
@@ -917,6 +922,9 @@ func buildAuthorizationErrorRedirect(redirectURI, state string, oauthErr *OAuthE
 	}
 	if state != "" {
 		query.Set("state", state)
+	}
+	if issuer = strings.TrimRight(strings.TrimSpace(issuer), "/"); issuer != "" {
+		query.Set("iss", issuer)
 	}
 	redirectURL.RawQuery = query.Encode()
 	return redirectURL.String(), nil

@@ -114,6 +114,9 @@ func TestOAuthServerService_AuthorizationCodeAndRefreshFlow(t *testing.T) {
 	if parsedRedirect.Query().Get("state") != "opaque-state" {
 		t.Fatalf("expected state round-trip in redirect URL, got %q", parsedRedirect.Query().Get("state"))
 	}
+	if parsedRedirect.Query().Get("iss") != "https://flyingforge.example" {
+		t.Fatalf("expected issuer identifier in redirect URL, got %q", parsedRedirect.Query().Get("iss"))
+	}
 
 	tokenResponse, err := service.ExchangeToken(ctx, url.Values{
 		"grant_type":    []string{"authorization_code"},
