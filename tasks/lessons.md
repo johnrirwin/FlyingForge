@@ -37,3 +37,8 @@ Review this file at the start of each session and apply any relevant rules befor
 - Context: answering architecture questions mid-implementation.
 - Correction from user: make it clear whether I actually changed the code or was only giving guidance.
 - Rule to follow next time: explicitly state when no repo changes were made, especially after a design-only or clarification response.
+
+### 2026-05-06 — Keep OAuth consent human-readable and cross-site safe
+- Context: self-hosted OAuth consent flow for ChatGPT MCP.
+- Correction from user: the consent page exposed raw client metadata and the Approve action did not complete the redirect flow.
+- Rule to follow next time: for third-party OAuth consent screens, show the app name plus human-readable requested access only, and treat approval submits as cross-site/browser-embedded flows by using secure cookie settings and POST-safe redirects.

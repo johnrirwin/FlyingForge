@@ -127,6 +127,12 @@ func TestOAuthAPI_AuthorizeRedirectsToGoogleWithoutSession(t *testing.T) {
 			if cookie.Value == "" {
 				t.Fatal("expected pending OAuth cookie to be populated")
 			}
+			if !cookie.Secure {
+				t.Fatal("expected pending OAuth cookie to be secure for HTTPS issuer")
+			}
+			if cookie.SameSite != http.SameSiteNoneMode {
+				t.Fatalf("expected pending OAuth cookie SameSite=None, got %v", cookie.SameSite)
+			}
 		}
 	}
 	if !foundPendingCookie {
@@ -170,8 +176,20 @@ func TestOAuthAPI_AuthorizeShowsConsentPageForSignedInUser(t *testing.T) {
 		t.Fatalf("expected HTML consent page, got content type %q", contentType)
 	}
 	body := responseRecorder.Body.String()
-	if !strings.Contains(body, "Authorize ChatGPT Test Connector?") {
+	if !strings.Contains(body, "Allow <span class=\"app-name\">ChatGPT Test Connector</span> to access FlyingForge?") {
 		t.Fatalf("expected consent prompt to mention client name, got body %q", body)
+	}
+	if !strings.Contains(body, "ChatGPT Test Connector is requesting access to your FlyingForge account.") {
+		t.Fatalf("expected consent prompt to use generic access copy, got body %q", body)
+	}
+	if strings.Contains(body, "Client ID:") || strings.Contains(body, "Redirect URI:") || strings.Contains(body, "Requested scopes:") {
+		t.Fatalf("expected consent prompt to hide raw client metadata, got body %q", body)
+	}
+	if !strings.Contains(body, "View your aircraft, receiver summaries, tuning, radios, and backup metadata.") {
+		t.Fatalf("expected consent prompt to show human-readable access description, got body %q", body)
+	}
+	if !strings.Contains(body, "name=\"consent_token\"") {
+		t.Fatalf("expected consent prompt to include a signed consent token, got body %q", body)
 	}
 	if !strings.Contains(body, "name=\"decision\" value=\"approve\"") {
 		t.Fatalf("expected consent form approve button, got body %q", body)
@@ -179,6 +197,161 @@ func TestOAuthAPI_AuthorizeShowsConsentPageForSignedInUser(t *testing.T) {
 }
 
 func TestOAuthAPI_AuthorizeApprovalRedirectsBackToClient(t *testing.T) {
+	api, oauthService, userStore, _, authCfg := setupTestOAuthAPI(t)
+	ctx := context.Background()
+
+	user, err := userStore.Create(ctx, models.CreateUserParams{
+		Email:  "pilot@example.com",
+		Status: models.UserStatusActive,
+	})
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	registration, err := oauthService.RegisterClient(ctx, auth.OAuthDynamicClientRegistrationRequest{
+		ClientName:   "ChatGPT Test Connector",
+		RedirectURIs: []string{"https://chat.openai.com/a/oauth/callback"},
+	})
+	if err != nil {
+		t.Fatalf("register client: %v", err)
+	}
+
+	authRequest, err := oauthService.ParseAuthorizationRequest(url.Values{
+		"response_type":         []string{"code"},
+		"client_id":             []string{registration.ClientID},
+		"redirect_uri":          []string{registration.RedirectURIs[0]},
+		"scope":                 []string{"flyingforge.read"},
+		"state":                 []string{"opaque-state"},
+		"code_challenge":        []string{"testchallenge"},
+		"code_challenge_method": []string{"S256"},
+		"resource":              []string{"https://flyingforge.example/mcp"},
+	})
+	if err != nil {
+		t.Fatalf("parse auth request: %v", err)
+	}
+	consentToken, err := oauthService.BuildAuthorizationConsentToken(user.ID, authRequest)
+	if err != nil {
+		t.Fatalf("build consent token: %v", err)
+	}
+
+	form := url.Values{
+		"response_type":         []string{"code"},
+		"client_id":             []string{registration.ClientID},
+		"redirect_uri":          []string{registration.RedirectURIs[0]},
+		"scope":                 []string{"flyingforge.read"},
+		"state":                 []string{"opaque-state"},
+		"code_challenge":        []string{"testchallenge"},
+		"code_challenge_method": []string{"S256"},
+		"resource":              []string{"https://flyingforge.example/mcp"},
+		"consent_token":         []string{consentToken},
+		"decision":              []string{"approve"},
+	}
+	request := httptest.NewRequest(http.MethodPost, "/oauth/authorize", strings.NewReader(form.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.AddCookie(makeSessionCookie(t, authCfg.JWTSecret, user.ID, time.Now().Add(time.Hour)))
+
+	responseRecorder := httptest.NewRecorder()
+	api.handleAuthorize(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusSeeOther {
+		t.Fatalf("expected HTTP 303, got %d with body %s", responseRecorder.Code, responseRecorder.Body.String())
+	}
+	location := responseRecorder.Header().Get("Location")
+	if !strings.HasPrefix(location, registration.RedirectURIs[0]) {
+		t.Fatalf("expected redirect back to client redirect URI, got %q", location)
+	}
+	parsedLocation, err := url.Parse(location)
+	if err != nil {
+		t.Fatalf("parse redirect location: %v", err)
+	}
+	if parsedLocation.Query().Get("code") == "" {
+		t.Fatalf("expected authorization code in redirect query, got %q", location)
+	}
+	if parsedLocation.Query().Get("state") != "opaque-state" {
+		t.Fatalf("expected state to round-trip, got %q", parsedLocation.Query().Get("state"))
+	}
+}
+
+func TestOAuthAPI_AuthorizeErrorsRedirectToRegisteredClient(t *testing.T) {
+	api, oauthService, userStore, oauthStore, authCfg := setupTestOAuthAPI(t)
+	ctx := context.Background()
+
+	user, err := userStore.Create(ctx, models.CreateUserParams{
+		Email:  "pilot@example.com",
+		Status: models.UserStatusActive,
+	})
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	client, err := oauthStore.CreateClient(
+		ctx,
+		"ff_mcp_error_redirect_test",
+		"Error Redirect Connector",
+		[]string{"https://chat.openai.com/a/oauth/callback"},
+		[]string{models.OAuthGrantTypeRefreshToken},
+		[]string{models.OAuthResponseTypeCode},
+		models.OAuthTokenEndpointAuthMethodNone,
+		"flyingforge.read",
+	)
+	if err != nil {
+		t.Fatalf("create client: %v", err)
+	}
+
+	authRequest, err := oauthService.ParseAuthorizationRequest(url.Values{
+		"response_type":         []string{"code"},
+		"client_id":             []string{client.ClientID},
+		"redirect_uri":          []string{client.RedirectURIs[0]},
+		"scope":                 []string{"flyingforge.read"},
+		"state":                 []string{"opaque-state"},
+		"code_challenge":        []string{"testchallenge"},
+		"code_challenge_method": []string{"S256"},
+		"resource":              []string{"https://flyingforge.example/mcp"},
+	})
+	if err != nil {
+		t.Fatalf("parse auth request: %v", err)
+	}
+	consentToken, err := oauthService.BuildAuthorizationConsentToken(user.ID, authRequest)
+	if err != nil {
+		t.Fatalf("build consent token: %v", err)
+	}
+
+	form := url.Values{
+		"response_type":         []string{"code"},
+		"client_id":             []string{client.ClientID},
+		"redirect_uri":          []string{client.RedirectURIs[0]},
+		"scope":                 []string{"flyingforge.read"},
+		"state":                 []string{"opaque-state"},
+		"code_challenge":        []string{"testchallenge"},
+		"code_challenge_method": []string{"S256"},
+		"resource":              []string{"https://flyingforge.example/mcp"},
+		"consent_token":         []string{consentToken},
+		"decision":              []string{"approve"},
+	}
+	request := httptest.NewRequest(http.MethodPost, "/oauth/authorize", strings.NewReader(form.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.AddCookie(makeSessionCookie(t, authCfg.JWTSecret, user.ID, time.Now().Add(time.Hour)))
+
+	responseRecorder := httptest.NewRecorder()
+	api.handleAuthorize(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusSeeOther {
+		t.Fatalf("expected HTTP 303, got %d with body %s", responseRecorder.Code, responseRecorder.Body.String())
+	}
+	location := responseRecorder.Header().Get("Location")
+	parsedLocation, err := url.Parse(location)
+	if err != nil {
+		t.Fatalf("parse redirect location: %v", err)
+	}
+	if parsedLocation.Query().Get("error") != "unauthorized_client" {
+		t.Fatalf("expected unauthorized_client redirect, got %q", location)
+	}
+	if parsedLocation.Query().Get("state") != "opaque-state" {
+		t.Fatalf("expected state to round-trip on error redirect, got %q", location)
+	}
+}
+
+func TestOAuthAPI_AuthorizeApprovalRequiresConsentToken(t *testing.T) {
 	api, oauthService, userStore, _, authCfg := setupTestOAuthAPI(t)
 	ctx := context.Background()
 
@@ -216,82 +389,16 @@ func TestOAuthAPI_AuthorizeApprovalRedirectsBackToClient(t *testing.T) {
 	responseRecorder := httptest.NewRecorder()
 	api.handleAuthorize(responseRecorder, request)
 
-	if responseRecorder.Code != http.StatusFound {
-		t.Fatalf("expected HTTP 302, got %d with body %s", responseRecorder.Code, responseRecorder.Body.String())
-	}
-	location := responseRecorder.Header().Get("Location")
-	if !strings.HasPrefix(location, registration.RedirectURIs[0]) {
-		t.Fatalf("expected redirect back to client redirect URI, got %q", location)
-	}
-	parsedLocation, err := url.Parse(location)
-	if err != nil {
-		t.Fatalf("parse redirect location: %v", err)
-	}
-	if parsedLocation.Query().Get("code") == "" {
-		t.Fatalf("expected authorization code in redirect query, got %q", location)
-	}
-	if parsedLocation.Query().Get("state") != "opaque-state" {
-		t.Fatalf("expected state to round-trip, got %q", parsedLocation.Query().Get("state"))
-	}
-}
-
-func TestOAuthAPI_AuthorizeErrorsRedirectToRegisteredClient(t *testing.T) {
-	api, _, userStore, oauthStore, authCfg := setupTestOAuthAPI(t)
-	ctx := context.Background()
-
-	user, err := userStore.Create(ctx, models.CreateUserParams{
-		Email:  "pilot@example.com",
-		Status: models.UserStatusActive,
-	})
-	if err != nil {
-		t.Fatalf("create user: %v", err)
-	}
-
-	client, err := oauthStore.CreateClient(
-		ctx,
-		"ff_mcp_error_redirect_test",
-		"Error Redirect Connector",
-		[]string{"https://chat.openai.com/a/oauth/callback"},
-		[]string{models.OAuthGrantTypeRefreshToken},
-		[]string{models.OAuthResponseTypeCode},
-		models.OAuthTokenEndpointAuthMethodNone,
-		"flyingforge.read",
-	)
-	if err != nil {
-		t.Fatalf("create client: %v", err)
-	}
-
-	form := url.Values{
-		"response_type":         []string{"code"},
-		"client_id":             []string{client.ClientID},
-		"redirect_uri":          []string{client.RedirectURIs[0]},
-		"scope":                 []string{"flyingforge.read"},
-		"state":                 []string{"opaque-state"},
-		"code_challenge":        []string{"testchallenge"},
-		"code_challenge_method": []string{"S256"},
-		"resource":              []string{"https://flyingforge.example/mcp"},
-		"decision":              []string{"approve"},
-	}
-	request := httptest.NewRequest(http.MethodPost, "/oauth/authorize", strings.NewReader(form.Encode()))
-	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	request.AddCookie(makeSessionCookie(t, authCfg.JWTSecret, user.ID, time.Now().Add(time.Hour)))
-
-	responseRecorder := httptest.NewRecorder()
-	api.handleAuthorize(responseRecorder, request)
-
-	if responseRecorder.Code != http.StatusFound {
-		t.Fatalf("expected HTTP 302, got %d with body %s", responseRecorder.Code, responseRecorder.Body.String())
+	if responseRecorder.Code != http.StatusSeeOther {
+		t.Fatalf("expected HTTP 303, got %d with body %s", responseRecorder.Code, responseRecorder.Body.String())
 	}
 	location := responseRecorder.Header().Get("Location")
 	parsedLocation, err := url.Parse(location)
 	if err != nil {
 		t.Fatalf("parse redirect location: %v", err)
 	}
-	if parsedLocation.Query().Get("error") != "unauthorized_client" {
-		t.Fatalf("expected unauthorized_client redirect, got %q", location)
-	}
-	if parsedLocation.Query().Get("state") != "opaque-state" {
-		t.Fatalf("expected state to round-trip on error redirect, got %q", location)
+	if parsedLocation.Query().Get("error") != "invalid_request" {
+		t.Fatalf("expected invalid_request redirect, got %q", location)
 	}
 }
 
@@ -368,6 +475,25 @@ func TestOAuthAPI_ErrorResponsesDisableCaching(t *testing.T) {
 		t.Fatalf("expected HTTP 400, got %d with body %s", responseRecorder.Code, responseRecorder.Body.String())
 	}
 	assertNoStoreHeaders(t, responseRecorder.Result())
+}
+
+func TestDescribeAuthorizationAccess_SortsUnknownScopes(t *testing.T) {
+	descriptions := describeAuthorizationAccess("scope.z flyingforge.read scope.a")
+	want := []string{
+		"View your aircraft, receiver summaries, tuning, radios, and backup metadata.",
+		"Use read-only access only; this app cannot modify your FlyingForge data.",
+		"Access scope: scope.a",
+		"Access scope: scope.z",
+	}
+
+	if len(descriptions) != len(want) {
+		t.Fatalf("expected %d descriptions, got %d: %#v", len(want), len(descriptions), descriptions)
+	}
+	for i, expected := range want {
+		if descriptions[i] != expected {
+			t.Fatalf("description %d: expected %q, got %q", i, expected, descriptions[i])
+		}
+	}
 }
 
 func makeSessionCookie(t *testing.T, jwtSecret, userID string, expiresAt time.Time) *http.Cookie {
