@@ -57,3 +57,8 @@ Review this file at the start of each session and apply any relevant rules befor
 - Context: ChatGPT connector OAuth approval kept opening a blank popup even after the consent and CORS fixes were deployed.
 - Correction from user: the browser still showed the same spinner-and-blank-popup behavior, so the prior fixes had not resolved the final handoff.
 - Rule to follow next time: if production logs show `/oauth/authorize` succeeding but no `/oauth/token` request ever arrives, verify whether the client expects popup-oriented `response_mode=web_message` handling instead of a normal redirect callback.
+
+### 2026-05-06 — Confirm the live request parameters before patching a specific OAuth branch
+- Context: I added popup `response_mode` support, but production still showed the same spinner/blank-popup behavior.
+- Correction from user: the new patch still did not work in the real ChatGPT flow.
+- Rule to follow next time: before committing to a response-mode-specific OAuth fix, inspect the live authorize logs to confirm whether the client is actually sending that parameter and patch the active branch of the flow first.

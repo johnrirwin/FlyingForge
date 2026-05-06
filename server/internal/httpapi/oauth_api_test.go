@@ -89,6 +89,9 @@ func TestOAuthAPI_OpenIDConfiguration(t *testing.T) {
 	if metadata.JWKSURI != "https://flyingforge.example/oauth/jwks.json" {
 		t.Fatalf("unexpected JWKS URI: %+v", metadata)
 	}
+	if !metadata.AuthorizationResponseIssParameterSupported {
+		t.Fatalf("expected metadata to advertise issuer response support, got %+v", metadata)
+	}
 }
 
 func TestOAuthAPI_OpenIDConfigurationIncludesCORSForConfiguredOrigin(t *testing.T) {
@@ -376,6 +379,9 @@ func TestOAuthAPI_AuthorizeApprovalRedirectsBackToClient(t *testing.T) {
 	if parsedLocation.Query().Get("state") != "opaque-state" {
 		t.Fatalf("expected state to round-trip, got %q", parsedLocation.Query().Get("state"))
 	}
+	if parsedLocation.Query().Get("iss") != "https://flyingforge.example" {
+		t.Fatalf("expected issuer identifier in redirect, got %q", parsedLocation.Query().Get("iss"))
+	}
 	assertCORSHeaders(t, responseRecorder.Result(), "https://flyingforge.example", "GET, POST, OPTIONS", oauthCORSDefaultAllowedHeaders)
 }
 
@@ -533,6 +539,9 @@ func TestOAuthAPI_AuthorizeErrorsRedirectToRegisteredClient(t *testing.T) {
 	}
 	if parsedLocation.Query().Get("state") != "opaque-state" {
 		t.Fatalf("expected state to round-trip on error redirect, got %q", location)
+	}
+	if parsedLocation.Query().Get("iss") != "https://flyingforge.example" {
+		t.Fatalf("expected issuer identifier in error redirect, got %q", location)
 	}
 }
 
