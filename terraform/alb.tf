@@ -82,7 +82,24 @@ resource "aws_lb_listener_rule" "api_http" {
 
   condition {
     path_pattern {
-      values = local.backend_path_patterns
+      values = local.backend_path_patterns_primary
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "api_http_well_known" {
+  count        = var.domain_name == "" ? 1 : 0
+  listener_arn = aws_lb_listener.http.arn
+  priority     = 101
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.server.arn
+  }
+
+  condition {
+    path_pattern {
+      values = local.backend_path_patterns_secondary
     }
   }
 }
@@ -120,7 +137,24 @@ resource "aws_lb_listener_rule" "api_https" {
 
   condition {
     path_pattern {
-      values = local.backend_path_patterns
+      values = local.backend_path_patterns_primary
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "api_https_well_known" {
+  count        = var.domain_name != "" ? 1 : 0
+  listener_arn = aws_lb_listener.https[0].arn
+  priority     = 101
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.server.arn
+  }
+
+  condition {
+    path_pattern {
+      values = local.backend_path_patterns_secondary
     }
   }
 }
