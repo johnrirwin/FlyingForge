@@ -350,6 +350,7 @@ func TestOAuthAPI_AuthorizeApprovalRedirectsBackToClient(t *testing.T) {
 	}
 	request := httptest.NewRequest(http.MethodPost, "/oauth/authorize", strings.NewReader(form.Encode()))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.Header.Set("Origin", "https://flyingforge.example")
 	request.AddCookie(makeSessionCookie(t, authCfg.JWTSecret, user.ID, time.Now().Add(time.Hour)))
 
 	responseRecorder := httptest.NewRecorder()
@@ -372,6 +373,7 @@ func TestOAuthAPI_AuthorizeApprovalRedirectsBackToClient(t *testing.T) {
 	if parsedLocation.Query().Get("state") != "opaque-state" {
 		t.Fatalf("expected state to round-trip, got %q", parsedLocation.Query().Get("state"))
 	}
+	assertCORSHeaders(t, responseRecorder.Result(), "https://flyingforge.example", "GET, POST, OPTIONS", oauthCORSDefaultAllowedHeaders)
 }
 
 func TestOAuthAPI_AuthorizeErrorsRedirectToRegisteredClient(t *testing.T) {
