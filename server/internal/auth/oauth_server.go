@@ -221,6 +221,12 @@ func (s *OAuthServerService) SessionCookieTTL() time.Duration {
 func (s *OAuthServerService) PendingCookieTTL() time.Duration {
 	return oauthStateTTL
 }
+func (s *OAuthServerService) AllowedOrigins() []string {
+	if s == nil {
+		return nil
+	}
+	return append([]string(nil), s.mcpCfg.AllowedOrigins...)
+}
 
 func (s *OAuthServerService) AuthorizationServerMetadata() *OAuthAuthorizationServerMetadata {
 	if !s.Enabled() {

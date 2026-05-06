@@ -13,6 +13,8 @@ import (
 	"github.com/johnrirwin/flyingforge/internal/logging"
 )
 
+const oauthCORSDefaultAllowedHeaders = "Authorization, Content-Type, Accept, Last-Event-ID, MCP-Session-Id"
+
 var authorizeConsentTemplate = template.Must(template.New("oauth-authorize-consent").Parse(`<!doctype html>
 <html lang="en">
 <head>
@@ -62,12 +64,26 @@ var authorizeConsentTemplate = template.Must(template.New("oauth-authorize-conse
 
 // OAuthAPI exposes a self-hosted authorization server for MCP.
 type OAuthAPI struct {
-	oauthService *auth.OAuthServerService
-	logger       *logging.Logger
+	oauthService   *auth.OAuthServerService
+	allowedOrigins map[string]struct{}
+	logger         *logging.Logger
 }
 
 func NewOAuthAPI(oauthService *auth.OAuthServerService, logger *logging.Logger) *OAuthAPI {
-	return &OAuthAPI{oauthService: oauthService, logger: logger}
+	originSet := map[string]struct{}{}
+	if oauthService != nil {
+		for _, origin := range oauthService.AllowedOrigins() {
+			if trimmed := strings.TrimSpace(origin); trimmed != "" {
+				originSet[trimmed] = struct{}{}
+			}
+		}
+	}
+
+	return &OAuthAPI{
+		oauthService:   oauthService,
+		allowedOrigins: originSet,
+		logger:         logger,
+	}
 }
 
 func (api *OAuthAPI) RegisterRoutes(mux *http.ServeMux) {
@@ -92,8 +108,11 @@ func (api *OAuthAPI) handleAuthorizationServerMetadata(w http.ResponseWriter, r 
 }
 
 func (api *OAuthAPI) handleMetadataResponse(w http.ResponseWriter, r *http.Request) {
+	if api.handleCORS(w, r, "GET, OPTIONS") {
+		return
+	}
 	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", "GET")
+		w.Header().Set("Allow", "GET, OPTIONS")
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -101,8 +120,11 @@ func (api *OAuthAPI) handleMetadataResponse(w http.ResponseWriter, r *http.Reque
 }
 
 func (api *OAuthAPI) handleJWKS(w http.ResponseWriter, r *http.Request) {
+	if api.handleCORS(w, r, "GET, OPTIONS") {
+		return
+	}
 	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", "GET")
+		w.Header().Set("Allow", "GET, OPTIONS")
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -110,8 +132,11 @@ func (api *OAuthAPI) handleJWKS(w http.ResponseWriter, r *http.Request) {
 }
 
 func (api *OAuthAPI) handleRegisterClient(w http.ResponseWriter, r *http.Request) {
+	if api.handleCORS(w, r, "POST, OPTIONS") {
+		return
+	}
 	if r.Method != http.MethodPost {
-		w.Header().Set("Allow", "POST")
+		w.Header().Set("Allow", "POST, OPTIONS")
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -132,8 +157,11 @@ func (api *OAuthAPI) handleRegisterClient(w http.ResponseWriter, r *http.Request
 }
 
 func (api *OAuthAPI) handleAuthorize(w http.ResponseWriter, r *http.Request) {
+	if api.handleCORS(w, r, "GET, POST, OPTIONS") {
+		return
+	}
 	if r.Method != http.MethodGet && r.Method != http.MethodPost {
-		w.Header().Set("Allow", "GET, POST")
+		w.Header().Set("Allow", "GET, POST, OPTIONS")
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -232,8 +260,11 @@ func (api *OAuthAPI) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 }
 
 func (api *OAuthAPI) handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
+	if api.handleCORS(w, r, "GET, OPTIONS") {
+		return
+	}
 	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", "GET")
+		w.Header().Set("Allow", "GET, OPTIONS")
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -265,8 +296,11 @@ func (api *OAuthAPI) handleGoogleCallback(w http.ResponseWriter, r *http.Request
 }
 
 func (api *OAuthAPI) handleToken(w http.ResponseWriter, r *http.Request) {
+	if api.handleCORS(w, r, "POST, OPTIONS") {
+		return
+	}
 	if r.Method != http.MethodPost {
-		w.Header().Set("Allow", "POST")
+		w.Header().Set("Allow", "POST, OPTIONS")
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -356,6 +390,71 @@ func redirectStatusCode(r *http.Request) int {
 		return http.StatusSeeOther
 	}
 	return http.StatusFound
+}
+
+func (api *OAuthAPI) handleCORS(w http.ResponseWriter, r *http.Request, allowMethods string) bool {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin != "" && !api.originAllowed(origin) {
+		http.Error(w, "forbidden origin", http.StatusForbidden)
+		return true
+	}
+	if origin != "" {
+		api.setCORSHeaders(w, r, origin, allowMethods)
+	}
+
+	if r.Method == http.MethodOptions {
+		w.Header().Set("Allow", allowMethods)
+		w.WriteHeader(http.StatusNoContent)
+		return true
+	}
+
+	return false
+}
+
+func (api *OAuthAPI) originAllowed(origin string) bool {
+	origin = strings.TrimSpace(origin)
+	if origin == "" || len(api.allowedOrigins) == 0 {
+		return true
+	}
+
+	_, ok := api.allowedOrigins[origin]
+	return ok
+}
+
+func (api *OAuthAPI) setCORSHeaders(w http.ResponseWriter, r *http.Request, origin, allowMethods string) {
+	origin = strings.TrimSpace(origin)
+	if origin == "" {
+		return
+	}
+
+	w.Header().Set("Access-Control-Allow-Origin", origin)
+	addVaryHeader(w, "Origin")
+	w.Header().Set("Access-Control-Allow-Methods", allowMethods)
+	w.Header().Set("Access-Control-Allow-Headers", oauthRequestedHeaders(r))
+	if strings.TrimSpace(r.Header.Get("Access-Control-Request-Headers")) != "" {
+		addVaryHeader(w, "Access-Control-Request-Headers")
+	}
+}
+
+func oauthRequestedHeaders(r *http.Request) string {
+	if r == nil {
+		return oauthCORSDefaultAllowedHeaders
+	}
+	if requested := strings.TrimSpace(r.Header.Get("Access-Control-Request-Headers")); requested != "" {
+		return requested
+	}
+	return oauthCORSDefaultAllowedHeaders
+}
+
+func addVaryHeader(w http.ResponseWriter, value string) {
+	for _, existing := range w.Header().Values("Vary") {
+		for _, part := range strings.Split(existing, ",") {
+			if strings.EqualFold(strings.TrimSpace(part), value) {
+				return
+			}
+		}
+	}
+	w.Header().Add("Vary", value)
 }
 
 func oauthCookieSameSite(secure bool) http.SameSite {
