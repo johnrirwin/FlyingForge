@@ -155,6 +155,74 @@ func TestOAuthServerService_AuthorizationCodeAndRefreshFlow(t *testing.T) {
 	}
 }
 
+func TestOAuthServerService_ParseAuthorizationRequestSupportsPopupResponseModes(t *testing.T) {
+	service, _ := setupTestOAuthServerService(t)
+
+	testCases := []struct {
+		name         string
+		responseMode string
+		wantMode     string
+	}{
+		{name: "default query", responseMode: "", wantMode: ""},
+		{name: "explicit query", responseMode: "query", wantMode: "query"},
+		{name: "web message", responseMode: "web_message", wantMode: "web_message"},
+		{name: "web message opener", responseMode: "web_message.opener", wantMode: "web_message.opener"},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			values := url.Values{
+				"response_type":         []string{"code"},
+				"client_id":             []string{"ff_client"},
+				"redirect_uri":          []string{"https://chat.openai.com/a/oauth/callback"},
+				"scope":                 []string{"flyingforge.read"},
+				"state":                 []string{"opaque-state"},
+				"code_challenge":        []string{"testchallenge"},
+				"code_challenge_method": []string{"S256"},
+				"resource":              []string{"https://flyingforge.example/mcp"},
+			}
+			if tt.responseMode != "" {
+				values.Set("response_mode", tt.responseMode)
+			}
+
+			authRequest, err := service.ParseAuthorizationRequest(values)
+			if err != nil {
+				t.Fatalf("parse auth request: %v", err)
+			}
+			if authRequest.ResponseMode != tt.wantMode {
+				t.Fatalf("expected response mode %q, got %q", tt.wantMode, authRequest.ResponseMode)
+			}
+		})
+	}
+}
+
+func TestOAuthServerService_ParseAuthorizationRequestRejectsUnsupportedResponseMode(t *testing.T) {
+	service, _ := setupTestOAuthServerService(t)
+
+	_, err := service.ParseAuthorizationRequest(url.Values{
+		"response_type":         []string{"code"},
+		"response_mode":         []string{"fragment"},
+		"client_id":             []string{"ff_client"},
+		"redirect_uri":          []string{"https://chat.openai.com/a/oauth/callback"},
+		"scope":                 []string{"flyingforge.read"},
+		"state":                 []string{"opaque-state"},
+		"code_challenge":        []string{"testchallenge"},
+		"code_challenge_method": []string{"S256"},
+		"resource":              []string{"https://flyingforge.example/mcp"},
+	})
+	if err == nil {
+		t.Fatal("expected invalid_request for unsupported response_mode")
+	}
+
+	oauthErr, ok := err.(*OAuthError)
+	if !ok {
+		t.Fatalf("expected OAuthError, got %T", err)
+	}
+	if oauthErr.Code != "invalid_request" {
+		t.Fatalf("expected invalid_request, got %q", oauthErr.Code)
+	}
+}
+
 func TestOAuthServerService_GooglePendingStateAndSessionTokens(t *testing.T) {
 	service, userStore := setupTestOAuthServerService(t)
 	ctx := context.Background()
@@ -198,6 +266,45 @@ func TestOAuthServerService_GooglePendingStateAndSessionTokens(t *testing.T) {
 	}
 	if validatedUserID != user.ID {
 		t.Fatalf("expected session token subject %q, got %q", user.ID, validatedUserID)
+	}
+}
+
+func TestOAuthServerService_ConsentTokenBindsResponseMode(t *testing.T) {
+	service, userStore := setupTestOAuthServerService(t)
+	ctx := context.Background()
+
+	user, err := userStore.Create(ctx, models.CreateUserParams{
+		Email:  "pilot@example.com",
+		Status: models.UserStatusActive,
+	})
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	authRequest, err := service.ParseAuthorizationRequest(url.Values{
+		"response_type":         []string{"code"},
+		"response_mode":         []string{"web_message.opener"},
+		"client_id":             []string{"ff_client"},
+		"redirect_uri":          []string{"https://chat.openai.com/a/oauth/callback"},
+		"scope":                 []string{"flyingforge.read"},
+		"state":                 []string{"opaque-state"},
+		"code_challenge":        []string{"testchallenge"},
+		"code_challenge_method": []string{"S256"},
+		"resource":              []string{"https://flyingforge.example/mcp"},
+	})
+	if err != nil {
+		t.Fatalf("parse auth request: %v", err)
+	}
+
+	consentToken, err := service.BuildAuthorizationConsentToken(user.ID, authRequest)
+	if err != nil {
+		t.Fatalf("build consent token: %v", err)
+	}
+
+	mutatedRequest := *authRequest
+	mutatedRequest.ResponseMode = ""
+	if err := service.ValidateAuthorizationConsentToken(consentToken, user.ID, &mutatedRequest); err == nil {
+		t.Fatal("expected response_mode mismatch to invalidate consent token")
 	}
 }
 

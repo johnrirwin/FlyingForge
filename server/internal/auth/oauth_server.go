@@ -63,6 +63,7 @@ func NormalizeOAuthError(err error) *OAuthError {
 
 type OAuthAuthorizationRequest struct {
 	ResponseType        string
+	ResponseMode        string
 	ClientID            string
 	RedirectURI         string
 	Scope               string
@@ -100,6 +101,7 @@ type OAuthAuthorizationServerMetadata struct {
 	JWKSURI                           string   `json:"jwks_uri"`
 	ScopesSupported                   []string `json:"scopes_supported,omitempty"`
 	ResponseTypesSupported            []string `json:"response_types_supported,omitempty"`
+	ResponseModesSupported            []string `json:"response_modes_supported,omitempty"`
 	GrantTypesSupported               []string `json:"grant_types_supported,omitempty"`
 	TokenEndpointAuthMethodsSupported []string `json:"token_endpoint_auth_methods_supported,omitempty"`
 	CodeChallengeMethodsSupported     []string `json:"code_challenge_methods_supported,omitempty"`
@@ -140,6 +142,7 @@ type oauthConsentClaims struct {
 	RedirectURI         string `json:"redirect_uri"`
 	Scope               string `json:"scope"`
 	State               string `json:"state"`
+	ResponseMode        string `json:"response_mode,omitempty"`
 	CodeChallenge       string `json:"code_challenge"`
 	CodeChallengeMethod string `json:"code_challenge_method"`
 	Resource            string `json:"resource,omitempty"`
@@ -250,6 +253,7 @@ func (s *OAuthServerService) AuthorizationServerMetadata() *OAuthAuthorizationSe
 		JWKSURI:                           issuer + "/oauth/jwks.json",
 		ScopesSupported:                   append([]string(nil), s.mcpCfg.Auth.RequiredScopes...),
 		ResponseTypesSupported:            []string{models.OAuthResponseTypeCode},
+		ResponseModesSupported:            []string{"query", "web_message", "web_message.opener"},
 		GrantTypesSupported:               []string{models.OAuthGrantTypeAuthorizationCode, models.OAuthGrantTypeRefreshToken},
 		TokenEndpointAuthMethodsSupported: []string{models.OAuthTokenEndpointAuthMethodNone},
 		CodeChallengeMethodsSupported:     []string{models.OAuthCodeChallengeMethodS256},
@@ -340,6 +344,7 @@ func (s *OAuthServerService) ParseAuthorizationRequest(values url.Values) (*OAut
 
 	req := &OAuthAuthorizationRequest{
 		ResponseType:        strings.TrimSpace(values.Get("response_type")),
+		ResponseMode:        strings.TrimSpace(values.Get("response_mode")),
 		ClientID:            strings.TrimSpace(values.Get("client_id")),
 		RedirectURI:         strings.TrimSpace(values.Get("redirect_uri")),
 		Scope:               strings.TrimSpace(values.Get("scope")),
@@ -351,6 +356,9 @@ func (s *OAuthServerService) ParseAuthorizationRequest(values url.Values) (*OAut
 
 	if req.ResponseType != models.OAuthResponseTypeCode {
 		return nil, &OAuthError{Code: "unsupported_response_type", Description: "response_type must be code", StatusCode: 400}
+	}
+	if !isSupportedAuthorizationResponseMode(req.ResponseMode) {
+		return nil, &OAuthError{Code: "invalid_request", Description: "response_mode must be query, web_message, or web_message.opener", StatusCode: 400}
 	}
 	if req.ClientID == "" || req.RedirectURI == "" {
 		return nil, &OAuthError{Code: "invalid_request", Description: "client_id and redirect_uri are required", StatusCode: 400}
@@ -579,6 +587,7 @@ func (s *OAuthServerService) BuildAuthorizationConsentToken(userID string, req *
 		RedirectURI:         req.RedirectURI,
 		Scope:               req.Scope,
 		State:               req.State,
+		ResponseMode:        req.ResponseMode,
 		CodeChallenge:       req.CodeChallenge,
 		CodeChallengeMethod: req.CodeChallengeMethod,
 		Resource:            req.Resource,
@@ -620,6 +629,7 @@ func (s *OAuthServerService) ValidateAuthorizationConsentToken(token string, use
 		claims.RedirectURI != req.RedirectURI ||
 		claims.Scope != req.Scope ||
 		claims.State != req.State ||
+		claims.ResponseMode != req.ResponseMode ||
 		claims.CodeChallenge != req.CodeChallenge ||
 		claims.CodeChallengeMethod != req.CodeChallengeMethod ||
 		claims.Resource != req.Resource {
@@ -923,6 +933,15 @@ func originFromURL(raw string) string {
 	}
 
 	return parsed.Scheme + "://" + parsed.Host
+}
+
+func isSupportedAuthorizationResponseMode(mode string) bool {
+	switch strings.TrimSpace(mode) {
+	case "", "query", "web_message", "web_message.opener":
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *OAuthServerService) normalizeRequestedScope(raw string) (string, error) {

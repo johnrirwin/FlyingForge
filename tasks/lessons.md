@@ -52,3 +52,8 @@ Review this file at the start of each session and apply any relevant rules befor
 - Context: tightening OAuth endpoint CORS/origin checks for ChatGPT compatibility.
 - Correction from user: after the stricter origin gate shipped, clicking Approve redirected back to FlyingForge instead of completing OAuth.
 - Rule to follow next time: when adding origin restrictions to OAuth endpoints, explicitly allow the app’s own public origin/issuer for first-party browser form submissions in addition to third-party client origins.
+
+### 2026-05-06 — When authorize succeeds but no token exchange follows, inspect popup response mode
+- Context: ChatGPT connector OAuth approval kept opening a blank popup even after the consent and CORS fixes were deployed.
+- Correction from user: the browser still showed the same spinner-and-blank-popup behavior, so the prior fixes had not resolved the final handoff.
+- Rule to follow next time: if production logs show `/oauth/authorize` succeeding but no `/oauth/token` request ever arrives, verify whether the client expects popup-oriented `response_mode=web_message` handling instead of a normal redirect callback.
