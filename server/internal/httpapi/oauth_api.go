@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -49,6 +50,7 @@ var authorizeConsentTemplate = template.Must(template.New("oauth-authorize-conse
       <input type="hidden" name="redirect_uri" value="{{.Request.RedirectURI}}">
       <input type="hidden" name="scope" value="{{.Request.Scope}}">
       <input type="hidden" name="state" value="{{.Request.State}}">
+      <input type="hidden" name="response_mode" value="{{.Request.ResponseMode}}">
       <input type="hidden" name="code_challenge" value="{{.Request.CodeChallenge}}">
       <input type="hidden" name="code_challenge_method" value="{{.Request.CodeChallengeMethod}}">
       <input type="hidden" name="resource" value="{{.Request.Resource}}">
@@ -59,6 +61,52 @@ var authorizeConsentTemplate = template.Must(template.New("oauth-authorize-conse
       </div>
     </form>
   </main>
+</body>
+</html>`))
+
+var authorizeWebMessageTemplate = template.Must(template.New("oauth-authorize-web-message").Parse(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Authorization complete</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0b1020; color: #e5e7eb; margin: 0; padding: 2rem; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    main { max-width: 34rem; background: #111827; border-radius: 16px; padding: 2rem; box-shadow: 0 16px 48px rgba(0,0,0,0.28); }
+    h1 { margin-top: 0; font-size: 1.5rem; }
+    p { line-height: 1.5; }
+    .meta { color: #9ca3af; font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>{{.Title}}</h1>
+    <p>{{.Message}}</p>
+    <p class="meta">If this window does not close automatically, you can close it and return to your app.</p>
+  </main>
+  <script>
+    (function () {
+      const payload = {{.PayloadJSON}};
+      const targetOrigin = {{.TargetOriginJSON}};
+      const responseMode = {{.ResponseModeJSON}};
+
+      let targetWindow = null;
+      if (responseMode === "web_message.opener") {
+        targetWindow = window.opener;
+      } else if (window.opener && !window.opener.closed) {
+        targetWindow = window.opener;
+      } else if (window.parent && window.parent !== window) {
+        targetWindow = window.parent;
+      }
+
+      if (!targetWindow || !targetOrigin) {
+        return;
+      }
+
+      targetWindow.postMessage(payload, targetOrigin);
+      window.close();
+    })();
+  </script>
 </body>
 </html>`))
 
@@ -246,6 +294,9 @@ func (api *OAuthAPI) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		api.logOAuthAuthorizeSuccess(r, authReq, redirectURL)
+		if api.writeAuthorizeWebMessageResponse(w, authReq, redirectURL, nil) {
+			return
+		}
 		http.Redirect(w, r, redirectURL, redirectStatusCode(r))
 	case "deny":
 		denyErr := &auth.OAuthError{
@@ -348,6 +399,9 @@ func (api *OAuthAPI) writeOAuthError(w http.ResponseWriter, err error) {
 
 func (api *OAuthAPI) redirectOrWriteAuthorizeError(w http.ResponseWriter, r *http.Request, authReq *auth.OAuthAuthorizationRequest, err error) {
 	if redirectURL, ok := api.oauthService.AuthorizationErrorRedirect(r.Context(), authReq, err); ok {
+		if api.writeAuthorizeWebMessageResponse(w, authReq, "", err) {
+			return
+		}
 		http.Redirect(w, r, redirectURL, redirectStatusCode(r))
 		return
 	}
@@ -407,6 +461,63 @@ func redirectStatusCode(r *http.Request) int {
 		return http.StatusSeeOther
 	}
 	return http.StatusFound
+}
+
+func (api *OAuthAPI) writeAuthorizeWebMessageResponse(w http.ResponseWriter, authReq *auth.OAuthAuthorizationRequest, redirectURL string, err error) bool {
+	if !usesWebMessageResponseMode(authReq) {
+		return false
+	}
+	targetOrigin := originFromRedirectURI(authReq.RedirectURI)
+	if targetOrigin == "" {
+		return false
+	}
+
+	payload := map[string]string{
+		"iss": strings.TrimSpace(api.oauthService.AuthorizationServerMetadata().Issuer),
+	}
+	title := "Authorization complete"
+	message := "You can return to your app now."
+
+	if err != nil {
+		oauthErr := auth.NormalizeOAuthError(err)
+		payload["error"] = oauthErr.Code
+		if description := strings.TrimSpace(oauthErr.Description); description != "" {
+			payload["error_description"] = description
+		}
+		if authReq != nil && strings.TrimSpace(authReq.State) != "" {
+			payload["state"] = authReq.State
+		}
+		title = "Authorization denied"
+		message = "We sent the authorization result back to your app."
+	} else {
+		parsedRedirect, parseErr := url.Parse(strings.TrimSpace(redirectURL))
+		if parseErr != nil {
+			return false
+		}
+		if code := strings.TrimSpace(parsedRedirect.Query().Get("code")); code != "" {
+			payload["code"] = code
+		}
+		if authReq != nil && strings.TrimSpace(authReq.State) != "" {
+			payload["state"] = authReq.State
+		}
+		if payload["code"] == "" {
+			return false
+		}
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'")
+	w.WriteHeader(http.StatusOK)
+	_ = authorizeWebMessageTemplate.Execute(w, map[string]any{
+		"Title":            title,
+		"Message":          message,
+		"PayloadJSON":      mustJSONJS(payload),
+		"TargetOriginJSON": mustJSONJS(targetOrigin),
+		"ResponseModeJSON": mustJSONJS(strings.TrimSpace(authReq.ResponseMode)),
+	})
+	return true
 }
 
 func (api *OAuthAPI) handleCORS(w http.ResponseWriter, r *http.Request, allowMethods string) bool {
@@ -559,6 +670,7 @@ func oauthAuthorizationFields(authReq *auth.OAuthAuthorizationRequest) map[strin
 	fields["redirect_uri_host"] = hostFromURL(authReq.RedirectURI)
 	fields["has_state"] = strings.TrimSpace(authReq.State) != ""
 	fields["resource"] = strings.TrimSpace(authReq.Resource)
+	fields["response_mode"] = strings.TrimSpace(authReq.ResponseMode)
 	fields["scope"] = strings.TrimSpace(authReq.Scope)
 	return fields
 }
@@ -640,4 +752,32 @@ func writeOAuthJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Pragma", "no-cache")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(data)
+}
+
+func usesWebMessageResponseMode(authReq *auth.OAuthAuthorizationRequest) bool {
+	if authReq == nil {
+		return false
+	}
+	switch strings.TrimSpace(authReq.ResponseMode) {
+	case "web_message", "web_message.opener":
+		return true
+	default:
+		return false
+	}
+}
+
+func originFromRedirectURI(raw string) string {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+	return parsed.Scheme + "://" + parsed.Host
+}
+
+func mustJSONJS(value interface{}) template.JS {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return template.JS(strconv.Quote(""))
+	}
+	return template.JS(encoded)
 }
