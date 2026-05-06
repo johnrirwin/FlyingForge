@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"encoding/json"
 	"html/template"
 	"net/http"
@@ -509,14 +510,23 @@ func (api *OAuthAPI) writeAuthorizeWebMessageResponse(w http.ResponseWriter, aut
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'")
-	w.WriteHeader(http.StatusOK)
-	_ = authorizeWebMessageTemplate.Execute(w, map[string]any{
+	var body bytes.Buffer
+	if err := authorizeWebMessageTemplate.Execute(&body, map[string]any{
 		"Title":            title,
 		"Message":          message,
 		"PayloadJSON":      mustJSONJS(payload),
 		"TargetOriginJSON": mustJSONJS(targetOrigin),
 		"ResponseModeJSON": mustJSONJS(strings.TrimSpace(authReq.ResponseMode)),
-	})
+	}); err != nil {
+		if api.logger != nil {
+			api.logger.Error("Failed to render OAuth web_message response", logging.WithField("error", err.Error()))
+		}
+		return false
+	}
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write(body.Bytes()); err != nil && api.logger != nil {
+		api.logger.Warn("Failed to write OAuth web_message response", logging.WithField("error", err.Error()))
+	}
 	return true
 }
 

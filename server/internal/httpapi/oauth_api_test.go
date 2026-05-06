@@ -443,7 +443,7 @@ func TestOAuthAPI_AuthorizeApprovalUsesWebMessageWhenRequested(t *testing.T) {
 		t.Fatalf("expected HTTP 200, got %d with body %s", responseRecorder.Code, responseRecorder.Body.String())
 	}
 	body := responseRecorder.Body.String()
-	if !strings.Contains(body, "window.opener.postMessage(payload, targetOrigin);") {
+	if !strings.Contains(body, "targetWindow.postMessage(payload, targetOrigin);") {
 		t.Fatalf("expected popup web_message response, got body %q", body)
 	}
 	if !strings.Contains(body, `"code"`) {
