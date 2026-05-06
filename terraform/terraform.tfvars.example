@@ -44,7 +44,13 @@ enable_kms_vpc_endpoint = true
 domain_name       = ""
 create_dns_record = false
 
+# Self-hosted MCP OAuth for ChatGPT/custom connectors
+mcp_auth_self_hosted = true
+mcp_auth_key_id      = "ff-self-hosted"
+
 # Secrets (set via environment variables or -var flag, NOT in this file)
 # google_client_id     = ""
 # google_client_secret = ""
 # encryption_key       = ""
+# auth_jwt_secret      = ""
+# mcp_auth_private_key_pem = ""

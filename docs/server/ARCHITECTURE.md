@@ -767,6 +767,16 @@ When MCP OAuth is enabled, the HTTP server publishes:
 
 - `/.well-known/oauth-protected-resource`
 
+When self-hosted MCP OAuth is enabled, the HTTP server also publishes:
+
+- `/.well-known/openid-configuration`
+- `/.well-known/oauth-authorization-server`
+- `/oauth/jwks.json`
+- `/oauth/register`
+- `/oauth/authorize`
+- `/oauth/token`
+- `/oauth/google/callback`
+
 Unauthorized private tool calls return:
 
 - `WWW-Authenticate: Bearer ...`
@@ -983,12 +993,20 @@ HTML scraping fetcher for web forums. Currently configured but no active sources
 | `MCP_MODE` | `false` | Set to `true` or `1` for MCP mode |
 | `MCP_PUBLIC_BASE_URL` | (empty) | Public HTTPS base URL for the HTTP MCP endpoint |
 | `MCP_ALLOWED_ORIGINS` | `https://chatgpt.com,https://chat.openai.com` | Allowed browser origins for `/mcp` |
-| `MCP_AUTH_ISSUER` | (empty) | OIDC issuer for private MCP tools |
+| `MCP_AUTH_SELF_HOSTED` | `false` | Enable FlyingForge as the OAuth authorization server for MCP |
+| `MCP_AUTH_ISSUER` | (empty) | OIDC/OAuth issuer for private MCP tools; for self-hosted mode this should be the public HTTPS app base URL |
 | `MCP_AUTH_AUDIENCE` | (empty) | Expected audience for MCP access tokens |
-| `MCP_AUTH_RESOURCE` | `MCP_PUBLIC_BASE_URL` | Protected resource identifier for MCP OAuth |
+| `MCP_AUTH_RESOURCE` | `MCP_PUBLIC_BASE_URL + /mcp` | Protected resource identifier for MCP OAuth |
 | `MCP_AUTH_SCOPES` | `flyingforge.read` | Comma-separated scopes required for private MCP tools |
 | `MCP_AUTH_DISCOVERY_URL` | (empty) | Optional OIDC discovery override |
 | `MCP_AUTH_JWKS_URL` | (empty) | Optional JWKS override |
+| `MCP_AUTH_PRIVATE_KEY_PEM` | (empty) | PEM-encoded RSA or ECDSA private key for self-hosted OAuth token signing |
+| `MCP_AUTH_KEY_ID` | `ff-self-hosted` | JWK key ID for the self-hosted JWKS endpoint |
+| `MCP_AUTH_GOOGLE_REDIRECT_URI` | `MCP_PUBLIC_BASE_URL + /oauth/google/callback` | Google redirect URI for the self-hosted OAuth login flow |
+| `MCP_AUTH_ACCESS_TOKEN_TTL` | `1h` | Self-hosted OAuth access-token lifetime |
+| `MCP_AUTH_CODE_TTL` | `10m` | Self-hosted OAuth authorization-code lifetime |
+| `MCP_AUTH_REFRESH_TOKEN_TTL` | `720h` | Self-hosted OAuth refresh-token lifetime |
+| `MCP_AUTH_SESSION_TTL` | `24h` | Browser login-session lifetime for self-hosted OAuth |
 | `LOG_LEVEL` | `info` | Log level (debug/info/warn/error) |
 | `RATE_LIMIT` | `1s` | Rate limit interval between requests |
 | `CORS_ORIGIN` | `*` | Allowed CORS origins |

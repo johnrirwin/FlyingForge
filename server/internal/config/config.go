@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/x509"
+	"encoding/pem"
 	"flag"
 	"os"
 	"strconv"
@@ -39,13 +41,22 @@ type MCPConfig struct {
 
 // MCPAuthConfig holds OAuth/OIDC settings for private MCP tools.
 type MCPAuthConfig struct {
-	Issuer         string
-	Audience       string
-	Resource       string
-	RequiredScopes []string
-	DiscoveryURL   string
-	JWKSURL        string
-	Enabled        bool
+	Issuer               string
+	Audience             string
+	Resource             string
+	RequiredScopes       []string
+	DiscoveryURL         string
+	JWKSURL              string
+	SelfHosted           bool
+	AllowEphemeralKey    bool
+	PrivateKeyPEM        string
+	KeyID                string
+	GoogleRedirectURI    string
+	AccessTokenTTL       time.Duration
+	AuthorizationCodeTTL time.Duration
+	RefreshTokenTTL      time.Duration
+	SessionTTL           time.Duration
+	Enabled              bool
 }
 
 // CacheConfig holds cache configuration
@@ -201,15 +212,73 @@ func loadMCPConfig() MCPConfig {
 		}
 	}
 
+	issuer := strings.TrimSpace(os.Getenv("MCP_AUTH_ISSUER"))
+	selfHosted := false
+	if v := strings.ToLower(strings.TrimSpace(os.Getenv("MCP_AUTH_SELF_HOSTED"))); v == "true" || v == "1" {
+		selfHosted = true
+		if issuer == "" && publicBaseURL != "" {
+			issuer = strings.TrimRight(publicBaseURL, "/")
+		}
+	}
+	allowEphemeralKey := false
+	if v := strings.ToLower(strings.TrimSpace(os.Getenv("MCP_AUTH_ALLOW_EPHEMERAL_KEY"))); v == "true" || v == "1" {
+		allowEphemeralKey = true
+	}
+
+	accessTokenTTL := time.Hour
+	if raw := strings.TrimSpace(os.Getenv("MCP_AUTH_ACCESS_TOKEN_TTL")); raw != "" {
+		if parsed, err := time.ParseDuration(raw); err == nil && parsed > 0 {
+			accessTokenTTL = parsed
+		}
+	}
+
+	authorizationCodeTTL := 10 * time.Minute
+	if raw := strings.TrimSpace(os.Getenv("MCP_AUTH_CODE_TTL")); raw != "" {
+		if parsed, err := time.ParseDuration(raw); err == nil && parsed > 0 {
+			authorizationCodeTTL = parsed
+		}
+	}
+
+	refreshTokenTTL := 30 * 24 * time.Hour
+	if raw := strings.TrimSpace(os.Getenv("MCP_AUTH_REFRESH_TOKEN_TTL")); raw != "" {
+		if parsed, err := time.ParseDuration(raw); err == nil && parsed > 0 {
+			refreshTokenTTL = parsed
+		}
+	}
+
+	sessionTTL := 24 * time.Hour
+	if raw := strings.TrimSpace(os.Getenv("MCP_AUTH_SESSION_TTL")); raw != "" {
+		if parsed, err := time.ParseDuration(raw); err == nil && parsed > 0 {
+			sessionTTL = parsed
+		}
+	}
+
+	googleRedirectURI := strings.TrimSpace(os.Getenv("MCP_AUTH_GOOGLE_REDIRECT_URI"))
+	if googleRedirectURI == "" && publicBaseURL != "" {
+		googleRedirectURI = strings.TrimRight(publicBaseURL, "/") + "/oauth/google/callback"
+	}
+
 	authCfg := MCPAuthConfig{
-		Issuer:         strings.TrimSpace(os.Getenv("MCP_AUTH_ISSUER")),
-		Audience:       strings.TrimSpace(os.Getenv("MCP_AUTH_AUDIENCE")),
-		Resource:       resource,
-		RequiredScopes: requiredScopes,
-		DiscoveryURL:   strings.TrimSpace(os.Getenv("MCP_AUTH_DISCOVERY_URL")),
-		JWKSURL:        strings.TrimSpace(os.Getenv("MCP_AUTH_JWKS_URL")),
+		Issuer:               issuer,
+		Audience:             strings.TrimSpace(os.Getenv("MCP_AUTH_AUDIENCE")),
+		Resource:             resource,
+		RequiredScopes:       requiredScopes,
+		DiscoveryURL:         strings.TrimSpace(os.Getenv("MCP_AUTH_DISCOVERY_URL")),
+		JWKSURL:              strings.TrimSpace(os.Getenv("MCP_AUTH_JWKS_URL")),
+		SelfHosted:           selfHosted,
+		AllowEphemeralKey:    allowEphemeralKey,
+		PrivateKeyPEM:        os.Getenv("MCP_AUTH_PRIVATE_KEY_PEM"),
+		KeyID:                strings.TrimSpace(os.Getenv("MCP_AUTH_KEY_ID")),
+		GoogleRedirectURI:    strings.TrimSpace(googleRedirectURI),
+		AccessTokenTTL:       accessTokenTTL,
+		AuthorizationCodeTTL: authorizationCodeTTL,
+		RefreshTokenTTL:      refreshTokenTTL,
+		SessionTTL:           sessionTTL,
 	}
 	authCfg.Enabled = authCfg.Issuer != ""
+	if authCfg.Enabled && authCfg.SelfHosted && !authCfg.AllowEphemeralKey {
+		authCfg.Enabled = selfHostedSigningKeyConfigured(authCfg.PrivateKeyPEM)
+	}
 
 	return MCPConfig{
 		PublicBaseURL:  publicBaseURL,
@@ -301,6 +370,30 @@ func getEnvOrDefault(key, defaultValue string) string {
 		return v
 	}
 	return defaultValue
+}
+
+func selfHostedSigningKeyConfigured(privateKeyPEM string) bool {
+	privateKeyPEM = strings.TrimSpace(privateKeyPEM)
+	if privateKeyPEM == "" {
+		return false
+	}
+
+	block, _ := pem.Decode([]byte(privateKeyPEM))
+	if block == nil {
+		return false
+	}
+
+	if _, err := x509.ParsePKCS8PrivateKey(block.Bytes); err == nil {
+		return true
+	}
+	if _, err := x509.ParseECPrivateKey(block.Bytes); err == nil {
+		return true
+	}
+	if _, err := x509.ParsePKCS1PrivateKey(block.Bytes); err == nil {
+		return true
+	}
+
+	return false
 }
 
 func splitAndTrim(value string) []string {
