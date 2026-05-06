@@ -235,27 +235,34 @@ func (api *OAuthAPI) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	switch strings.ToLower(strings.TrimSpace(r.PostForm.Get("decision"))) {
 	case "approve":
 		if consentErr := api.oauthService.ValidateAuthorizationConsentToken(r.PostForm.Get("consent_token"), userID, authReq); consentErr != nil {
+			api.logOAuthAuthorizeFailure(r, authReq, consentErr)
 			api.redirectOrWriteAuthorizeError(w, r, authReq, consentErr)
 			return
 		}
 		redirectURL, authorizeErr := api.oauthService.Authorize(r.Context(), authReq, userID)
 		if authorizeErr != nil {
+			api.logOAuthAuthorizeFailure(r, authReq, authorizeErr)
 			api.redirectOrWriteAuthorizeError(w, r, authReq, authorizeErr)
 			return
 		}
+		api.logOAuthAuthorizeSuccess(r, authReq, redirectURL)
 		http.Redirect(w, r, redirectURL, redirectStatusCode(r))
 	case "deny":
-		api.redirectOrWriteAuthorizeError(w, r, authReq, &auth.OAuthError{
+		denyErr := &auth.OAuthError{
 			Code:        "access_denied",
 			Description: "user denied the authorization request",
 			StatusCode:  http.StatusUnauthorized,
-		})
+		}
+		api.logOAuthAuthorizeFailure(r, authReq, denyErr)
+		api.redirectOrWriteAuthorizeError(w, r, authReq, denyErr)
 	default:
-		api.redirectOrWriteAuthorizeError(w, r, authReq, &auth.OAuthError{
+		decisionErr := &auth.OAuthError{
 			Code:        "invalid_request",
 			Description: "authorization decision is required",
 			StatusCode:  http.StatusBadRequest,
-		})
+		}
+		api.logOAuthAuthorizeFailure(r, authReq, decisionErr)
+		api.redirectOrWriteAuthorizeError(w, r, authReq, decisionErr)
 	}
 }
 
@@ -271,7 +278,9 @@ func (api *OAuthAPI) handleGoogleCallback(w http.ResponseWriter, r *http.Request
 
 	if authError := r.URL.Query().Get("error"); authError != "" {
 		api.clearCookie(w, api.oauthService.PendingCookieName())
-		api.writeOAuthError(w, &auth.OAuthError{Code: "access_denied", Description: "Google authentication was denied", StatusCode: http.StatusUnauthorized})
+		oauthErr := &auth.OAuthError{Code: "access_denied", Description: "Google authentication was denied", StatusCode: http.StatusUnauthorized}
+		api.logOAuthCallbackFailure(r, oauthErr)
+		api.writeOAuthError(w, oauthErr)
 		return
 	}
 
@@ -279,19 +288,23 @@ func (api *OAuthAPI) handleGoogleCallback(w http.ResponseWriter, r *http.Request
 	state := r.URL.Query().Get("state")
 	pendingCookie, err := r.Cookie(api.oauthService.PendingCookieName())
 	if err != nil || code == "" || state == "" {
-		api.writeOAuthError(w, &auth.OAuthError{Code: "access_denied", Description: "missing OAuth login callback state", StatusCode: http.StatusUnauthorized})
+		oauthErr := &auth.OAuthError{Code: "access_denied", Description: "missing OAuth login callback state", StatusCode: http.StatusUnauthorized}
+		api.logOAuthCallbackFailure(r, oauthErr)
+		api.writeOAuthError(w, oauthErr)
 		return
 	}
 
 	sessionToken, redirectTo, callbackErr := api.oauthService.HandleGoogleCallback(r.Context(), code, state, pendingCookie.Value)
 	if callbackErr != nil {
 		api.clearCookie(w, api.oauthService.PendingCookieName())
+		api.logOAuthCallbackFailure(r, callbackErr)
 		api.writeOAuthError(w, callbackErr)
 		return
 	}
 
 	api.clearCookie(w, api.oauthService.PendingCookieName())
 	api.setCookie(w, api.oauthService.SessionCookieName(), sessionToken, api.oauthService.SessionCookieTTL())
+	api.logOAuthCallbackSuccess(r, redirectTo)
 	http.Redirect(w, r, redirectTo, http.StatusFound)
 }
 
@@ -305,15 +318,19 @@ func (api *OAuthAPI) handleToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		api.writeOAuthError(w, &auth.OAuthError{Code: "invalid_request", Description: "invalid token request body", StatusCode: http.StatusBadRequest})
+		oauthErr := &auth.OAuthError{Code: "invalid_request", Description: "invalid token request body", StatusCode: http.StatusBadRequest}
+		api.logOAuthTokenFailure(r, nil, oauthErr)
+		api.writeOAuthError(w, oauthErr)
 		return
 	}
 
 	response, err := api.oauthService.ExchangeToken(r.Context(), r.PostForm)
 	if err != nil {
+		api.logOAuthTokenFailure(r, r.PostForm, err)
 		api.writeOAuthError(w, err)
 		return
 	}
+	api.logOAuthTokenSuccess(r, r.PostForm)
 	writeOAuthJSON(w, http.StatusOK, response)
 }
 
@@ -455,6 +472,133 @@ func addVaryHeader(w http.ResponseWriter, value string) {
 		}
 	}
 	w.Header().Add("Vary", value)
+}
+
+func (api *OAuthAPI) logOAuthAuthorizeSuccess(r *http.Request, authReq *auth.OAuthAuthorizationRequest, redirectURL string) {
+	if api == nil || api.logger == nil {
+		return
+	}
+	fields := oauthRequestFields(r)
+	mergeFieldMaps(fields, oauthAuthorizationFields(authReq))
+	fields["redirect_destination_host"] = hostFromURL(redirectURL)
+	fields["decision"] = "approve"
+	api.logger.Info("OAuth authorize redirecting to client callback", logging.WithFields(fields))
+}
+
+func (api *OAuthAPI) logOAuthAuthorizeFailure(r *http.Request, authReq *auth.OAuthAuthorizationRequest, err error) {
+	if api == nil || api.logger == nil {
+		return
+	}
+	fields := oauthRequestFields(r)
+	mergeFieldMaps(fields, oauthAuthorizationFields(authReq))
+	mergeFieldMaps(fields, oauthErrorFields(err))
+	fields["decision"] = strings.ToLower(strings.TrimSpace(r.PostFormValue("decision")))
+	api.logger.Warn("OAuth authorize failed", logging.WithFields(fields))
+}
+
+func (api *OAuthAPI) logOAuthCallbackSuccess(r *http.Request, redirectTo string) {
+	if api == nil || api.logger == nil {
+		return
+	}
+	fields := oauthRequestFields(r)
+	fields["redirect_destination_host"] = hostFromURL(redirectTo)
+	fields["has_code"] = strings.TrimSpace(r.URL.Query().Get("code")) != ""
+	fields["has_state"] = strings.TrimSpace(r.URL.Query().Get("state")) != ""
+	api.logger.Info("OAuth Google callback restored session", logging.WithFields(fields))
+}
+
+func (api *OAuthAPI) logOAuthCallbackFailure(r *http.Request, err error) {
+	if api == nil || api.logger == nil {
+		return
+	}
+	fields := oauthRequestFields(r)
+	fields["has_code"] = strings.TrimSpace(r.URL.Query().Get("code")) != ""
+	fields["has_state"] = strings.TrimSpace(r.URL.Query().Get("state")) != ""
+	mergeFieldMaps(fields, oauthErrorFields(err))
+	api.logger.Warn("OAuth Google callback failed", logging.WithFields(fields))
+}
+
+func (api *OAuthAPI) logOAuthTokenSuccess(r *http.Request, form url.Values) {
+	if api == nil || api.logger == nil {
+		return
+	}
+	fields := oauthRequestFields(r)
+	mergeFieldMaps(fields, oauthTokenRequestFields(form))
+	api.logger.Info("OAuth token exchange succeeded", logging.WithFields(fields))
+}
+
+func (api *OAuthAPI) logOAuthTokenFailure(r *http.Request, form url.Values, err error) {
+	if api == nil || api.logger == nil {
+		return
+	}
+	fields := oauthRequestFields(r)
+	mergeFieldMaps(fields, oauthTokenRequestFields(form))
+	mergeFieldMaps(fields, oauthErrorFields(err))
+	api.logger.Warn("OAuth token exchange failed", logging.WithFields(fields))
+}
+
+func oauthRequestFields(r *http.Request) map[string]interface{} {
+	fields := map[string]interface{}{}
+	if r == nil {
+		return fields
+	}
+	fields["method"] = r.Method
+	fields["path"] = r.URL.Path
+	if origin := strings.TrimSpace(r.Header.Get("Origin")); origin != "" {
+		fields["origin"] = origin
+	}
+	return fields
+}
+
+func oauthAuthorizationFields(authReq *auth.OAuthAuthorizationRequest) map[string]interface{} {
+	fields := map[string]interface{}{}
+	if authReq == nil {
+		return fields
+	}
+	fields["client_id"] = authReq.ClientID
+	fields["redirect_uri_host"] = hostFromURL(authReq.RedirectURI)
+	fields["has_state"] = strings.TrimSpace(authReq.State) != ""
+	fields["resource"] = strings.TrimSpace(authReq.Resource)
+	fields["scope"] = strings.TrimSpace(authReq.Scope)
+	return fields
+}
+
+func oauthTokenRequestFields(form url.Values) map[string]interface{} {
+	fields := map[string]interface{}{}
+	if form == nil {
+		return fields
+	}
+	fields["grant_type"] = strings.TrimSpace(form.Get("grant_type"))
+	fields["client_id"] = strings.TrimSpace(form.Get("client_id"))
+	fields["redirect_uri_host"] = hostFromURL(form.Get("redirect_uri"))
+	fields["resource"] = strings.TrimSpace(form.Get("resource"))
+	fields["has_code"] = strings.TrimSpace(form.Get("code")) != ""
+	fields["has_code_verifier"] = strings.TrimSpace(form.Get("code_verifier")) != ""
+	fields["has_refresh_token"] = strings.TrimSpace(form.Get("refresh_token")) != ""
+	return fields
+}
+
+func oauthErrorFields(err error) map[string]interface{} {
+	oauthErr := auth.NormalizeOAuthError(err)
+	return map[string]interface{}{
+		"oauth_error":             oauthErr.Code,
+		"oauth_error_description": oauthErr.Description,
+		"oauth_status":            oauthErr.StatusCode,
+	}
+}
+
+func hostFromURL(raw string) string {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(parsed.Host)
+}
+
+func mergeFieldMaps(dst map[string]interface{}, src map[string]interface{}) {
+	for key, value := range src {
+		dst[key] = value
+	}
 }
 
 func oauthCookieSameSite(secure bool) http.SameSite {
