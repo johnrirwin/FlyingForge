@@ -62,3 +62,8 @@ Review this file at the start of each session and apply any relevant rules befor
 - Context: I added popup `response_mode` support, but production still showed the same spinner/blank-popup behavior.
 - Correction from user: the new patch still did not work in the real ChatGPT flow.
 - Rule to follow next time: before committing to a response-mode-specific OAuth fix, inspect the live authorize logs to confirm whether the client is actually sending that parameter and patch the active branch of the flow first.
+
+### 2026-05-07 — Read the browser CSP error literally in OAuth redirect bugs
+- Context: the ChatGPT approval flow still failed after redirect-path fixes.
+- Correction from user: the browser console showed a precise CSP `form-action` violation for the ChatGPT callback URL.
+- Rule to follow next time: when a browser surfaces a CSP violation during OAuth approval, patch the exact blocked directive first—especially `form-action` on consent pages that POST and then redirect to a third-party callback.
