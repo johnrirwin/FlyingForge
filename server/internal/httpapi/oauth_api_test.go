@@ -280,6 +280,9 @@ func TestOAuthAPI_AuthorizeShowsConsentPageForSignedInUser(t *testing.T) {
 	if contentType := responseRecorder.Header().Get("Content-Type"); !strings.Contains(contentType, "text/html") {
 		t.Fatalf("expected HTML consent page, got content type %q", contentType)
 	}
+	if csp := responseRecorder.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "form-action 'self' https://chat.openai.com") {
+		t.Fatalf("expected consent CSP to allow the registered redirect origin, got %q", csp)
+	}
 	body := responseRecorder.Body.String()
 	if !strings.Contains(body, "Allow <span class=\"app-name\">ChatGPT Test Connector</span> to access FlyingForge?") {
 		t.Fatalf("expected consent prompt to mention client name, got body %q", body)

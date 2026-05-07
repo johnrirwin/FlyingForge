@@ -418,7 +418,7 @@ func (api *OAuthAPI) renderAuthorizeConsentPage(w http.ResponseWriter, authReq *
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Frame-Options", "DENY")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+	w.Header().Set("Content-Security-Policy", authorizeConsentContentSecurityPolicy(authReq))
 	if err := authorizeConsentTemplate.Execute(w, map[string]any{
 		"Prompt":             prompt,
 		"Request":            authReq,
@@ -462,6 +462,16 @@ func redirectStatusCode(r *http.Request) int {
 		return http.StatusSeeOther
 	}
 	return http.StatusFound
+}
+
+func authorizeConsentContentSecurityPolicy(authReq *auth.OAuthAuthorizationRequest) string {
+	formActions := []string{"'self'"}
+	if authReq != nil {
+		if redirectOrigin := originFromRedirectURI(authReq.RedirectURI); redirectOrigin != "" {
+			formActions = append(formActions, redirectOrigin)
+		}
+	}
+	return "default-src 'none'; style-src 'unsafe-inline'; form-action " + strings.Join(formActions, " ") + "; base-uri 'none'; frame-ancestors 'none'"
 }
 
 func (api *OAuthAPI) writeAuthorizeWebMessageResponse(w http.ResponseWriter, authReq *auth.OAuthAuthorizationRequest, redirectURL string, err error) bool {
