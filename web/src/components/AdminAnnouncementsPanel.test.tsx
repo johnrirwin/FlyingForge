@@ -55,12 +55,30 @@ describe('AdminAnnouncementsPanel', () => {
     render(<AdminAnnouncementsPanel />);
 
     expect(await screen.findAllByText('ChatGPT MCP integrations are now available')).toHaveLength(2);
+    expect(screen.getByText('1 announcement found')).toBeInTheDocument();
     expect(mockAdminListAnnouncements).toHaveBeenCalledWith({
       query: undefined,
       status: undefined,
       limit: 100,
       offset: 0,
     });
+  });
+
+  it('shows when only the first page of announcements is displayed', async () => {
+    mockAdminListAnnouncements.mockResolvedValueOnce({
+      announcements: Array.from({ length: 100 }, (_, index) =>
+        createAnnouncement({
+          id: `announcement-${index + 1}`,
+          title: `Announcement ${index + 1}`,
+        }),
+      ),
+      totalCount: 135,
+    });
+
+    render(<AdminAnnouncementsPanel />);
+
+    expect(await screen.findByRole('button', { name: 'Open editor for Announcement 1' })).toBeInTheDocument();
+    expect(screen.getByText('Showing 100 of 135 announcements')).toBeInTheDocument();
   });
 
   it('creates a new announcement from the editor modal', async () => {

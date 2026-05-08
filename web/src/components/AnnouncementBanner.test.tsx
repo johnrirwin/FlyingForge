@@ -47,6 +47,16 @@ describe('AnnouncementBanner', () => {
     expect(screen.getByRole('link', { name: /learn more/i })).toHaveAttribute('href', '/news');
   });
 
+  it('renders external CTA links with noopener noreferrer', () => {
+    render(
+      <MemoryRouter>
+        <AnnouncementBanner announcement={createAnnouncement({ ctaUrl: 'https://example.com/news' })} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('link', { name: /learn more/i })).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
   it('renders no button when the announcement has no call to action', () => {
     render(
       <MemoryRouter>

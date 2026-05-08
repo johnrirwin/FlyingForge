@@ -148,7 +148,16 @@ func IsValidAnnouncementCTAURL(raw string) bool {
 		return true
 	}
 	if strings.HasPrefix(value, "/") {
-		return true
+		if strings.HasPrefix(value, "//") {
+			return false
+		}
+
+		parsed, err := url.Parse(value)
+		if err != nil {
+			return false
+		}
+
+		return parsed.Scheme == "" && parsed.Host == ""
 	}
 
 	parsed, err := url.Parse(value)

@@ -44,7 +44,7 @@ export function AnnouncementBanner({ announcement, onDismiss, className = '' }: 
                 <a
                   href={ctaUrl}
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700"
                 >
                   {ctaLabel}

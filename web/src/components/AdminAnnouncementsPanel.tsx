@@ -26,6 +26,8 @@ const PLACEMENT_OPTIONS: Array<{ value: AnnouncementPlacement; label: string }> 
   { value: 'news', label: 'News' },
 ];
 
+const ADMIN_ANNOUNCEMENT_PAGE_LIMIT = 100;
+
 function formatDateTime(value?: string): string {
   if (!value) return '—';
   const date = new Date(value);
@@ -365,7 +367,7 @@ export function AdminAnnouncementsPanel() {
       const response = await adminListAnnouncements({
         query: appliedQuery || undefined,
         status: status || undefined,
-        limit: 100,
+        limit: ADMIN_ANNOUNCEMENT_PAGE_LIMIT,
         offset: 0,
       });
       setItems(response.announcements ?? []);
@@ -449,8 +451,11 @@ export function AdminAnnouncementsPanel() {
   const visibleModal = isCreating || editingAnnouncement !== null;
 
   const countLabel = useMemo(
-    () => `${totalCount} announcement${totalCount === 1 ? '' : 's'} found`,
-    [totalCount],
+    () =>
+      totalCount > items.length
+        ? `Showing ${items.length} of ${totalCount} announcement${totalCount === 1 ? '' : 's'}`
+        : `${totalCount} announcement${totalCount === 1 ? '' : 's'} found`,
+    [items.length, totalCount],
   );
 
   return (
