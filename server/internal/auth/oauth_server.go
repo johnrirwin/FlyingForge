@@ -31,6 +31,7 @@ const (
 	oauthSessionCookieName  = "ff_mcp_oauth_session"
 	oauthPendingCookieName  = "ff_mcp_oauth_pending"
 	oauthStateTTL           = 15 * time.Minute
+	defaultJWTSecret        = "change-me-in-production"
 )
 
 type OAuthError struct {
@@ -62,6 +63,7 @@ func NormalizeOAuthError(err error) *OAuthError {
 
 type OAuthAuthorizationRequest struct {
 	ResponseType        string
+	ResponseMode        string
 	ClientID            string
 	RedirectURI         string
 	Scope               string
@@ -92,16 +94,18 @@ type OAuthDynamicClientRegistrationResponse struct {
 }
 
 type OAuthAuthorizationServerMetadata struct {
-	Issuer                            string   `json:"issuer"`
-	AuthorizationEndpoint             string   `json:"authorization_endpoint"`
-	TokenEndpoint                     string   `json:"token_endpoint"`
-	RegistrationEndpoint              string   `json:"registration_endpoint"`
-	JWKSURI                           string   `json:"jwks_uri"`
-	ScopesSupported                   []string `json:"scopes_supported,omitempty"`
-	ResponseTypesSupported            []string `json:"response_types_supported,omitempty"`
-	GrantTypesSupported               []string `json:"grant_types_supported,omitempty"`
-	TokenEndpointAuthMethodsSupported []string `json:"token_endpoint_auth_methods_supported,omitempty"`
-	CodeChallengeMethodsSupported     []string `json:"code_challenge_methods_supported,omitempty"`
+	Issuer                                     string   `json:"issuer"`
+	AuthorizationEndpoint                      string   `json:"authorization_endpoint"`
+	TokenEndpoint                              string   `json:"token_endpoint"`
+	RegistrationEndpoint                       string   `json:"registration_endpoint"`
+	JWKSURI                                    string   `json:"jwks_uri"`
+	AuthorizationResponseIssParameterSupported bool     `json:"authorization_response_iss_parameter_supported,omitempty"`
+	ScopesSupported                            []string `json:"scopes_supported,omitempty"`
+	ResponseTypesSupported                     []string `json:"response_types_supported,omitempty"`
+	ResponseModesSupported                     []string `json:"response_modes_supported,omitempty"`
+	GrantTypesSupported                        []string `json:"grant_types_supported,omitempty"`
+	TokenEndpointAuthMethodsSupported          []string `json:"token_endpoint_auth_methods_supported,omitempty"`
+	CodeChallengeMethodsSupported              []string `json:"code_challenge_methods_supported,omitempty"`
 }
 
 type OAuthTokenResponse struct {
@@ -114,6 +118,7 @@ type OAuthTokenResponse struct {
 }
 
 type OAuthAuthorizationPrompt struct {
+	UserID      string
 	ClientID    string
 	ClientName  string
 	Scope       string
@@ -130,6 +135,19 @@ type oauthPendingStateClaims struct {
 
 type oauthSessionClaims struct {
 	Use string `json:"use"`
+	jwt.RegisteredClaims
+}
+
+type oauthConsentClaims struct {
+	ClientID            string `json:"client_id"`
+	RedirectURI         string `json:"redirect_uri"`
+	Scope               string `json:"scope"`
+	State               string `json:"state"`
+	ResponseMode        string `json:"response_mode,omitempty"`
+	CodeChallenge       string `json:"code_challenge"`
+	CodeChallengeMethod string `json:"code_challenge_method"`
+	Resource            string `json:"resource,omitempty"`
+	Use                 string `json:"use"`
 	jwt.RegisteredClaims
 }
 
@@ -162,6 +180,10 @@ type OAuthServerService struct {
 
 func NewOAuthServerService(mcpCfg config.MCPConfig, authCfg config.AuthConfig, userStore *database.UserStore, oauthStore *database.OAuthStore, googleAuth *Service, logger *logging.Logger) *OAuthServerService {
 	if !mcpCfg.Auth.Enabled || !mcpCfg.Auth.SelfHosted || userStore == nil || oauthStore == nil || googleAuth == nil {
+		return nil
+	}
+	if err := validateOAuthCookieSigningSecret(authCfg.JWTSecret); err != nil {
+		logger.Error("Failed to initialize self-hosted OAuth cookie signing secret", logging.WithField("error", err.Error()))
 		return nil
 	}
 
@@ -203,6 +225,21 @@ func (s *OAuthServerService) SessionCookieTTL() time.Duration {
 func (s *OAuthServerService) PendingCookieTTL() time.Duration {
 	return oauthStateTTL
 }
+func (s *OAuthServerService) AllowedOrigins() []string {
+	if s == nil {
+		return nil
+	}
+	origins := append([]string(nil), s.mcpCfg.AllowedOrigins...)
+	for _, candidate := range []string{
+		strings.TrimSpace(s.mcpCfg.PublicBaseURL),
+		strings.TrimSpace(s.mcpCfg.Auth.Issuer),
+	} {
+		if origin := originFromURL(candidate); origin != "" && !containsString(origins, origin) {
+			origins = append(origins, origin)
+		}
+	}
+	return origins
+}
 
 func (s *OAuthServerService) AuthorizationServerMetadata() *OAuthAuthorizationServerMetadata {
 	if !s.Enabled() {
@@ -210,13 +247,15 @@ func (s *OAuthServerService) AuthorizationServerMetadata() *OAuthAuthorizationSe
 	}
 	issuer := strings.TrimRight(strings.TrimSpace(s.mcpCfg.Auth.Issuer), "/")
 	return &OAuthAuthorizationServerMetadata{
-		Issuer:                            issuer,
-		AuthorizationEndpoint:             issuer + "/oauth/authorize",
-		TokenEndpoint:                     issuer + "/oauth/token",
-		RegistrationEndpoint:              issuer + "/oauth/register",
-		JWKSURI:                           issuer + "/oauth/jwks.json",
+		Issuer:                issuer,
+		AuthorizationEndpoint: issuer + "/oauth/authorize",
+		TokenEndpoint:         issuer + "/oauth/token",
+		RegistrationEndpoint:  issuer + "/oauth/register",
+		JWKSURI:               issuer + "/oauth/jwks.json",
+		AuthorizationResponseIssParameterSupported: true,
 		ScopesSupported:                   append([]string(nil), s.mcpCfg.Auth.RequiredScopes...),
 		ResponseTypesSupported:            []string{models.OAuthResponseTypeCode},
+		ResponseModesSupported:            []string{"query", "web_message", "web_message.opener"},
 		GrantTypesSupported:               []string{models.OAuthGrantTypeAuthorizationCode, models.OAuthGrantTypeRefreshToken},
 		TokenEndpointAuthMethodsSupported: []string{models.OAuthTokenEndpointAuthMethodNone},
 		CodeChallengeMethodsSupported:     []string{models.OAuthCodeChallengeMethodS256},
@@ -307,6 +346,7 @@ func (s *OAuthServerService) ParseAuthorizationRequest(values url.Values) (*OAut
 
 	req := &OAuthAuthorizationRequest{
 		ResponseType:        strings.TrimSpace(values.Get("response_type")),
+		ResponseMode:        strings.TrimSpace(values.Get("response_mode")),
 		ClientID:            strings.TrimSpace(values.Get("client_id")),
 		RedirectURI:         strings.TrimSpace(values.Get("redirect_uri")),
 		Scope:               strings.TrimSpace(values.Get("scope")),
@@ -318,6 +358,9 @@ func (s *OAuthServerService) ParseAuthorizationRequest(values url.Values) (*OAut
 
 	if req.ResponseType != models.OAuthResponseTypeCode {
 		return nil, &OAuthError{Code: "unsupported_response_type", Description: "response_type must be code", StatusCode: 400}
+	}
+	if !isSupportedAuthorizationResponseMode(req.ResponseMode) {
+		return nil, &OAuthError{Code: "invalid_request", Description: "response_mode must be query, web_message, or web_message.opener", StatusCode: 400}
 	}
 	if req.ClientID == "" || req.RedirectURI == "" {
 		return nil, &OAuthError{Code: "invalid_request", Description: "client_id and redirect_uri are required", StatusCode: 400}
@@ -346,10 +389,15 @@ func (s *OAuthServerService) DescribeAuthorizationRequest(ctx context.Context, r
 
 	clientName := strings.TrimSpace(authCtx.client.ClientName)
 	if clientName == "" {
-		clientName = authCtx.client.ClientID
+		if redirectURI, err := url.Parse(req.RedirectURI); err == nil && strings.TrimSpace(redirectURI.Host) != "" {
+			clientName = redirectURI.Host
+		} else {
+			clientName = authCtx.client.ClientID
+		}
 	}
 
 	return &OAuthAuthorizationPrompt{
+		UserID:      authCtx.user.ID,
 		ClientID:    authCtx.client.ClientID,
 		ClientName:  clientName,
 		Scope:       authCtx.scope,
@@ -368,7 +416,7 @@ func (s *OAuthServerService) AuthorizationErrorRedirect(ctx context.Context, req
 		return "", false
 	}
 
-	redirectURL, buildErr := buildAuthorizationErrorRedirect(req.RedirectURI, req.State, NormalizeOAuthError(err))
+	redirectURL, buildErr := buildAuthorizationErrorRedirect(req.RedirectURI, req.State, strings.TrimSpace(s.mcpCfg.Auth.Issuer), NormalizeOAuthError(err))
 	if buildErr != nil {
 		return "", false
 	}
@@ -466,6 +514,9 @@ func (s *OAuthServerService) Authorize(ctx context.Context, req *OAuthAuthorizat
 	if req.State != "" {
 		query.Set("state", req.State)
 	}
+	if issuer := strings.TrimRight(strings.TrimSpace(s.mcpCfg.Auth.Issuer), "/"); issuer != "" {
+		query.Set("iss", issuer)
+	}
 	redirectURL.RawQuery = query.Encode()
 	return redirectURL.String(), nil
 }
@@ -529,6 +580,68 @@ func (s *OAuthServerService) HandleGoogleCallback(ctx context.Context, code, sta
 	}
 
 	return sessionToken, pending.ReturnTo, nil
+}
+
+func (s *OAuthServerService) BuildAuthorizationConsentToken(userID string, req *OAuthAuthorizationRequest) (string, error) {
+	if strings.TrimSpace(userID) == "" || req == nil {
+		return "", &OAuthError{Code: "invalid_request", Description: "authorization confirmation requires a valid session", StatusCode: 400}
+	}
+
+	claims := oauthConsentClaims{
+		ClientID:            req.ClientID,
+		RedirectURI:         req.RedirectURI,
+		Scope:               req.Scope,
+		State:               req.State,
+		ResponseMode:        req.ResponseMode,
+		CodeChallenge:       req.CodeChallenge,
+		CodeChallengeMethod: req.CodeChallengeMethod,
+		Resource:            req.Resource,
+		Use:                 "mcp_oauth_consent",
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   userID,
+			IssuedAt:  jwt.NewNumericDate(s.now()),
+			ExpiresAt: jwt.NewNumericDate(s.now().Add(oauthStateTTL)),
+		},
+	}
+
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(s.authCfg.JWTSecret))
+}
+
+func (s *OAuthServerService) ValidateAuthorizationConsentToken(token string, userID string, req *OAuthAuthorizationRequest) error {
+	if strings.TrimSpace(token) == "" {
+		return &OAuthError{Code: "invalid_request", Description: "authorization confirmation is missing", StatusCode: 400}
+	}
+	if strings.TrimSpace(userID) == "" || req == nil {
+		return &OAuthError{Code: "invalid_request", Description: "authorization confirmation is invalid", StatusCode: 400}
+	}
+
+	parsedToken, err := jwt.ParseWithClaims(token, &oauthConsentClaims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte(s.authCfg.JWTSecret), nil
+	})
+	if err != nil {
+		return &OAuthError{Code: "invalid_request", Description: "authorization confirmation is invalid or expired", StatusCode: 400}
+	}
+
+	claims, ok := parsedToken.Claims.(*oauthConsentClaims)
+	if !ok || !parsedToken.Valid || claims.Use != "mcp_oauth_consent" || claims.Subject != userID {
+		return &OAuthError{Code: "invalid_request", Description: "authorization confirmation is invalid or expired", StatusCode: 400}
+	}
+
+	if claims.ClientID != req.ClientID ||
+		claims.RedirectURI != req.RedirectURI ||
+		claims.Scope != req.Scope ||
+		claims.State != req.State ||
+		claims.ResponseMode != req.ResponseMode ||
+		claims.CodeChallenge != req.CodeChallenge ||
+		claims.CodeChallengeMethod != req.CodeChallengeMethod ||
+		claims.Resource != req.Resource {
+		return &OAuthError{Code: "invalid_request", Description: "authorization confirmation does not match the current request", StatusCode: 400}
+	}
+
+	return nil
 }
 
 func (s *OAuthServerService) ValidateSessionToken(token string) (string, error) {
@@ -796,7 +909,7 @@ func (s *OAuthServerService) pruneExpiredOAuthState(ctx context.Context) {
 	}
 }
 
-func buildAuthorizationErrorRedirect(redirectURI, state string, oauthErr *OAuthError) (string, error) {
+func buildAuthorizationErrorRedirect(redirectURI, state, issuer string, oauthErr *OAuthError) (string, error) {
 	redirectURL, err := url.Parse(redirectURI)
 	if err != nil {
 		return "", err
@@ -810,8 +923,33 @@ func buildAuthorizationErrorRedirect(redirectURI, state string, oauthErr *OAuthE
 	if state != "" {
 		query.Set("state", state)
 	}
+	if issuer = strings.TrimRight(strings.TrimSpace(issuer), "/"); issuer != "" {
+		query.Set("iss", issuer)
+	}
 	redirectURL.RawQuery = query.Encode()
 	return redirectURL.String(), nil
+}
+
+func originFromURL(raw string) string {
+	if strings.TrimSpace(raw) == "" {
+		return ""
+	}
+
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+
+	return parsed.Scheme + "://" + parsed.Host
+}
+
+func isSupportedAuthorizationResponseMode(mode string) bool {
+	switch strings.TrimSpace(mode) {
+	case "", "query", "web_message", "web_message.opener":
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *OAuthServerService) normalizeRequestedScope(raw string) (string, error) {
@@ -956,6 +1094,20 @@ func loadOAuthSigningKey(cfg config.MCPAuthConfig, logger *logging.Logger) (*sig
 	}
 
 	return nil, errors.New("unsupported OAuth private key format")
+}
+
+func validateOAuthCookieSigningSecret(secret string) error {
+	secret = strings.TrimSpace(secret)
+	if secret == "" {
+		return errors.New("AUTH_JWT_SECRET is required for self-hosted OAuth")
+	}
+	if secret == defaultJWTSecret {
+		return errors.New("AUTH_JWT_SECRET must be overridden for self-hosted OAuth")
+	}
+	if len(secret) < 32 {
+		return errors.New("AUTH_JWT_SECRET must be at least 32 characters for self-hosted OAuth")
+	}
+	return nil
 }
 
 func keyIDOrDefault(kid string) string {

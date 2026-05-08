@@ -38,12 +38,32 @@ Review this file at the start of each session and apply any relevant rules befor
 - Correction from user: make it clear whether I actually changed the code or was only giving guidance.
 - Rule to follow next time: explicitly state when no repo changes were made, especially after a design-only or clarification response.
 
-### 2026-05-07 — Keep announcements on a dedicated admin page
-- Context: implementing announcement management for FlyingForge.
-- Correction from user: announcements should not be added to the existing admin gear moderation page; they should live on their own admin page.
-- Rule to follow next time: when adding a new admin feature, default to a dedicated page/route unless the user explicitly asks to extend an existing admin screen.
+### 2026-05-06 — Keep OAuth consent human-readable and cross-site safe
+- Context: self-hosted OAuth consent flow for ChatGPT MCP.
+- Correction from user: the consent page exposed raw client metadata and the Approve action did not complete the redirect flow.
+- Rule to follow next time: for third-party OAuth consent screens, show the app name plus human-readable requested access only, and treat approval submits as cross-site/browser-embedded flows by using secure cookie settings and POST-safe redirects.
 
-### 2026-05-07 — Do not add local-agent offload workflows by default
-- Context: repository guidance and helper scripts for AI-assisted development.
-- Correction from user: revert the local-agent offload setup and just use the GPT model.
-- Rule to follow next time: keep repo guidance on the primary GPT workflow by default, and do not add local-model offload instructions or helper scripts unless the user explicitly requests them.
+### 2026-05-06 — Verify deployed OAuth/browser flows at the HTTP boundary
+- Context: production ChatGPT MCP auth still failed after the consent-flow fix was merged and deployed.
+- Correction from user: the same blank-popup behavior persisted in production even after the previous fix shipped.
+- Rule to follow next time: when debugging deployed OAuth/browser issues, verify the live HTTP behavior (headers, preflight handling, redirects) against production before assuming the previous hypothesis fully solved the problem.
+
+### 2026-05-06 — Don’t block first-party OAuth form posts with third-party origin rules
+- Context: tightening OAuth endpoint CORS/origin checks for ChatGPT compatibility.
+- Correction from user: after the stricter origin gate shipped, clicking Approve redirected back to FlyingForge instead of completing OAuth.
+- Rule to follow next time: when adding origin restrictions to OAuth endpoints, explicitly allow the app’s own public origin/issuer for first-party browser form submissions in addition to third-party client origins.
+
+### 2026-05-06 — When authorize succeeds but no token exchange follows, inspect popup response mode
+- Context: ChatGPT connector OAuth approval kept opening a blank popup even after the consent and CORS fixes were deployed.
+- Correction from user: the browser still showed the same spinner-and-blank-popup behavior, so the prior fixes had not resolved the final handoff.
+- Rule to follow next time: if production logs show `/oauth/authorize` succeeding but no `/oauth/token` request ever arrives, verify whether the client expects popup-oriented `response_mode=web_message` handling instead of a normal redirect callback.
+
+### 2026-05-06 — Confirm the live request parameters before patching a specific OAuth branch
+- Context: I added popup `response_mode` support, but production still showed the same spinner/blank-popup behavior.
+- Correction from user: the new patch still did not work in the real ChatGPT flow.
+- Rule to follow next time: before committing to a response-mode-specific OAuth fix, inspect the live authorize logs to confirm whether the client is actually sending that parameter and patch the active branch of the flow first.
+
+### 2026-05-07 — Read the browser CSP error literally in OAuth redirect bugs
+- Context: the ChatGPT approval flow still failed after redirect-path fixes.
+- Correction from user: the browser console showed a precise CSP `form-action` violation for the ChatGPT callback URL.
+- Rule to follow next time: when a browser surfaces a CSP violation during OAuth approval, patch the exact blocked directive first—especially `form-action` on consent pages that POST and then redirect to a third-party callback.
