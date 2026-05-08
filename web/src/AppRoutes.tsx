@@ -17,6 +17,7 @@ import {
   MyProfile,
   SocialPage,
   AdminGearModeration,
+  AdminAnnouncementsPage,
   AdminUserManagement,
   TopBar,
 } from './components';
@@ -274,6 +275,15 @@ export function AppRoutes({
           path="/admin/content"
           element={
             <AdminGearModeration
+              hasContentAdminAccess={Boolean(user?.isAdmin || user?.isContentAdmin || user?.isGearAdmin)}
+              authLoading={authLoading}
+            />
+          }
+        />
+        <Route
+          path="/admin/announcements"
+          element={
+            <AdminAnnouncementsPage
               hasContentAdminAccess={Boolean(user?.isAdmin || user?.isContentAdmin || user?.isGearAdmin)}
               authLoading={authLoading}
             />

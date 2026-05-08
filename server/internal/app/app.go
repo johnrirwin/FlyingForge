@@ -7,6 +7,7 @@ import (
 
 	"github.com/johnrirwin/flyingforge/internal/aggregator"
 	"github.com/johnrirwin/flyingforge/internal/aircraft"
+	"github.com/johnrirwin/flyingforge/internal/announcements"
 	"github.com/johnrirwin/flyingforge/internal/auth"
 	"github.com/johnrirwin/flyingforge/internal/battery"
 	"github.com/johnrirwin/flyingforge/internal/builds"
@@ -30,34 +31,36 @@ import (
 
 // App holds all application dependencies
 type App struct {
-	Config           *config.Config
-	Logger           *logging.Logger
-	Cache            cache.Cache
-	Aggregator       *aggregator.Aggregator
-	EquipmentSvc     *equipment.Service
-	InventorySvc     inventory.InventoryManager
-	AircraftSvc      *aircraft.Service
-	BuildSvc         *builds.Service
-	RadioSvc         *radio.Service
-	BatterySvc       *battery.Service
-	AuthService      *auth.Service
-	AuthMiddleware   *auth.Middleware
-	MCPAuthService   *auth.MCPAuthService
-	OAuthService     *auth.OAuthServerService
-	HTTPServer       *httpapi.Server
-	MCPHTTPHandler   *mcp.HTTPHandler
-	MCPServer        *mcp.Server
-	db               *database.DB
-	userStore        *database.UserStore
-	oauthStore       *database.OAuthStore
-	aircraftStore    *database.AircraftStore
-	fcConfigStore    *database.FCConfigStore
-	inventoryStore   *database.InventoryStore
-	buildStore       *database.BuildStore
-	gearCatalogStore *database.GearCatalogStore
-	imageAssetStore  *database.ImageAssetStore
-	imageSvc         *images.Service
-	refreshLimiter   ratelimit.RateLimiter
+	Config            *config.Config
+	Logger            *logging.Logger
+	Cache             cache.Cache
+	Aggregator        *aggregator.Aggregator
+	EquipmentSvc      *equipment.Service
+	InventorySvc      inventory.InventoryManager
+	AircraftSvc       *aircraft.Service
+	BuildSvc          *builds.Service
+	AnnouncementSvc   *announcements.Service
+	RadioSvc          *radio.Service
+	BatterySvc        *battery.Service
+	AuthService       *auth.Service
+	AuthMiddleware    *auth.Middleware
+	MCPAuthService    *auth.MCPAuthService
+	OAuthService      *auth.OAuthServerService
+	HTTPServer        *httpapi.Server
+	MCPHTTPHandler    *mcp.HTTPHandler
+	MCPServer         *mcp.Server
+	db                *database.DB
+	userStore         *database.UserStore
+	oauthStore        *database.OAuthStore
+	aircraftStore     *database.AircraftStore
+	fcConfigStore     *database.FCConfigStore
+	inventoryStore    *database.InventoryStore
+	buildStore        *database.BuildStore
+	announcementStore *database.AnnouncementStore
+	gearCatalogStore  *database.GearCatalogStore
+	imageAssetStore   *database.ImageAssetStore
+	imageSvc          *images.Service
+	refreshLimiter    ratelimit.RateLimiter
 }
 
 // New creates and initializes a new App instance
@@ -260,6 +263,8 @@ func (a *App) initDatabaseServices() {
 	// Initialize builds service (public builds + draft/temp builder)
 	a.buildStore = database.NewBuildStore(db)
 	a.BuildSvc = builds.NewService(a.buildStore, a.aircraftStore, a.gearCatalogStore, a.imageSvc, a.Logger)
+	a.announcementStore = database.NewAnnouncementStore(db)
+	a.AnnouncementSvc = announcements.NewService(a.announcementStore, a.Logger)
 
 	// Initialize radio
 	radioStore := database.NewRadioStore(db)
@@ -300,6 +305,7 @@ func (a *App) initServers() {
 	// Initialize HTTP server with auth, aircraft, radio, battery, fc-config, gear-catalog, and MCP support.
 	a.HTTPServer = httpapi.New(
 		a.Aggregator,
+		a.AnnouncementSvc,
 		a.EquipmentSvc,
 		a.InventorySvc,
 		a.AircraftSvc,

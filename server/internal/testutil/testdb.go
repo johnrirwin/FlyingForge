@@ -89,6 +89,7 @@ func (tdb *TestDB) Cleanup(ctx context.Context) {
 
 	// Order matters due to foreign key constraints
 	tables := []string{
+		"announcements",
 		"battery_logs",
 		"batteries",
 		"radio_backups",

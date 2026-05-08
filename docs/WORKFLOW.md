@@ -12,9 +12,9 @@ This workflow uses working software as the source of truth and applies AI help a
 
 > Code documents real states, interactions, and edge cases better than static prose alone.
 
-### Subagent Principle
+### Single-Model Principle
 
-Default to subagents for research-heavy or exploratory work. If multiple questions can be investigated independently—such as product research, codebase discovery, risk analysis, option comparison, or root-cause investigation—run them in parallel via subagents and merge the results before planning or implementation.
+Default to one primary GPT workflow for research, planning, implementation, and review. Prefer better prompts, clearer plans, and tighter verification over splitting work across local agents or offload helpers.
 
 ```text
 Vision → Prototype → Requirements → Tickets → Design → Planning → Implementation → Ship

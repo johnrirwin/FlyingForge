@@ -1,3 +1,5 @@
+import { AnnouncementPlacementBanner } from './AnnouncementBanner';
+
 interface HomepageProps {
   onSignIn: () => void;
   onExploreNews: () => void;
@@ -55,6 +57,8 @@ export function Homepage({ onSignIn, onExploreNews }: HomepageProps) {
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-primary-600/10 rounded-full blur-3xl" />
         
         <div className="relative max-w-5xl mx-auto text-center">
+          <AnnouncementPlacementBanner placement="home" className="mb-8 text-left" />
+
           {/* Logo */}
           <div className="flex items-center justify-center gap-3 mb-8">
             <div className="w-14 h-14 bg-primary-600 rounded-xl flex items-center justify-center shadow-lg shadow-primary-600/30">

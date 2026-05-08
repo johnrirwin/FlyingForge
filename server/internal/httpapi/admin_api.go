@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/johnrirwin/flyingforge/internal/announcements"
 	"github.com/johnrirwin/flyingforge/internal/auth"
 	"github.com/johnrirwin/flyingforge/internal/builds"
 	"github.com/johnrirwin/flyingforge/internal/database"
@@ -24,23 +25,25 @@ import (
 
 // AdminAPI handles admin-only endpoints
 type AdminAPI struct {
-	catalogStore   *database.GearCatalogStore
-	userStore      *database.UserStore
-	buildSvc       *builds.Service
-	imageSvc       *images.Service
-	authMiddleware *auth.Middleware
-	logger         *logging.Logger
+	catalogStore    *database.GearCatalogStore
+	userStore       *database.UserStore
+	buildSvc        *builds.Service
+	announcementSvc *announcements.Service
+	imageSvc        *images.Service
+	authMiddleware  *auth.Middleware
+	logger          *logging.Logger
 }
 
 // NewAdminAPI creates a new admin API handler
-func NewAdminAPI(catalogStore *database.GearCatalogStore, userStore *database.UserStore, buildSvc *builds.Service, imageSvc *images.Service, authMiddleware *auth.Middleware, logger *logging.Logger) *AdminAPI {
+func NewAdminAPI(catalogStore *database.GearCatalogStore, userStore *database.UserStore, buildSvc *builds.Service, announcementSvc *announcements.Service, imageSvc *images.Service, authMiddleware *auth.Middleware, logger *logging.Logger) *AdminAPI {
 	return &AdminAPI{
-		catalogStore:   catalogStore,
-		userStore:      userStore,
-		buildSvc:       buildSvc,
-		imageSvc:       imageSvc,
-		authMiddleware: authMiddleware,
-		logger:         logger,
+		catalogStore:    catalogStore,
+		userStore:       userStore,
+		buildSvc:        buildSvc,
+		announcementSvc: announcementSvc,
+		imageSvc:        imageSvc,
+		authMiddleware:  authMiddleware,
+		logger:          logger,
 	}
 }
 
@@ -59,6 +62,10 @@ func (api *AdminAPI) RegisterRoutes(mux *http.ServeMux, corsMiddleware func(http
 	if api.buildSvc != nil {
 		mux.HandleFunc("/api/admin/builds", corsMiddleware(api.authMiddleware.RequireAuth(api.requireContentModerator(api.handleAdminBuilds))))
 		mux.HandleFunc("/api/admin/builds/", corsMiddleware(api.authMiddleware.RequireAuth(api.requireContentModerator(api.handleAdminBuildByID))))
+	}
+	if api.announcementSvc != nil {
+		mux.HandleFunc("/api/admin/announcements", corsMiddleware(api.authMiddleware.RequireAuth(api.requireContentModerator(api.handleAdminAnnouncements))))
+		mux.HandleFunc("/api/admin/announcements/", corsMiddleware(api.authMiddleware.RequireAuth(api.requireContentModerator(api.handleAdminAnnouncementByID))))
 	}
 
 	// User admin routes: admin role only
@@ -745,6 +752,159 @@ func (api *AdminAPI) handleAdminBuildImage(w http.ResponseWriter, r *http.Reques
 		api.uploadAdminBuildImage(w, r, buildID)
 	case http.MethodDelete:
 		api.deleteAdminBuildImage(w, r, buildID)
+	default:
+		api.writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+func (api *AdminAPI) handleAdminAnnouncements(w http.ResponseWriter, r *http.Request) {
+	if api.announcementSvc == nil {
+		api.writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "announcement management unavailable"})
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		query := r.URL.Query()
+		status := models.NormalizeAnnouncementStatus(models.AnnouncementStatus(strings.TrimSpace(query.Get("status"))))
+		if status != "" && !models.IsValidAnnouncementStatus(status) {
+			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid status"})
+			return
+		}
+
+		params := models.AdminAnnouncementListParams{
+			Query:  strings.TrimSpace(query.Get("query")),
+			Status: status,
+			Limit:  parseIntQuery(query.Get("limit"), 20),
+			Offset: parseIntQuery(query.Get("offset"), 0),
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+		defer cancel()
+
+		response, err := api.announcementSvc.ListAdmin(ctx, params)
+		if err != nil {
+			var svcErr *announcements.ServiceError
+			if errors.As(err, &svcErr) {
+				api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": svcErr.Message})
+				return
+			}
+			api.logger.Error("Failed to list announcements", logging.WithField("error", err.Error()))
+			api.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list announcements"})
+			return
+		}
+
+		api.writeJSON(w, http.StatusOK, response)
+	case http.MethodPost:
+		var params models.SaveAnnouncementParams
+		if err := decodeJSONAllowEmpty(r, &params); err != nil {
+			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+		defer cancel()
+
+		item, err := api.announcementSvc.Create(ctx, auth.GetUserID(r.Context()), params)
+		if err != nil {
+			var svcErr *announcements.ServiceError
+			if errors.As(err, &svcErr) {
+				api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": svcErr.Message})
+				return
+			}
+			api.logger.Error("Failed to create announcement", logging.WithField("error", err.Error()))
+			api.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create announcement"})
+			return
+		}
+
+		api.writeJSON(w, http.StatusCreated, item)
+	default:
+		api.writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+func (api *AdminAPI) handleAdminAnnouncementByID(w http.ResponseWriter, r *http.Request) {
+	if api.announcementSvc == nil {
+		api.writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "announcement management unavailable"})
+		return
+	}
+
+	id := strings.TrimSpace(strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/admin/announcements/"), "/"))
+	if id == "" {
+		api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "announcement ID required"})
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+		defer cancel()
+
+		item, err := api.announcementSvc.GetByID(ctx, id)
+		if err != nil {
+			var svcErr *announcements.ServiceError
+			if errors.As(err, &svcErr) {
+				api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": svcErr.Message})
+				return
+			}
+			api.logger.Error("Failed to get announcement", logging.WithField("error", err.Error()))
+			api.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to get announcement"})
+			return
+		}
+		if item == nil {
+			api.writeJSON(w, http.StatusNotFound, map[string]string{"error": "announcement not found"})
+			return
+		}
+
+		api.writeJSON(w, http.StatusOK, item)
+	case http.MethodPut:
+		var params models.SaveAnnouncementParams
+		if err := decodeJSONAllowEmpty(r, &params); err != nil {
+			api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+		defer cancel()
+
+		item, err := api.announcementSvc.Update(ctx, id, auth.GetUserID(r.Context()), params)
+		if err != nil {
+			var svcErr *announcements.ServiceError
+			if errors.As(err, &svcErr) {
+				api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": svcErr.Message})
+				return
+			}
+			api.logger.Error("Failed to update announcement", logging.WithField("error", err.Error()))
+			api.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update announcement"})
+			return
+		}
+		if item == nil {
+			api.writeJSON(w, http.StatusNotFound, map[string]string{"error": "announcement not found"})
+			return
+		}
+
+		api.writeJSON(w, http.StatusOK, item)
+	case http.MethodDelete:
+		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+		defer cancel()
+
+		deleted, err := api.announcementSvc.Delete(ctx, id)
+		if err != nil {
+			var svcErr *announcements.ServiceError
+			if errors.As(err, &svcErr) {
+				api.writeJSON(w, http.StatusBadRequest, map[string]string{"error": svcErr.Message})
+				return
+			}
+			api.logger.Error("Failed to delete announcement", logging.WithField("error", err.Error()))
+			api.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to delete announcement"})
+			return
+		}
+		if !deleted {
+			api.writeJSON(w, http.StatusNotFound, map[string]string{"error": "announcement not found"})
+			return
+		}
+
+		api.writeJSON(w, http.StatusOK, map[string]string{"message": "Announcement deleted successfully"})
 	default:
 		api.writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 	}

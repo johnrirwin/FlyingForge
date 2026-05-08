@@ -274,6 +274,13 @@ describe('AdminGearModeration', () => {
     });
   });
 
+  it('keeps announcements off the content moderation page', async () => {
+    render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
+
+    expect(await screen.findByText('Content Moderation')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Announcements$/i })).not.toBeInTheDocument();
+  });
+
   it('opens the edit modal with keyboard interaction on a table row', async () => {
     render(<AdminGearModeration hasContentAdminAccess authLoading={false} />);
 

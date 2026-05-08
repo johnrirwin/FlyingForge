@@ -217,6 +217,7 @@ describe('Sidebar', () => {
       })} />)
       
       expect(screen.queryByText('Content Moderation')).not.toBeInTheDocument()
+      expect(screen.queryByText('Announcements')).not.toBeInTheDocument()
       expect(screen.queryByText('User Admin')).not.toBeInTheDocument()
     })
 
@@ -227,6 +228,7 @@ describe('Sidebar', () => {
       })} />)
       
       expect(screen.queryByText('Content Moderation')).not.toBeInTheDocument()
+      expect(screen.queryByText('Announcements')).not.toBeInTheDocument()
       expect(screen.queryByText('User Admin')).not.toBeInTheDocument()
     })
 
@@ -238,10 +240,11 @@ describe('Sidebar', () => {
       })} />)
       
       expect(screen.getByText('Content Moderation')).toBeInTheDocument()
+      expect(screen.getByText('Announcements')).toBeInTheDocument()
       expect(screen.getByText('User Admin')).toBeInTheDocument()
     })
 
-    it('shows only Content Moderation for content-admin users', () => {
+    it('shows content moderation and announcements for content-admin users', () => {
       const contentAdminUser: User = { ...mockUser, isContentAdmin: true }
       render(<Sidebar {...createDefaultProps({
         isAuthenticated: true,
@@ -249,6 +252,7 @@ describe('Sidebar', () => {
       })} />)
 
       expect(screen.getByText('Content Moderation')).toBeInTheDocument()
+      expect(screen.getByText('Announcements')).toBeInTheDocument()
       expect(screen.queryByText('User Admin')).not.toBeInTheDocument()
     })
 
@@ -263,6 +267,19 @@ describe('Sidebar', () => {
       
       fireEvent.click(screen.getByText('Content Moderation'))
       expect(onSectionChange).toHaveBeenCalledWith('admin-content')
+    })
+
+    it('navigates to admin-announcements section when Announcements is clicked', () => {
+      const adminUser: User = { ...mockUser, isAdmin: true }
+      const onSectionChange = vi.fn()
+      render(<Sidebar {...createDefaultProps({
+        isAuthenticated: true,
+        user: adminUser,
+        onSectionChange,
+      })} />)
+
+      fireEvent.click(screen.getByText('Announcements'))
+      expect(onSectionChange).toHaveBeenCalledWith('admin-announcements')
     })
 
     it('navigates to admin-users section when User Admin is clicked', () => {
