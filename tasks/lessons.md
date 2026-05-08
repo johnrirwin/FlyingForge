@@ -37,3 +37,13 @@ Review this file at the start of each session and apply any relevant rules befor
 - Context: answering architecture questions mid-implementation.
 - Correction from user: make it clear whether I actually changed the code or was only giving guidance.
 - Rule to follow next time: explicitly state when no repo changes were made, especially after a design-only or clarification response.
+
+### 2026-05-07 — Keep announcements on a dedicated admin page
+- Context: implementing announcement management for FlyingForge.
+- Correction from user: announcements should not be added to the existing admin gear moderation page; they should live on their own admin page.
+- Rule to follow next time: when adding a new admin feature, default to a dedicated page/route unless the user explicitly asks to extend an existing admin screen.
+
+### 2026-05-07 — Do not add local-agent offload workflows by default
+- Context: repository guidance and helper scripts for AI-assisted development.
+- Correction from user: revert the local-agent offload setup and just use the GPT model.
+- Rule to follow next time: keep repo guidance on the primary GPT workflow by default, and do not add local-model offload instructions or helper scripts unless the user explicitly requests them.

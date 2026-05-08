@@ -5,7 +5,7 @@
 Follow [`docs/AGENT_WORKFLOW.md`](docs/AGENT_WORKFLOW.md) as the repository source of truth. Key rules:
 - Plan non-trivial work before implementation, using plan mode when available and `tasks/todo.md` for a detailed checklist.
 - Confirm the plan before starting non-trivial or risky implementation; for tiny, low-risk changes, the written plan is enough. Stop to re-plan immediately if the work or verification goes sideways.
-- Use focused subagents when available for research, exploration, and parallel analysis—one task per subagent.
+- Prefer the primary GPT model end-to-end for repo work; do not offload research, planning, or implementation to local agents by default.
 - Review `tasks/lessons.md` at the start of each session and update it after any user correction with a concrete prevention rule.
 - Never mark work done without proof: run relevant tests, inspect logs or errors, compare baseline vs. changed behavior when helpful, and summarize the evidence.
 - Prefer elegant root-cause fixes over hacks, but avoid over-engineering simple changes.
@@ -89,8 +89,7 @@ cd server && go run ./cmd/server -mcp
 ## Agent Workflow Expectations
 
 - Enter a planning workflow for non-trivial work before implementation.
-- When a task involves broad research, codebase exploration, comparing alternatives, or independent analysis streams, proactively use subagents to parallelize the work.
-- Prefer one focused task per subagent, then synthesize the results into a single plan or recommendation before making changes.
+- Keep research, planning, implementation, and verification in the primary GPT workflow unless the user explicitly asks for delegation.
 - Do not mark work done until you have verified it with the relevant tests, logs, or direct behavior checks.
 
 ## API Endpoints

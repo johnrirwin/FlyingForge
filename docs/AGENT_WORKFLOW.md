@@ -9,11 +9,11 @@ This repository expects AI coding assistants to follow the workflow below for an
 - Write detailed specs and checklists up front to reduce ambiguity.
 - If something goes sideways, stop and re-plan immediately instead of pushing through a bad plan.
 
-## 2. Subagent Strategy
-- Use subagents or workers liberally when the client supports them to keep the main context window clean.
-- Offload research, exploration, and parallel analysis.
-- Use one task per subagent for focused execution.
-- Increase parallel compute for complex problems, but keep every delegated task tightly scoped.
+## 2. Stay on the Primary Model
+- Default to the primary GPT model for research, planning, implementation, and review.
+- Do not offload work to local agents or subagents unless the user explicitly asks for delegation.
+- Keep the task focused with good planning and scoped verification instead of automatic delegation.
+- If delegation is ever used, treat it as an exception and explain why it is necessary.
 
 ## 3. Self-Improvement Loop
 - Review `tasks/lessons.md` at the start of each session for relevant lessons.
