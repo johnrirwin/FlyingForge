@@ -131,6 +131,7 @@ func (db *DB) Migrate(ctx context.Context) error {
 		migrationBuildDeclinedStatus,                       // Adds explicit DECLINED build status and backfills historical declines
 		migrationBuildReactions,                            // Adds likes/dislikes for published builds
 		migrationFeedItems,                                 // Adds persistent storage for aggregated feed/news items
+		migrationAnnouncements,                             // Adds first-party announcements for product/site messaging
 		migrationDropLegacyImageURLs,                       // Drops legacy image_url columns in favor of image_assets
 		migrationGearItemImageURLOverrides,                 // Adds back optional external image_url overrides for gear items
 		migrationGearCatalogAttributionAndShoppingLinks,    // Adds image source attribution + shopping links fields
@@ -1162,6 +1163,33 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
     RAISE NOTICE 'Could not create feed_items trigram indexes, using fallback search';
 END $$;
+`
+
+const migrationAnnouncements = `
+CREATE TABLE IF NOT EXISTS announcements (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title VARCHAR(255) NOT NULL,
+    body TEXT NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'draft',
+    priority INTEGER NOT NULL DEFAULT 0,
+    placements TEXT[] NOT NULL DEFAULT '{}',
+    audience VARCHAR(20) NOT NULL DEFAULT 'all',
+    cta_label VARCHAR(255),
+    cta_url TEXT,
+    dismissible BOOLEAN NOT NULL DEFAULT TRUE,
+    starts_at TIMESTAMPTZ,
+    ends_at TIMESTAMPTZ,
+    created_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    updated_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_announcements_status ON announcements(LOWER(status));
+CREATE INDEX IF NOT EXISTS idx_announcements_audience ON announcements(LOWER(audience));
+CREATE INDEX IF NOT EXISTS idx_announcements_priority ON announcements(priority DESC, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_announcements_schedule ON announcements(starts_at, ends_at);
+CREATE INDEX IF NOT EXISTS idx_announcements_placements ON announcements USING GIN(placements);
 `
 
 // Migration to drop legacy image_url columns in favor of moderated image assets / binary storage.

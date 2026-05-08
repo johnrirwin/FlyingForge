@@ -10,6 +10,7 @@ import (
 
 	"github.com/johnrirwin/flyingforge/internal/aggregator"
 	"github.com/johnrirwin/flyingforge/internal/aircraft"
+	"github.com/johnrirwin/flyingforge/internal/announcements"
 	"github.com/johnrirwin/flyingforge/internal/auth"
 	"github.com/johnrirwin/flyingforge/internal/battery"
 	"github.com/johnrirwin/flyingforge/internal/builds"
@@ -26,6 +27,7 @@ import (
 
 type Server struct {
 	agg                 *aggregator.Aggregator
+	announcementSvc     *announcements.Service
 	equipmentSvc        *equipment.Service
 	inventorySvc        inventory.InventoryManager
 	aircraftSvc         *aircraft.Service
@@ -49,9 +51,10 @@ type Server struct {
 	enableManualRefresh bool
 }
 
-func New(agg *aggregator.Aggregator, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, buildSvc *builds.Service, radioSvc *radio.Service, batterySvc *battery.Service, authSvc *auth.Service, oauthSvc *auth.OAuthServerService, authMiddleware *auth.Middleware, mcpHandler *mcp.HTTPHandler, userStore *database.UserStore, aircraftStore *database.AircraftStore, fcConfigStore *database.FCConfigStore, inventoryStore *database.InventoryStore, gearCatalogStore *database.GearCatalogStore, imageSvc *images.Service, refreshLimiter ratelimit.RateLimiter, enableManualRefresh bool, logger *logging.Logger) *Server {
+func New(agg *aggregator.Aggregator, announcementSvc *announcements.Service, equipmentSvc *equipment.Service, inventorySvc inventory.InventoryManager, aircraftSvc *aircraft.Service, buildSvc *builds.Service, radioSvc *radio.Service, batterySvc *battery.Service, authSvc *auth.Service, oauthSvc *auth.OAuthServerService, authMiddleware *auth.Middleware, mcpHandler *mcp.HTTPHandler, userStore *database.UserStore, aircraftStore *database.AircraftStore, fcConfigStore *database.FCConfigStore, inventoryStore *database.InventoryStore, gearCatalogStore *database.GearCatalogStore, imageSvc *images.Service, refreshLimiter ratelimit.RateLimiter, enableManualRefresh bool, logger *logging.Logger) *Server {
 	return &Server{
 		agg:                 agg,
+		announcementSvc:     announcementSvc,
 		equipmentSvc:        equipmentSvc,
 		inventorySvc:        inventorySvc,
 		aircraftSvc:         aircraftSvc,
@@ -83,6 +86,10 @@ func (s *Server) Start(addr string) error {
 	mux.HandleFunc("/api/sources", s.corsMiddleware(s.handleGetSources))
 	if s.enableManualRefresh {
 		mux.HandleFunc("/api/refresh", s.corsMiddleware(s.handleRefresh))
+	}
+	if s.announcementSvc != nil {
+		announcementAPI := NewAnnouncementAPI(s.announcementSvc, s.authMiddleware, s.logger)
+		announcementAPI.RegisterRoutes(mux, s.corsMiddleware)
 	}
 
 	// Auth routes
@@ -161,7 +168,7 @@ func (s *Server) Start(addr string) error {
 
 	// Admin routes (content moderation + user admin).
 	if s.gearCatalogStore != nil && s.userStore != nil && s.authMiddleware != nil && s.imageSvc != nil {
-		adminAPI := NewAdminAPI(s.gearCatalogStore, s.userStore, s.buildSvc, s.imageSvc, s.authMiddleware, s.logger)
+		adminAPI := NewAdminAPI(s.gearCatalogStore, s.userStore, s.buildSvc, s.announcementSvc, s.imageSvc, s.authMiddleware, s.logger)
 		adminAPI.RegisterRoutes(mux, s.corsMiddleware)
 	}
 

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ComponentProps } from 'react';
 import type { FeedItem, SourceInfo } from '../types';
+import { AnnouncementPlacementBanner } from './AnnouncementBanner';
 import { FeedList } from './FeedList';
 import { MobileFloatingControls } from './MobileFloatingControls';
 import { TopBar } from './TopBar';
@@ -59,6 +60,12 @@ export function NewsPage({
         }}
       >
         <div className="md:hidden pt-20" />
+
+        <div className="px-4 pt-4 md:px-6 md:pt-6">
+          <div className="mx-auto max-w-4xl">
+            <AnnouncementPlacementBanner placement="news" className="mb-4" />
+          </div>
+        </div>
 
         <FeedList
           items={items}

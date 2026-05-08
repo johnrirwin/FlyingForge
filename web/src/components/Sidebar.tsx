@@ -277,6 +277,20 @@ export const Sidebar = memo(function Sidebar({
             />
           )}
 
+          {(user?.isAdmin || user?.isContentAdmin || user?.isGearAdmin) && (
+            <NavItem
+              section="admin-announcements"
+              label="Announcements"
+              requiresAuth
+              icon={
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.055A9.001 9.001 0 1020.945 15M11 5.055A9.003 9.003 0 0119 12h-8V5.055z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 13l4 4m0 0h-4m4 0v-4" />
+                </svg>
+              }
+            />
+          )}
+
           {/* Admin: User Admin - only shown to full admins */}
           {user?.isAdmin && (
             <NavItem

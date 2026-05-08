@@ -7,6 +7,7 @@ import { getAircraftImageUrl } from '../aircraftApi';
 import { getFollowers } from '../socialApi';
 import { getInventory } from '../equipmentApi';
 import { useAuth } from '../hooks/useAuth';
+import { AnnouncementPlacementBanner } from './AnnouncementBanner';
 
 interface DashboardProps {
   // Data
@@ -371,6 +372,8 @@ export function Dashboard({
           <h1 className="text-2xl font-bold text-white mb-2">Dashboard</h1>
           <p className="text-slate-400">Welcome back! Here's your FlyingForge overview.</p>
         </div>
+
+        <AnnouncementPlacementBanner placement="dashboard" className="mb-6" />
 
         {/* Main Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">

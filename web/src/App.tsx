@@ -10,6 +10,7 @@ import { useAuth } from './hooks/useAuth';
 import { useGoogleAnalytics, trackEvent } from './hooks/useGoogleAnalytics';
 import { upsertInventoryItem } from './inventoryUtils';
 import { buildLoginPath, getCurrentPathWithSearchAndHash } from './authRouting';
+import { hasOpenModalDialog, shouldHandleGlobalSlashShortcut } from './appKeyboard';
 import type { FeedItem, SourceInfo, FilterParams } from './types';
 import type { EquipmentItem, InventoryItem, EquipmentCategory, AddInventoryParams, InventorySummary, AppSection } from './equipmentTypes';
 import type { Aircraft, AircraftDetailsResponse, CreateAircraftParams, UpdateAircraftParams, SetComponentParams, ReceiverConfig } from './aircraftTypes';
@@ -37,6 +38,7 @@ const pathToSection: Record<string, AppSection> = {
   '/admin': 'admin-content',
   '/admin/content': 'admin-content',
   '/admin/gear': 'admin-content',
+  '/admin/announcements': 'admin-announcements',
   '/admin/users': 'admin-users',
 };
 
@@ -57,6 +59,7 @@ const sectionToPath: Record<AppSection, string> = {
   'profile': '/profile',
   'pilot-profile': '/social/pilots', // Dynamic - handled separately
   'admin-content': '/admin/content',
+  'admin-announcements': '/admin/announcements',
   'admin-users': '/admin/users',
 };
 
@@ -453,6 +456,9 @@ function App() {
         }
       }
       if (e.key === '/' && !selectedPilotId && !selectedItem && !showAddInventoryModal && !showAircraftForm && !selectedAircraftDetails) {
+        if (!shouldHandleGlobalSlashShortcut(e.target, hasOpenModalDialog(document))) {
+          return;
+        }
         e.preventDefault();
         const searchInput = document.querySelector('input[type="text"]') as HTMLInputElement;
         searchInput?.focus();
@@ -534,7 +540,7 @@ function App() {
       return;
     }
     // Protected sections that require authentication
-    const protectedSections = ['dashboard', 'my-builds', 'inventory', 'aircraft', 'radio', 'batteries', 'profile', 'social', 'admin-content', 'admin-users'];
+    const protectedSections = ['dashboard', 'my-builds', 'inventory', 'aircraft', 'radio', 'batteries', 'profile', 'social', 'admin-content', 'admin-announcements', 'admin-users'];
     if (protectedSections.includes(section) && !isAuthenticated) {
       navigate(buildLoginPath(sectionToPath[section]));
       return;

@@ -15,6 +15,12 @@ import type {
   AdminUsersResponse,
   AdminUpdateUserParams,
 } from './adminUserTypes';
+import type {
+  Announcement,
+  AnnouncementListResponse,
+  AdminAnnouncementListParams,
+  SaveAnnouncementParams,
+} from './announcementTypes';
 import { getStoredTokens } from './authApi';
 
 const API_BASE = '/api/admin';
@@ -802,4 +808,143 @@ export async function adminDeleteUserAvatar(id: string): Promise<AdminUser> {
   }
 
   return response.json();
+}
+
+export async function adminListAnnouncements(
+  params: AdminAnnouncementListParams = {}
+): Promise<AnnouncementListResponse> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const searchParams = new URLSearchParams();
+  if (params.query) searchParams.set('query', params.query);
+  if (params.status) searchParams.set('status', params.status);
+  if (params.limit) searchParams.set('limit', params.limit.toString());
+  if (params.offset) searchParams.set('offset', params.offset.toString());
+
+  const response = await fetch(`${API_BASE}/announcements?${searchParams.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Request failed' }));
+    if (response.status === 403) {
+      throw new Error('Admin or content-admin access required');
+    }
+    throw new Error(data.error || 'Failed to list announcements');
+  }
+
+  return response.json();
+}
+
+export async function adminCreateAnnouncement(params: SaveAnnouncementParams): Promise<Announcement> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const response = await fetch(`${API_BASE}/announcements`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(params),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Request failed' }));
+    if (response.status === 403) {
+      throw new Error('Admin or content-admin access required');
+    }
+    throw new Error(data.error || 'Failed to create announcement');
+  }
+
+  return response.json();
+}
+
+export async function adminGetAnnouncement(id: string): Promise<Announcement> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const response = await fetch(`${API_BASE}/announcements/${id}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Request failed' }));
+    if (response.status === 403) {
+      throw new Error('Admin or content-admin access required');
+    }
+    if (response.status === 404) {
+      throw new Error('Announcement not found');
+    }
+    throw new Error(data.error || 'Failed to get announcement');
+  }
+
+  return response.json();
+}
+
+export async function adminUpdateAnnouncement(id: string, params: SaveAnnouncementParams): Promise<Announcement> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const response = await fetch(`${API_BASE}/announcements/${id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(params),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Request failed' }));
+    if (response.status === 403) {
+      throw new Error('Admin or content-admin access required');
+    }
+    if (response.status === 404) {
+      throw new Error('Announcement not found');
+    }
+    throw new Error(data.error || 'Failed to update announcement');
+  }
+
+  return response.json();
+}
+
+export async function adminDeleteAnnouncement(id: string): Promise<void> {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const response = await fetch(`${API_BASE}/announcements/${id}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Request failed' }));
+    if (response.status === 403) {
+      throw new Error('Admin or content-admin access required');
+    }
+    if (response.status === 404) {
+      throw new Error('Announcement not found');
+    }
+    throw new Error(data.error || 'Failed to delete announcement');
+  }
 }
